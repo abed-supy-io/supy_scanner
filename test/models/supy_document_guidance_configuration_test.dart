@@ -18,10 +18,21 @@ void main() {
       expect(cfg.smoothingAlpha, 0.35);
     });
 
+    test('exposes holdSteady defaults', () {
+      const c = SupyDocumentGuidanceConfiguration();
+      expect(c.readyStabilityFloor, 0.75);
+      expect(c.interiorVarianceFloor, 5.0);
+      expect(c.holdSteadyFrames, 6);
+      expect(c.autoCapture, isTrue);
+      expect(c.autoCaptureDelay, const Duration(milliseconds: 600));
+      expect(c.allowUnrectifiedFallback, isTrue);
+    });
+
     test('palette defaults: red for not-ready, green for ready', () {
       const cfg = SupyDocumentGuidanceConfiguration();
       expect(cfg.notReadyColor, const Color(0xFFE5484D));
       expect(cfg.readyColor, const Color(0xFF30A46C));
+      expect(cfg.warningColor, const Color(0xFFFF4D4D));
       expect(cfg.scrimColor.a, lessThan(1.0));
     });
   });
@@ -60,20 +71,30 @@ void main() {
   group('SupyDocumentGuidanceConfiguration.hintFor', () {
     const cfg = SupyDocumentGuidanceConfiguration();
 
-    test('default hint text matches each state', () {
+    test('hintFor(holdSteady) returns the holdSteady copy', () {
+      expect(cfg.hintFor(SupyDocumentFrameState.holdSteady), 'Hold steady…');
+    });
+
+    test('new default hint copy matches spec', () {
       expect(
         cfg.hintFor(SupyDocumentFrameState.noDocument),
-        'Point the camera at a document',
+        'Searching for document…',
       );
-      expect(cfg.hintFor(SupyDocumentFrameState.tooDark), 'More light needed');
-      expect(cfg.hintFor(SupyDocumentFrameState.tooClose), 'Move back');
+      expect(
+        cfg.hintFor(SupyDocumentFrameState.tooDark),
+        'Move to a brighter spot',
+      );
+      expect(
+        cfg.hintFor(SupyDocumentFrameState.tooClose),
+        'Move farther back',
+      );
       expect(cfg.hintFor(SupyDocumentFrameState.tooFar), 'Move closer');
       expect(
         cfg.hintFor(SupyDocumentFrameState.tooSkewed),
-        'Hold the camera straight',
+        'Hold the camera flat',
       );
       expect(cfg.hintFor(SupyDocumentFrameState.blurry), 'Hold steady');
-      expect(cfg.hintFor(SupyDocumentFrameState.ready), 'Hold still…');
+      expect(cfg.hintFor(SupyDocumentFrameState.ready), "Don't move");
       expect(cfg.hintFor(SupyDocumentFrameState.capturing), 'Capturing…');
       expect(cfg.hintFor(SupyDocumentFrameState.captured), 'Captured!');
     });
@@ -127,6 +148,13 @@ void main() {
       expect(a, isNot(equals(b)));
     });
 
+    test('changing holdSteady fields breaks equality', () {
+      const a = SupyDocumentGuidanceConfiguration();
+      const b = SupyDocumentGuidanceConfiguration(holdSteadyFrames: 99);
+      expect(a, isNot(equals(b)));
+      expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
+
     test('changing a hint bundle breaks equality', () {
       const a = SupyDocumentGuidanceConfiguration();
       const b = SupyDocumentGuidanceConfiguration(
@@ -154,6 +182,13 @@ void main() {
     test('overriding one field breaks equality', () {
       const a = SupyDocumentGuidanceHints();
       const b = SupyDocumentGuidanceHints(ready: 'now');
+      expect(a, isNot(equals(b)));
+      expect(a.hashCode, isNot(equals(b.hashCode)));
+    });
+
+    test('overriding holdSteady breaks equality', () {
+      const a = SupyDocumentGuidanceHints();
+      const b = SupyDocumentGuidanceHints(holdSteady: 'wait');
       expect(a, isNot(equals(b)));
       expect(a.hashCode, isNot(equals(b.hashCode)));
     });

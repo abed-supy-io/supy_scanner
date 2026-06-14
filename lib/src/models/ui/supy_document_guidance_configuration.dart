@@ -22,6 +22,13 @@ class SupyDocumentGuidanceConfiguration {
     this.exitMargin = 0.10,
     this.minDwellFrames = 4,
     this.smoothingAlpha = 0.35,
+    this.readyStabilityFloor = 0.75,
+    this.interiorVarianceFloor = 5.0,
+    this.holdSteadyFrames = 6,
+    this.autoCapture = true,
+    this.autoCaptureDelay = const Duration(milliseconds: 600),
+    this.allowUnrectifiedFallback = true,
+    this.warningColor = const Color(0xFFFF4D4D),
     this.notReadyColor = const Color(0xFFE5484D),
     this.readyColor = const Color(0xFF30A46C),
     this.scrimColor = const Color(0x99000000),
@@ -68,6 +75,32 @@ class SupyDocumentGuidanceConfiguration {
   /// (~0.35) reaches ~90% of a step input in ~6 frames at 30fps.
   final double smoothingAlpha;
 
+  /// Minimum `quadStability` required to leave `holdSteady` for `ready`.
+  final double readyStabilityFloor;
+
+  /// Minimum variance-of-Laplacian inside the quad before we trust it's a real
+  /// document. Screens showing a single image fail this; printed paper passes.
+  final double interiorVarianceFloor;
+
+  /// Consecutive frames `quadStability >= readyStabilityFloor` required to
+  /// promote `holdSteady` → `ready`.
+  final int holdSteadyFrames;
+
+  /// Whether the widget should auto-fire `captureAndRectify` after a brief
+  /// countdown when `ready` first lands.
+  final bool autoCapture;
+
+  /// Countdown duration before auto-capture fires.
+  final Duration autoCaptureDelay;
+
+  /// When `captureAndRectify` returns UNIMPLEMENTED (Android pre-Sprint 4),
+  /// silently retry via `captureFullFrame` so the user always gets a picture.
+  /// Set `false` for "rectified or nothing" flows.
+  final bool allowUnrectifiedFallback;
+
+  /// Color for failure-state corner brackets.
+  final Color warningColor;
+
   /// Color used for the outline + hint card when not capture-ready.
   final Color notReadyColor;
 
@@ -100,6 +133,7 @@ class SupyDocumentGuidanceConfiguration {
       case SupyDocumentFrameState.tooFar:
       case SupyDocumentFrameState.tooSkewed:
       case SupyDocumentFrameState.blurry:
+      case SupyDocumentFrameState.holdSteady:
         return notReadyColor;
     }
   }
@@ -118,13 +152,20 @@ class SupyDocumentGuidanceConfiguration {
           other.exitMargin == exitMargin &&
           other.minDwellFrames == minDwellFrames &&
           other.smoothingAlpha == smoothingAlpha &&
+          other.readyStabilityFloor == readyStabilityFloor &&
+          other.interiorVarianceFloor == interiorVarianceFloor &&
+          other.holdSteadyFrames == holdSteadyFrames &&
+          other.autoCapture == autoCapture &&
+          other.autoCaptureDelay == autoCaptureDelay &&
+          other.allowUnrectifiedFallback == allowUnrectifiedFallback &&
+          other.warningColor == warningColor &&
           other.notReadyColor == notReadyColor &&
           other.readyColor == readyColor &&
           other.scrimColor == scrimColor &&
           other.hints == hints;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
         minCoverageRatio,
         maxCoverageRatio,
         maxTiltDegrees,
@@ -135,17 +176,26 @@ class SupyDocumentGuidanceConfiguration {
         exitMargin,
         minDwellFrames,
         smoothingAlpha,
+        readyStabilityFloor,
+        interiorVarianceFloor,
+        holdSteadyFrames,
+        autoCapture,
+        autoCaptureDelay,
+        allowUnrectifiedFallback,
+        warningColor,
         notReadyColor,
         readyColor,
         scrimColor,
         hints,
-      );
+      ]);
 
   @override
   String toString() => 'SupyDocumentGuidanceConfiguration('
       'coverage: $minCoverageRatio..$maxCoverageRatio, '
       'tilt≤$maxTiltDegrees°, luma≥$minMeanLuma, '
-      'blur≥$minBlurScore, stable=$readyStableFrames)';
+      'blur≥$minBlurScore, stable=$readyStableFrames, '
+      'holdSteady=$holdSteadyFrames@$readyStabilityFloor, '
+      'autoCapture=$autoCapture)';
 }
 
 /// Per-state hint text bundle. Override individual strings for localization.
@@ -153,13 +203,14 @@ class SupyDocumentGuidanceConfiguration {
 class SupyDocumentGuidanceHints {
   /// Creates a hints bundle with English defaults.
   const SupyDocumentGuidanceHints({
-    this.noDocument = 'Point the camera at a document',
-    this.tooDark = 'More light needed',
-    this.tooClose = 'Move back',
+    this.noDocument = 'Searching for document…',
+    this.tooDark = 'Move to a brighter spot',
+    this.tooClose = 'Move farther back',
     this.tooFar = 'Move closer',
-    this.tooSkewed = 'Hold the camera straight',
+    this.tooSkewed = 'Hold the camera flat',
     this.blurry = 'Hold steady',
-    this.ready = 'Hold still…',
+    this.holdSteady = 'Hold steady…',
+    this.ready = "Don't move",
     this.capturing = 'Capturing…',
     this.captured = 'Captured!',
   });
@@ -181,6 +232,9 @@ class SupyDocumentGuidanceHints {
 
   /// Hint shown for [SupyDocumentFrameState.blurry].
   final String blurry;
+
+  /// Hint shown for [SupyDocumentFrameState.holdSteady].
+  final String holdSteady;
 
   /// Hint shown for [SupyDocumentFrameState.ready].
   final String ready;
@@ -206,6 +260,8 @@ class SupyDocumentGuidanceHints {
         return tooSkewed;
       case SupyDocumentFrameState.blurry:
         return blurry;
+      case SupyDocumentFrameState.holdSteady:
+        return holdSteady;
       case SupyDocumentFrameState.ready:
         return ready;
       case SupyDocumentFrameState.capturing:
@@ -225,6 +281,7 @@ class SupyDocumentGuidanceHints {
           other.tooFar == tooFar &&
           other.tooSkewed == tooSkewed &&
           other.blurry == blurry &&
+          other.holdSteady == holdSteady &&
           other.ready == ready &&
           other.capturing == capturing &&
           other.captured == captured;
@@ -237,6 +294,7 @@ class SupyDocumentGuidanceHints {
         tooFar,
         tooSkewed,
         blurry,
+        holdSteady,
         ready,
         capturing,
         captured,

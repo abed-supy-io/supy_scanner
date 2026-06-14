@@ -206,6 +206,10 @@ class SupyDocumentStateMachine {
         return 4;
       case SupyDocumentFrameState.blurry:
         return 5;
+      case SupyDocumentFrameState.holdSteady:
+        // Mirrors `blurry` priority: gate-style state the FSM itself doesn't
+        // emit yet (Task 3 wires it). Keeps the switch exhaustive.
+        return 5;
       case SupyDocumentFrameState.ready:
         return 6;
       case SupyDocumentFrameState.capturing:

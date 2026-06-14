@@ -30,7 +30,7 @@ void main() {
     testWidgets('shows noDocument hint initially', (tester) async {
       await _onDesktop(() async {
         await tester.pumpWidget(host(const SupyDocumentScannerView()));
-        expect(find.text('Point the camera at a document'), findsOneWidget);
+        expect(find.text('Searching for document…'), findsOneWidget);
       });
     });
 
@@ -39,7 +39,7 @@ void main() {
         await tester.pumpWidget(
           host(const SupyDocumentScannerView(showOverlay: false)),
         );
-        expect(find.text('Point the camera at a document'), findsNothing);
+        expect(find.text('Searching for document…'), findsNothing);
       });
     });
 
@@ -70,7 +70,7 @@ void main() {
         (tester) async {
       await _onDesktop(() async {
         await tester.pumpWidget(host(const SupyDocumentScannerView()));
-        expect(find.text('Point the camera at a document'), findsOneWidget);
+        expect(find.text('Searching for document…'), findsOneWidget);
 
         await tester.pumpWidget(
           host(
@@ -87,7 +87,7 @@ void main() {
         // asserting the outgoing copy is gone.
         await tester.pumpAndSettle();
         expect(find.text('NEEDS DOC'), findsOneWidget);
-        expect(find.text('Point the camera at a document'), findsNothing);
+        expect(find.text('Searching for document…'), findsNothing);
       });
     });
 
@@ -111,12 +111,12 @@ void main() {
         await tester.pumpWidget(
           host(SupyDocumentScannerView(controller: controller)),
         );
-        expect(find.text('Point the camera at a document'), findsOneWidget);
+        expect(find.text('Searching for document…'), findsOneWidget);
 
         controller.setCapturePhase(SupyDocumentCapturePhase.capturing);
         await tester.pumpAndSettle();
         expect(find.text('Capturing…'), findsOneWidget);
-        expect(find.text('Point the camera at a document'), findsNothing);
+        expect(find.text('Searching for document…'), findsNothing);
 
         controller.setCapturePhase(SupyDocumentCapturePhase.captured);
         await tester.pumpAndSettle();
@@ -124,7 +124,7 @@ void main() {
 
         controller.setCapturePhase(SupyDocumentCapturePhase.idle);
         await tester.pumpAndSettle();
-        expect(find.text('Point the camera at a document'), findsOneWidget);
+        expect(find.text('Searching for document…'), findsOneWidget);
       });
     });
 
@@ -173,7 +173,7 @@ void main() {
         );
         final container = tester.widget<Container>(
           find.ancestor(
-            of: find.text('Point the camera at a document'),
+            of: find.text('Searching for document…'),
             matching: find.byType(Container),
           ),
         );

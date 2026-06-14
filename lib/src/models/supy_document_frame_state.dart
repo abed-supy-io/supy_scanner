@@ -27,6 +27,10 @@ enum SupyDocumentFrameState {
   /// Sharpness is below the blur threshold — likely motion or focus.
   blurry,
 
+  /// All failure checks pass but the quad isn't stable enough yet — we're
+  /// waiting for the user to stop moving before promoting to `ready`.
+  holdSteady,
+
   /// All checks pass for enough consecutive frames — safe to capture.
   ready,
 
