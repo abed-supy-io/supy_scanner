@@ -16,9 +16,11 @@ set(CMAKE_CXX_EXTENSIONS OFF)
 set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 
 option(SUPY_WITH_ZXING_CPP "Vendor zxing-cpp for native barcode decode" OFF)
+option(SUPY_BUILD_TESTS "Build host-side GoogleTest suite" OFF)
 
 set(SUPY_CORE_SOURCES
   src/supy_scanner_core.cpp
+  document/document_edge_detector.cpp
 )
 
 # JNI bridge is Android-only and lives in the Flutter plugin tree so iOS
@@ -33,6 +35,7 @@ add_library(supy_scanner_core SHARED ${SUPY_CORE_SOURCES})
 
 target_include_directories(supy_scanner_core PUBLIC
   ${CMAKE_CURRENT_SOURCE_DIR}/include
+  ${CMAKE_CURRENT_SOURCE_DIR}
 )
 
 target_compile_options(supy_scanner_core PRIVATE
@@ -64,4 +67,25 @@ if(SUPY_WITH_ZXING_CPP)
   FetchContent_MakeAvailable(zxing-cpp)
   target_link_libraries(supy_scanner_core PRIVATE ZXing::ZXing)
   target_compile_definitions(supy_scanner_core PRIVATE SUPY_WITH_ZXING_CPP=1)
+endif()
+
+# GoogleTest — fetched from source when building host tests.
+# Default OFF so Android NDK and iOS pod builds stay untouched.
+if(SUPY_BUILD_TESTS)
+  include(FetchContent)
+  set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
+  set(BUILD_GMOCK   OFF CACHE BOOL "" FORCE)
+  FetchContent_Declare(
+    googletest
+    GIT_REPOSITORY https://github.com/google/googletest.git
+    GIT_TAG        v1.14.0
+    GIT_SHALLOW    TRUE
+  )
+  FetchContent_MakeAvailable(googletest)
+
+  add_executable(supy_scanner_core_tests
+    document/document_edge_detector_test.cpp
+  )
+  target_link_libraries(supy_scanner_core_tests PRIVATE supy_scanner_core gtest gtest_main)
+  target_compile_options(supy_scanner_core_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
 endif()
