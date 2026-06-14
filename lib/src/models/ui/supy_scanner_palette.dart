@@ -49,7 +49,7 @@ class SupyScannerPalette {
         outline = const Color(0x66FFFFFF),
         negative = const Color(0xFFFF3B30),
         positive = const Color(0xFF34C759),
-        warning = const Color(0xFFFFCC00),
+        warning = const Color(0xFFFF4D4D),
         modalOverlay = const Color(0x99000000);
 
   /// Light-themed default — for hosts that want a brighter chrome over the

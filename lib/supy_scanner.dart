@@ -56,7 +56,7 @@ export 'src/widgets/supy_document_scanner_controller.dart'
         SupyDocumentCapturePhase,
         SupyDocumentScannerController;
 export 'src/widgets/supy_document_scanner_view.dart'
-    show SupyDocumentScannerView;
+    show SupyDocumentCountdownRing, SupyDocumentScannerView;
 export 'src/widgets/supy_find_and_pick_accumulator.dart'
     show SupyFindAndPickAccumulator, SupyFindAndPickRow;
 export 'src/widgets/supy_find_and_pick_sheet.dart' show SupyFindAndPickSheet;
