@@ -5,6 +5,35 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
+## [Unreleased] — Document scanner smart guidance
+
+Smart-guidance + auto-snap + interior-variance false-positive gate for the
+embedded `SupyDocumentScannerView`. Channel stays `io.supy.scanner/v1`
+(additive only). Drop-in for v1.0.x / v1.1 retailer consumers.
+
+### Added
+- `SupyDocumentFrameState.holdSteady` — new FSM state between failing states and `ready`. Entered when all failure checks pass but `quadStability < readyStabilityFloor`; exits to `ready` after `holdSteadyFrames` (default 6) consecutive stable frames.
+- `quadStability` (Double 0–1) and `interiorVariance` (Double) fields on `SupyDocumentFrameMetrics` and the `frame_metrics` EventChannel payload. Old consumers that ignore unknown map keys are unaffected.
+- `holdSteady` guidance state hint copy (`"Hold steady…"`) in `SupyDocumentGuidanceHints`.
+- `captureAndRectify` MethodChannel method — iOS: `CIPerspectiveCorrection` against the last smoothed quad + `AVCapturePhotoOutput` JPEG write to `NSTemporaryDirectory()`. Returns `{ path, widthPx, heightPx, quad }`. Android returns `UNIMPLEMENTED` until Sprint 4 `warpPerspective` lands.
+- `captureFullFrame` MethodChannel method — always available on both platforms. iOS: `AVCapturePhotoOutput`. Android: CameraX `ImageCapture` writing to `context.cacheDir`. Returns `{ path, widthPx, heightPx }`.
+- Auto-capture countdown owned by `SupyDocumentScannerView`: when `guidance.autoCapture == true` (default), a 600 ms countdown ring sweeps on first `ready`; on completion calls `captureAndRectify`, catching `UNIMPLEMENTED` and retrying via `captureFullFrame` when `guidance.allowUnrectifiedFallback == true`. Countdown cancels if the FSM drops below `holdSteady`.
+- `SupyDocumentCountdownRing` widget — exported from `supy_document_scanner_view.dart`; animates an arc from −π/2 sweeping clockwise over `duration`; fires `onComplete` once.
+- Android native C++ document-edge detector (`native/document/document_edge_detector.{h,cpp}`) in the `supy_scanner_core` JNI scaffold — adaptive Canny + Hough pipeline at a 256 px working size. `DocumentFrameAnalyzer` wires the JNI call with a graceful fallback to the luma/blur-only v1 path on load failure.
+- `SupyScannerPalette.warning` color token (default `#FF4D4D`) — used by the document overlay for failure-state corner brackets and reticles.
+- `SupyDocumentGuidanceConfiguration` extensions: `readyStabilityFloor`, `interiorVarianceFloor`, `holdSteadyFrames`, `autoCapture`, `autoCaptureDelay`, `allowUnrectifiedFallback`, `warningColor`.
+
+### Changed
+- `SupyDocumentFrameMetrics` schema extended with `quadStability` and `interiorVariance` (both default `0.0`; backwards-compatible with existing `fromMap` callers).
+- iOS document detector hardened: `VNDetectRectanglesRequest.minimumConfidence = 0.7`, `quadratureTolerance = 30°`, `minimumAspectRatio = 0.4`, `maximumAspectRatio = 1.0`; interior-variance gate rejects laptop-screen false positives (`interiorVariance < 5.0` → treat as no document); `QuadStabilityTracker` ring-buffer now tracks last 6 quads and exports `quadStability`.
+- Document overlay redesigned: corner reticles pulse when no quad is found; corner brackets (not full outline) track the detected quad with color ramping red → amber → green across failure → holdSteady → ready states; ring countdown visible during auto-snap; 80 ms white flash + haptic on capture. All literals route through `SupyScannerPalette` — no hardcoded colors.
+- Default hint copy updated for clarity: `noDocument` → `"Searching for document…"`, `tooDark` → `"Move to a brighter spot"`, `tooClose` → `"Move farther back"`, `tooFar` → `"Move closer"`, `tooSkewed` → `"Hold the camera flat"`, `blurry` → `"Hold steady"`, `ready` → `"Don't move"`.
+
+### Channel
+- Channel name unchanged: `io.supy.scanner/v1`. New methods (`captureAndRectify`, `captureFullFrame`) and new `frame_metrics` keys (`quadStability`, `interiorVariance`) are additive.
+
+---
+
 ## [1.1.0] — Unreleased (pending P5 re-bench)
 
 Performance workstream from `docs/PERFORMANCE.md`. **No public API changes** — all event additions are advisory and backwards-compatible (consumers that ignore them continue to work). Drop-in for v1.0.0 retailer consumers.
@@ -26,6 +55,41 @@ Performance workstream from `docs/PERFORMANCE.md`. **No public API changes** —
 
 ### Channel
 - Channel name unchanged: `io.supy.scanner/v1`. Additive event types only.
+
+## [1.0.1] — 2026-06-14
+
+Hardening, observability, and release-ops sprint. **No public API changes** — Dart, MethodChannel (`io.supy.scanner/v1`), and native error-code surface are byte-for-byte compatible with v1.0.0. Retailer consumers upgrade without code changes.
+
+### Hardened
+- Channel error-code surface normalized to exactly `{cancelled, permission_denied, camera_unavailable, model_unavailable, unknown}` across Android + iOS — four pre-existing strays (`SupyScannerPlugin.nativeCoreProbe` on both platforms; `SupyBarcodeScannerView.setZoom`; `SupyDocumentScannerView.onError`) folded to canonical `unknown` with detail preserved in `message`. `format_unsupported` reserved for future use.
+- MethodChannel argument validation: every handler gates malformed payloads through `expectMapArgs` (Android Kotlin) / `expectMapArgs` (iOS Swift). Non-`Map` payloads now surface canonical `unknown` naming the method + runtime type instead of being silently dropped.
+- `EventChannel.EventSink` discipline: both platform views signal `endOfStream` / `FlutterEndOfEventStream` on dispose so Dart subscribers see a clean `onDone` instead of a silent drop. iOS marshals end-of-stream to `.main` from `deinit` if needed.
+
+### Testing
+- Android JVM unit suite (Robolectric + JUnit 4): `FormatMapperTest` + `DeviceTierTest`. Runs in CI via `./gradlew :supy_scanner:testDebugUnitTest`. UI/AVCapture-bound classes deferred.
+- iOS XCTest unit suite: `SymbologyMapperTests` + `SupyDeviceTierTests`. Wired via `s.test_spec 'Tests'` in the podspec.
+- Dart property-based fuzz at the channel boundary (`test/channel/fuzz_test.dart`): 10k frames with deterministic seed `0xDEC0DE` covering `fromMap` round-trip + single-mutation malformed payloads. Malformed-input invariant: only `TypeError` / `ArgumentError` / `SupyScanError` may escape.
+- Widget structural-test backfill for Sprint 1.5 widgets (`supy_top_bar`, `supy_user_guidance_card`, `supy_action_bar`, `supy_barcode_scanner_view`) — recording-canvas style, no pixel goldens.
+- Integration-test harness scaffolded under `example/integration_test/` with one driver per use-case (single / batch / embedded / document); headless `navigate:` cases compile and pass in CI, `device-only:` cases gated behind `SUPY_SCANNER_DEVICE_TEST=true` for emulator/device runners.
+- Coverage gates wired in CI: Dart lcov line coverage gated at ≥ 70% (current baseline 76.34%); Kover XML report for Android and `xccov` JSON for iOS uploaded as artifacts (native thresholds deferred until CI-observed baselines).
+
+### Observability
+- `SupyLogSink` Dart facade (`lib/src/log/supy_log.dart`) with `SupyLogLevel`, immutable `SupyLogRecord`, `SupyDebugPrintLogSink` (release-mode no-op), `SupyNullLogSink`, and a static `SupyLog` facade (`installSink` / `debug` / `info` / `warn` / `error`). Exported from `package:supy_scanner/supy_scanner.dart`. Consumers can install their own sink to route library logs into Sentry / Crashlytics / etc.
+- Native log parallels: `io.supy.scanner.log.SupyLog` (Kotlin object over `android.util.Log`, `@JvmStatic @Volatile enabled` toggle) and `SupyLog` (Swift `os.Logger` with per-tag cache + `privacy: .public`). All four pre-existing native log sites rerouted through these. Native→Dart channel-forwarded sink override is a deferred follow-up.
+- Example-app debug HUD (`example/lib/debug/supy_debug_hud.dart`) — overlay panel showing the last 200 `SupyLogRecord`s; togglable via AppBar action; debug-only via `SupyDebugHudScope` so the entire HUD path tree-shakes out of release builds.
+
+### Tooling
+- `tools/release.sh <version>` — automated version bump + gates + commit + annotated tag. Pre-flight: semver shape, `main` branch, clean tree, tag absent, CHANGELOG entry present. Bumps `pubspec.yaml` / `ios/supy_scanner.podspec` / `android/build.gradle` in lock-step. Runs `flutter analyze --fatal-infos` + `flutter test`. Idempotent on re-run. Does NOT push and does NOT publish — operator runs those manually.
+- `docs/RELEASE.md` — release runbook + symbolication contract. Per-release retention requirements for retailer-side R8 mapping, un-stripped Android `.so`s, iOS dSYMs, and Flutter `--split-debug-info` symbols (≥ 12-month retention). Post-hoc symbolication recipe (`llvm-addr2line` / `atos` / `flutter symbolize`). v1.1 native-core `-g -O2 -fno-omit-frame-pointer` parity rule.
+- CI matrix expansion (`.github/workflows/ci.yml`): workflow-level `concurrency` group cancels superseded PR runs; least-privilege `permissions: contents: read`; explicit `timeout-minutes` per job. Two non-blocking canary jobs added — `analyze-and-test-stable-canary` (Flutter `stable` channel) and `android-native-test-jdk21-canary` (JDK 21) — to surface upstream regressions before they bite the pinned floor.
+
+### Docs
+- `docs/SECURITY.md` — 12-section channel-boundary security review covering threat model, full channel surface, in/outbound arg validation, zero-network posture, permission inventory, filesystem surface, sensitive-data rules, dep pinning, known gaps.
+- `docs/DEPENDENCIES.md` — 9-section dep audit: exact pins for Dart / Android / iOS / native / CI, CVE scan log, license inventory (no copyleft), update cadence, follow-ups (SHA-pin actions, GMS DocScan beta1 bump, SBOM automation).
+- `docs/REPRODUCIBLE_BUILDS.md` — 9-section reproducibility doc scoping the 4 claims (pinned sources, pinned toolchain, deterministic plugin outputs, deterministic test outputs — explicitly NOT byte-identical host APK/IPA), manual repro procedure, accepted nondeterminism, verification log.
+
+### Channel
+- Channel name unchanged: `io.supy.scanner/v1`. No method-set or argument-shape changes.
 
 ## [1.0.0] — 2026-06-13
 

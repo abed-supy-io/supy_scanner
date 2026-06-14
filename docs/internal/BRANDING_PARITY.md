@@ -68,6 +68,39 @@ Android (`BatchBarcodeScannerActivity.kt`):
 
 - Document scanner UIs (iOS VisionKit, Android GMS) — vendor-owned chrome, cannot be reskinned without losing the system flow.
 - Embedded `SupyBarcodeScannerView` — already palette-driven via Flutter overlay; parity is structural.
+
+---
+
+## Document Scanner (embedded `SupyDocumentScannerView`)
+
+As of the 2026-06-14 smart-guidance branch, the embedded document overlay is
+**in parity scope**. Unlike the batch barcode surfaces above, the document
+overlay is pure Dart (`lib/src/widgets/supy_document_scanner_view.dart`) — it
+reads color tokens directly from `SupyScannerPalette` via
+`SupyDocumentGuidanceConfiguration`. There are **no hardcoded color literals
+in the library** for this surface; the example-app `#6448C3` purple is a
+consumer theme override in `example/` and must never migrate into library
+defaults.
+
+| Element | Literal | Source |
+|---|---|---|
+| Corner reticles (no-document state) | `palette.warning` — `#FF4D4D` | `SupyScannerPalette.warning` |
+| Corner brackets (failure / holdSteady states) | `palette.warning` — `#FF4D4D` | `SupyScannerPalette.warning` |
+| Corner brackets (ready state) | `palette.primary` — `#1AC0E5` | `SupyScannerPalette.primary` |
+| Ring countdown stroke | `palette.primary` — `#1AC0E5` | `SupyScannerPalette.primary` |
+| Capture flash | `Colors.white`, 80 ms fade-in + 80 ms fade-out | Hardcoded — flash is always white (system convention) |
+| Hint pill scrim | `black @ 0.55` | Mirrors batch barcode counter (`SCRIM_BLACK_055`) |
+
+**Note:** Document overlay literals route through `SupyScannerPalette` via
+the Dart `SupyDocumentGuidanceConfiguration` parameter, rather than through
+native-side constant duplication. This is possible because the entire overlay
+is a Flutter `CustomPainter` — no native chrome is involved. Consumers who
+supply a custom `SupyScannerPalette` to `SupyDocumentGuidanceConfiguration`
+get full rebranding without forking the library.
+
+The `warning` color (`#FF4D4D`) is a new token added to `SupyScannerPalette`
+(field `final Color warning`, default `const Color(0xFFFF4D4D)`). Both
+`scanbotDark` and `scanbotLight` named constructors set it to `#FF4D4D`.
 - String localization — "Cancel" / "Done" remain hardcoded English on both sides. Retailer consumer does not localize these strings today; tracked as a follow-up if a non-English locale enters scope.
 - Channel surface — no wire-format changes; `BatchBarcodeScannerLauncher.kt` and the iOS presenter args are untouched.
 

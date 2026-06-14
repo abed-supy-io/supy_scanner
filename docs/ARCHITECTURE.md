@@ -104,7 +104,24 @@
 | `scanBarcodesBatch` | `{ formats: [string], maxBatchCount: int (0=unlimited), dedupeWindowMs: int, beep: bool, vibrate: bool }` | `{ items: [{ rawValue: string, format: string }], duplicateCount: int }` | `cancelled`, `permission_denied`, `camera_unavailable`, `unknown` |
 | `prewarm` | `{}` | `{}` | `unknown` |
 | `requestCameraPermission` | `{}` | `{ status: 'granted' \| 'denied' \| 'permanentlyDenied' }` | — |
-| `nativeCoreProbe` | `{}` | `{ version: string, abiVersion: int }` | `native_core_unavailable`, `unknown` |
+| `nativeCoreProbe` | `{}` | `{ version: string, abiVersion: int, hasZxing: bool (v1.1) }` | `native_core_unavailable`, `unknown` |
+
+#### Native core C ABI (v1.1)
+
+The shared C++ core in `native/` exposes a stable C ABI consumed by Android JNI, iOS Swift, and (eventually) dart:ffi. The full surface lives in `native/include/supy_scanner_core.h`. Pixel buffers MUST NOT cross dart:ffi — only result structs (decoded payloads, doc page URIs) may.
+
+| Symbol | Purpose |
+|---|---|
+| `supy_core_version` | Semver string of the native core (e.g. `1.1.0-dev.2`). |
+| `supy_core_abi_version` | Integer ABI version (`SUPY_CORE_ABI_VERSION`); platform bridge refuses to load on mismatch. |
+| `supy_core_has_zxing` | `1` when build linked zxing-cpp (`SUPY_WITH_ZXING_CPP=ON`); `0` otherwise. Surfaced through `nativeCoreProbe.hasZxing`. |
+| `supy_core_decode` | Synchronous decode of a luma frame via zxing-cpp. Returns opaque handle or `NULL`. Caller frees with `supy_core_decode_results_free`. |
+| `supy_core_decode_count` / `_text` / `_format` / `_corners` | Result accessors. `text` is UTF-8, `format` is a single `SUPY_FORMAT_*` bit, `corners` is `[x0,y0,…,x3,y3]` in TL/TR/BR/BL pixel space. |
+
+The decode path is gated end-to-end:
+- CMake option `SUPY_WITH_ZXING_CPP` (default OFF) — controls whether zxing-cpp is fetched and linked.
+- iOS podspec gate on `ENV['SUPY_SCANNER_ENABLE_ZXING']=='1' || File.directory?(Vendor/ZXing.xcframework)` (see `tools/build_zxing_xcframework.sh`).
+- Runtime opt-in via the `useNativeCore` PlatformView arg — platforms only call `supy_core_decode` when `useNativeCore=true`; otherwise the ML Kit / Vision path stays canonical.
 
 ### `io.supy.scanner/v1/barcode/<viewId>` (per-view MethodChannel)
 
@@ -153,13 +170,14 @@ Backs `SupyDocumentScannerView` — the embedded streaming guidance preview
 | `pause` | — | `{}` |
 | `resume` | — | `{}` |
 | `setTorch` | `{ on: bool }` | `{}` |
-| `captureAndRectify` | — | `{ uri: string, width: int, height: int }` or `null` if no document is currently locked. Errors: `capture_failed`, `no_document`, `unknown`. Native rectifies the last smoothed quad to a top-down rectangle (≥300 DPI when `useNativeCore` is on) and persists the JPEG (quality follows `SupyDocumentScanOptions.jpegQuality`). v1.1 / Sprint 6 — depends on Sprint 4 `warpPerspective`. |
+| `captureAndRectify` | — | `{ path: String, widthPx: Int, heightPx: Int, quad: List<{x, y}> }`. iOS: applies `CIPerspectiveCorrection` to the last smoothed quad and writes a JPEG to `NSTemporaryDirectory()`. Android: returns `FlutterError("UNIMPLEMENTED", …)` until Sprint 4 `warpPerspective` lands — the Dart widget falls back to `captureFullFrame` when `guidance.allowUnrectifiedFallback` is `true`. Errors: `capture_failed`, `unknown`. |
+| `captureFullFrame` | — | `{ path: String, widthPx: Int, heightPx: Int }`. iOS: triggers `AVCapturePhotoOutput`, writes JPEG to `NSTemporaryDirectory()`. Android: triggers CameraX `ImageCapture`, writes JPEG to `context.cacheDir`. Always available on both platforms. Errors: `capture_failed`, `unknown`. |
 
 ### `io.supy.scanner/v1/document/<viewId>/events` (EventChannel)
 
 Stream of:
 - `{ type: 'preview_started', flashAvailable: bool }`
-- `{ type: 'frame_metrics', quad: [{x, y}, …] | [], coverageRatio: double, tiltDegrees: double, meanLuma: double, blurScore: double, clipsEdge: bool }`
+- `{ type: 'frame_metrics', quad: [{x, y}, …] | [], coverageRatio: double, tiltDegrees: double, meanLuma: double, blurScore: double, clipsEdge: bool, quadStability?: double, interiorVariance?: double }`
 - `{ type: 'error', code, message }`
 
 `quad` is normalized to preview coordinates with a **top-left origin**. An
@@ -167,10 +185,19 @@ empty `quad` signals "no document detected" — the Dart state machine maps
 that to `noDocument`. On iOS the quad is sourced from
 `VNDetectDocumentSegmentationRequest` (iOS 17+) with a
 `VNDetectRectanglesRequest` fallback on iOS 16. On Android the quad is
-**always empty** in v1: ML Kit has no per-frame rectangle detector and the
-GMS Document Scanner is a launcher activity, not a streaming detector. Luma /
-blur are still computed, so `tooDark` and `blurry` hints work on Android even
-without a quad. An Android edge detector is tracked as a follow-up.
+sourced from the native C++ document-edge detector (`supy_scanner_core` JNI)
+when available, with a graceful fallback to luma/blur-only metrics on load
+failure.
+
+`quadStability` (Double, 0.0–1.0) — 1 = no corner drift across the last 6
+frames of the stability window. Absent when `quad` is empty. Platforms that
+have not yet implemented per-corner tracking may omit the key; Dart defaults
+to `0.0`.
+
+`interiorVariance` (Double, ≥ 0) — variance-of-Laplacian inside the detected
+quad bounding box (downsampled). High values indicate textured surfaces
+(printed documents); low values indicate smooth surfaces (laptop screens
+showing a single image). Absent when `quad` is empty.
 
 ### `io.supy.scanner/v1/document_view` PlatformView
 
