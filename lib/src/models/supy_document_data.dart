@@ -9,6 +9,7 @@ class SupyDocumentData {
   const SupyDocumentData({
     required this.pages,
     required this.ocrText,
+    this.pdfUri,
   });
 
   /// Deserializes a document result from a channel map.
@@ -20,6 +21,7 @@ class SupyDocumentData {
     return SupyDocumentData(
       pages: List.unmodifiable(rawPages),
       ocrText: (map['ocrText'] as String?) ?? '',
+      pdfUri: map['pdfUri'] as String?,
     );
   }
 
@@ -31,11 +33,17 @@ class SupyDocumentData {
   /// Empty string when OCR was disabled or produced no results.
   final String ocrText;
 
+  /// File URI of the assembled multi-page PDF. Populated only when
+  /// `SupyDocumentScanOptions.outputFormat == SupyDocumentOutputFormat.pdf`.
+  /// `null` for JPG / PNG runs. v1.1 / Sprint 7.
+  final String? pdfUri;
+
   @override
   bool operator ==(Object other) {
     if (identical(this, other)) return true;
     if (other is! SupyDocumentData) return false;
     if (other.ocrText != ocrText) return false;
+    if (other.pdfUri != pdfUri) return false;
     if (other.pages.length != pages.length) return false;
     for (var i = 0; i < pages.length; i++) {
       if (other.pages[i] != pages[i]) return false;
@@ -44,9 +52,10 @@ class SupyDocumentData {
   }
 
   @override
-  int get hashCode => Object.hash(Object.hashAll(pages), ocrText);
+  int get hashCode => Object.hash(Object.hashAll(pages), ocrText, pdfUri);
 
   @override
   String toString() =>
-      'SupyDocumentData(pages: ${pages.length}, ocrText: ${ocrText.length} chars)';
+      'SupyDocumentData(pages: ${pages.length}, ocrText: ${ocrText.length} chars'
+      '${pdfUri != null ? ', pdfUri: $pdfUri' : ''})';
 }

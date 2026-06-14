@@ -29,9 +29,12 @@ final class OcrRunner {
       return
     }
 
+    let longEdgeCap = SupyDeviceTier.detect().ocrLongEdgeCap
+
     workQueue.async {
       let recognized: [String] = pages.map { page in
-        Self.recognizeText(in: page.image, languages: languages)
+        let prepared = Self.downscaleIfNeeded(page.image, longEdgeCap: longEdgeCap)
+        return Self.recognizeText(in: prepared, languages: languages)
       }
       let entries: [[String: Any]] = pages.map { page in
         [
@@ -87,6 +90,30 @@ final class OcrRunner {
     return observations
       .compactMap { $0.topCandidates(1).first?.string }
       .joined(separator: "\n")
+  }
+
+  /// Downscales [image] so its long edge is at most [longEdgeCap]. The
+  /// persisted page bytes returned to the consumer are unaffected — this
+  /// only reduces the in-memory copy fed to Vision.
+  private static func downscaleIfNeeded(
+    _ image: UIImage,
+    longEdgeCap: Int?
+  ) -> UIImage {
+    guard let cap = longEdgeCap else { return image }
+    let longEdge = max(image.size.width, image.size.height) * image.scale
+    guard longEdge > CGFloat(cap) else { return image }
+    let scale = CGFloat(cap) / longEdge
+    let targetSize = CGSize(
+      width: image.size.width * scale,
+      height: image.size.height * scale
+    )
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = 1
+    format.opaque = true
+    let renderer = UIGraphicsImageRenderer(size: targetSize, format: format)
+    return renderer.image { _ in
+      image.draw(in: CGRect(origin: .zero, size: targetSize))
+    }
   }
 
   private static func cgOrientation(

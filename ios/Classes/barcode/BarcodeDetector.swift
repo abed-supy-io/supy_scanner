@@ -43,6 +43,12 @@ final class BarcodeDetector: NSObject,
   /// Invoked from the detection queue on failure.
   var onError: ((String) -> Void)?
 
+  /// Optional pre-Vision gate. Invoked on the detection queue with the
+  /// incoming pixel buffer. Returning `true` skips the Vision request for
+  /// this frame — used by the idle detector to suppress ML work on static
+  /// scenes.
+  var shouldSkipFrame: ((CVPixelBuffer) -> Bool)?
+
   private let detectionQueue: DispatchQueue = DispatchQueue(
     label: "io.supy.scanner.detection",
     qos: .userInitiated
@@ -98,6 +104,10 @@ final class BarcodeDetector: NSObject,
     }
 
     guard let pixelBuffer = CMSampleBufferGetImageBuffer(sampleBuffer) else {
+      return
+    }
+
+    if shouldSkipFrame?(pixelBuffer) == true {
       return
     }
 

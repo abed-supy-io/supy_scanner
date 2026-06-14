@@ -26,6 +26,14 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
       factory,
       withId: SupyBarcodeScannerViewFactory.viewTypeId
     )
+
+    let documentFactory = SupyDocumentScannerViewFactory(
+      messenger: registrar.messenger()
+    )
+    registrar.register(
+      documentFactory,
+      withId: SupyDocumentScannerViewFactory.viewTypeId
+    )
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -33,17 +41,56 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
     case "requestCameraPermission":
       requestCameraPermission(result: result)
     case "scanDocument":
-      let args = call.arguments as? [String: Any]
+      guard let args = Self.expectMapArgs(call, result: result) else { return }
       documentPresenter.present(args: args, result: result)
     case "scanBarcodesBatch":
-      let args = call.arguments as? [String: Any]
+      guard let args = Self.expectMapArgs(call, result: result) else { return }
       batchBarcodePresenter.present(args: args, result: result)
     case "prewarm":
       documentPresenter.prewarm()
       result(nil)
+    case "nativeCoreProbe":
+      let version = SupyNativeCore.version()
+      let abiVersion = Int(SupyNativeCore.abiVersion())
+      if version.isEmpty {
+        result(
+          // Canonical `unknown` wire code (see
+          // `lib/src/models/supy_scan_error.dart`); detail in message.
+          FlutterError(
+            code: "unknown",
+            message: "Native core unavailable: empty version string",
+            details: nil
+          )
+        )
+      } else {
+        result([
+          "version": version,
+          "abiVersion": abiVersion,
+        ])
+      }
     default:
       result(FlutterMethodNotImplemented)
     }
+  }
+
+  /// Validates that `call.arguments` is either nil or a `[String: Any]`. A
+  /// non-nil, non-dict payload means a malformed caller — surfaces the
+  /// canonical `unknown` error and returns nil so the caller bails.
+  private static func expectMapArgs(
+    _ call: FlutterMethodCall,
+    result: @escaping FlutterResult
+  ) -> [String: Any]? {
+    if call.arguments == nil { return [:] }
+    if let dict = call.arguments as? [String: Any] { return dict }
+    let actual = String(describing: type(of: call.arguments))
+    result(
+      FlutterError(
+        code: "unknown",
+        message: "\(call.method): arguments must be a [String: Any], got \(actual)",
+        details: nil
+      )
+    )
+    return nil
   }
 
   // MARK: - Camera permission

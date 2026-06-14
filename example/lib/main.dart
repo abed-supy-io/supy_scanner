@@ -4,6 +4,8 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:supy_scanner/supy_scanner.dart';
 
+import 'demo/supy_demo_home.dart';
+
 void main() {
   runApp(const SupyScannerExampleApp());
 }
@@ -27,27 +29,66 @@ class SupyScannerExampleApp extends StatelessWidget {
 class _Home extends StatelessWidget {
   const _Home();
 
+  Future<void> _probeNativeCore(BuildContext context) async {
+    final messenger = ScaffoldMessenger.of(context);
+    try {
+      final probe = await SupyScannerChannel.instance.nativeCoreProbe();
+      messenger.showSnackBar(
+        SnackBar(
+          content: Text(
+            'native core ${probe.version} (abi ${probe.abiVersion})',
+          ),
+        ),
+      );
+    } on SupyScanError catch (e) {
+      messenger.showSnackBar(
+        SnackBar(content: Text('native core unavailable: ${e.message}')),
+      );
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     return DefaultTabController(
-      length: 3,
-      child: Scaffold(
-        appBar: AppBar(
-          title: const Text('supy_scanner'),
-          bottom: const TabBar(
-            tabs: [
-              Tab(text: 'Embedded', icon: Icon(Icons.qr_code_scanner)),
-              Tab(text: 'Batch', icon: Icon(Icons.dynamic_feed)),
-              Tab(text: 'Document', icon: Icon(Icons.document_scanner)),
+      length: 6,
+      child: Builder(
+        builder: (tabContext) => Scaffold(
+          appBar: AppBar(
+            title: const Text('supy_scanner'),
+            actions: [
+              Builder(
+                builder: (innerContext) => IconButton(
+                  tooltip: 'Probe native core (v1.1 debug)',
+                  icon: const Icon(Icons.memory),
+                  onPressed: () => _probeNativeCore(innerContext),
+                ),
+              ),
+            ],
+            bottom: const TabBar(
+              isScrollable: true,
+              tabs: [
+                Tab(text: 'Supy Demo', icon: Icon(Icons.auto_awesome)),
+                Tab(text: 'Embedded', icon: Icon(Icons.qr_code_scanner)),
+                Tab(text: 'Gallery', icon: Icon(Icons.dashboard)),
+                Tab(text: 'Batch', icon: Icon(Icons.dynamic_feed)),
+                Tab(text: 'Document', icon: Icon(Icons.document_scanner)),
+                Tab(text: 'Guidance', icon: Icon(Icons.center_focus_strong)),
+              ],
+            ),
+          ),
+          body: TabBarView(
+            children: [
+              SupyDemoHome(
+                onOpenDevTabs: () =>
+                    DefaultTabController.of(tabContext).animateTo(1),
+              ),
+              const _EmbeddedBarcodeTab(),
+              const _GalleryTab(),
+              const _BatchBarcodeTab(),
+              const _DocumentTab(),
+              const _DocumentGuidanceTab(),
             ],
           ),
-        ),
-        body: const TabBarView(
-          children: [
-            _EmbeddedBarcodeTab(),
-            _BatchBarcodeTab(),
-            _DocumentTab(),
-          ],
         ),
       ),
     );
@@ -110,6 +151,176 @@ class _EmbeddedBarcodeTabState extends State<_EmbeddedBarcodeTab> {
               ),
             ),
           ),
+      ],
+    );
+  }
+}
+
+/// V1-S1_5-13 — Demo gallery showcasing `SupyBarcodeScannerScreen` across
+/// every use-case variant + a palette picker (Scanbot Dark / Scanbot Light).
+class _GalleryTab extends StatefulWidget {
+  const _GalleryTab();
+
+  @override
+  State<_GalleryTab> createState() => _GalleryTabState();
+}
+
+enum _PaletteChoice { dark, light }
+
+class _GalleryTabState extends State<_GalleryTab> {
+  _PaletteChoice _palette = _PaletteChoice.dark;
+
+  SupyScannerPalette get _activePalette => switch (_palette) {
+        _PaletteChoice.dark => const SupyScannerPalette.scanbotDark(),
+        _PaletteChoice.light => const SupyScannerPalette.scanbotLight(),
+      };
+
+  Future<void> _launch(BuildContext context, SupyScanUseCase useCase) async {
+    final messenger = ScaffoldMessenger.of(context);
+    final navigator = Navigator.of(context);
+    final palette = _activePalette;
+    await navigator.push<void>(
+      MaterialPageRoute(
+        builder: (_) => SupyBarcodeScannerScreen(
+          useCase: useCase,
+          palette: palette,
+          onCancel: () => navigator.maybePop(),
+          onSingleScan: (b) {
+            navigator.maybePop();
+            messenger.showSnackBar(
+              SnackBar(content: Text('Single: ${b.rawValue}')),
+            );
+          },
+          onMultipleScan: (items) {
+            navigator.maybePop();
+            messenger.showSnackBar(
+              SnackBar(content: Text('Multi: ${items.length} items')),
+            );
+          },
+          onFindAndPick: (rows) {
+            navigator.maybePop();
+            messenger.showSnackBar(
+              SnackBar(content: Text('FindAndPick: ${rows.length} rows')),
+            );
+          },
+          onError: (e) => messenger.showSnackBar(
+            SnackBar(content: Text('Error: $e')),
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        Text('Palette', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        SegmentedButton<_PaletteChoice>(
+          segments: const [
+            ButtonSegment(
+              value: _PaletteChoice.dark,
+              label: Text('Scanbot Dark'),
+              icon: Icon(Icons.dark_mode),
+            ),
+            ButtonSegment(
+              value: _PaletteChoice.light,
+              label: Text('Scanbot Light'),
+              icon: Icon(Icons.light_mode),
+            ),
+          ],
+          selected: {_palette},
+          onSelectionChanged: (s) => setState(() => _palette = s.first),
+        ),
+        const SizedBox(height: 24),
+        Text('Use cases', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 8),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.qr_code),
+            title: const Text('Single scan'),
+            subtitle: const Text('Pauses on first detection · confirm sheet'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _launch(context, const SupySingleScanUseCase()),
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.bolt),
+            title: const Text('Single scan (immediate)'),
+            subtitle: const Text('Returns first detection without sheet'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _launch(
+              context,
+              const SupySingleScanUseCase(
+                config: SupySingleScanUseCaseConfiguration(
+                  confirmationSheetEnabled: false,
+                ),
+              ),
+            ),
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.format_list_numbered),
+            title: const Text('Multiple scan — counting'),
+            subtitle: const Text('Same code increments count'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _launch(
+              context,
+              const SupyMultipleScanUseCase(
+                config: SupyMultipleScanUseCaseConfiguration(
+                  mode: SupyMultipleScanMode.counting,
+                ),
+              ),
+            ),
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.fingerprint),
+            title: const Text('Multiple scan — unique'),
+            subtitle: const Text('Deduplicates by raw value'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _launch(
+              context,
+              const SupyMultipleScanUseCase(
+                config: SupyMultipleScanUseCaseConfiguration(
+                  mode: SupyMultipleScanMode.unique,
+                ),
+              ),
+            ),
+          ),
+        ),
+        Card(
+          child: ListTile(
+            leading: const Icon(Icons.checklist),
+            title: const Text('Find and pick'),
+            subtitle: const Text('Pick-list with per-row progress'),
+            trailing: const Icon(Icons.chevron_right),
+            onTap: () => _launch(
+              context,
+              const SupyFindAndPickUseCase(
+                config: SupyFindAndPickUseCaseConfiguration(
+                  expected: [
+                    SupyExpectedBarcode(
+                      rawValue: '1234567890123',
+                      expectedCount: 2,
+                      label: 'Sample EAN-13',
+                    ),
+                    SupyExpectedBarcode(
+                      rawValue: '9876543210',
+                      expectedCount: 1,
+                      label: 'Sample UPC',
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
       ],
     );
   }
@@ -331,6 +542,91 @@ class _DocumentTabState extends State<_DocumentTab> {
           ),
         ],
       ),
+    );
+  }
+}
+
+/// Demonstrates the embedded `SupyDocumentScannerView` with live edge guidance.
+/// Shows the green/red outline + hint copy driven by the state machine, and
+/// fires a snackbar the first time the document is deemed `ready` (auto-snap
+/// target — capture/OCR wiring lands downstream of this prototype).
+class _DocumentGuidanceTab extends StatefulWidget {
+  const _DocumentGuidanceTab();
+
+  @override
+  State<_DocumentGuidanceTab> createState() => _DocumentGuidanceTabState();
+}
+
+class _DocumentGuidanceTabState extends State<_DocumentGuidanceTab> {
+  final SupyDocumentScannerController _controller =
+      SupyDocumentScannerController();
+  SupyDocumentFrameState _state = SupyDocumentFrameState.noDocument;
+  bool _torchOn = false;
+  bool _flashAvailable = false;
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  void _onReady(SupyDocumentGuidanceFrame frame) {
+    final messenger = ScaffoldMessenger.of(context);
+    messenger.showSnackBar(
+      const SnackBar(
+        content: Text('Document ready — capture would fire here.'),
+        duration: Duration(seconds: 1),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Stack(
+      fit: StackFit.expand,
+      children: [
+        SupyDocumentScannerView(
+          controller: _controller,
+          onGuidance: (frame) {
+            if (frame.state != _state) {
+              setState(() => _state = frame.state);
+            }
+          },
+          onReady: _onReady,
+          onPreviewStarted: (flashAvailable) =>
+              setState(() => _flashAvailable = flashAvailable),
+        ),
+        if (_flashAvailable)
+          Positioned(
+            top: 16,
+            right: 16,
+            child: FloatingActionButton.small(
+              heroTag: 'doc-torch',
+              onPressed: () async {
+                await _controller.setTorch(on: !_torchOn);
+                setState(() => _torchOn = !_torchOn);
+              },
+              child: Icon(_torchOn ? Icons.flash_on : Icons.flash_off),
+            ),
+          ),
+        Positioned(
+          top: 16,
+          left: 16,
+          child: Card(
+            color: Colors.black.withValues(alpha: 0.55),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(
+                horizontal: 12,
+                vertical: 6,
+              ),
+              child: Text(
+                'state: ${_state.name}',
+                style: const TextStyle(color: Colors.white),
+              ),
+            ),
+          ),
+        ),
+      ],
     );
   }
 }

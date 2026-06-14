@@ -78,6 +78,45 @@ class SupyScannerChannel {
     }
   }
 
+  /// Returns the native C++ core's version + ABI version, or throws
+  /// [SupyScanError] if the native core is not available on this build.
+  ///
+  /// v1.1 scaffold (see docs/V1.1_PLAN.md). Used by integration tests and
+  /// the example app to verify the JNI / Swift bridge is wired correctly.
+  Future<SupyNativeCoreProbe> nativeCoreProbe() async {
+    try {
+      final raw = await _methodChannel.invokeMapMethod<String, Object?>(
+        'nativeCoreProbe',
+      );
+      if (raw == null) {
+        throw const SupyScanError(
+          code: SupyScanErrorCode.unknown,
+          message: 'nativeCoreProbe returned null',
+        );
+      }
+      final version = raw['version'] as String?;
+      final abiVersion = raw['abiVersion'] as int?;
+      if (version == null || version.isEmpty) {
+        throw const SupyScanError(
+          code: SupyScanErrorCode.unknown,
+          message: 'nativeCoreProbe response is missing key "version"',
+        );
+      }
+      if (abiVersion == null) {
+        throw const SupyScanError(
+          code: SupyScanErrorCode.unknown,
+          message: 'nativeCoreProbe response is missing key "abiVersion"',
+        );
+      }
+      return SupyNativeCoreProbe(
+        version: version,
+        abiVersion: abiVersion,
+      );
+    } on PlatformException catch (e) {
+      throw _wrap(e);
+    }
+  }
+
   /// Asks the OS for camera permission. Returns the resulting status.
   Future<SupyCameraPermissionStatus> requestCameraPermission() async {
     try {
@@ -95,6 +134,35 @@ class SupyScannerChannel {
         message: e.message ?? 'PlatformException without message',
         details: e.details,
       );
+}
+
+/// Result of a [SupyScannerChannel.nativeCoreProbe] call — exposes the
+/// semver of the C++ core and the ABI version it was compiled against.
+@immutable
+class SupyNativeCoreProbe {
+  /// Creates a native-core probe result.
+  const SupyNativeCoreProbe({required this.version, required this.abiVersion});
+
+  /// Semantic version reported by the native core (e.g. `'1.1.0-dev.1'`).
+  final String version;
+
+  /// ABI version. The Dart side currently expects `1`; mismatches indicate
+  /// a stale plugin/native build pair.
+  final int abiVersion;
+
+  @override
+  String toString() =>
+      'SupyNativeCoreProbe(version: $version, abiVersion: $abiVersion)';
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SupyNativeCoreProbe &&
+          other.version == version &&
+          other.abiVersion == abiVersion;
+
+  @override
+  int get hashCode => Object.hash(version, abiVersion);
 }
 
 /// Outcome of a [SupyScannerChannel.requestCameraPermission] call.

@@ -300,6 +300,51 @@ Build `supy_scanner_scanbot_compat` so retailer can adopt with minimal churn.
 
 Detailed ticket-level breakdown lives in [`docs/SPRINTS.md`](SPRINTS.md).
 
+### Post-v1.0 — v1.1 Performance workstream
+
+Full plan: [`docs/PERFORMANCE.md`](PERFORMANCE.md). Lands on top of v1.0.0 as `v1.1.x` — no public API changes, additive EventChannel payloads only (`thermal`, `idle_pause`, `idle_resume`, `torch_idle_suggested`). Decision: ships as **v1.1**, not deferred to v1.2 — the Moto G Power floor is the binding constraint for the retailer cutover and the same release that turns the library on by default should hit it.
+
+| Phase | Status | Surface |
+|---|---|---|
+| P1 — DeviceTier + tier-adaptive analyzer | ✅ done | `perf/SupyDeviceTier`, analyzer resolution/FPS caps |
+| P2 — ThermalGovernor + thermal events | ✅ done | `perf/ThermalGovernor` + `perf/SupyThermalGovernor`; `{type:'thermal'}` event |
+| P3 — Idle pause (luma variance) | ✅ done | `perf/IdleDetector` + `perf/SupyIdleDetector`; `{type:'idle_pause'\|'idle_resume'}` events |
+| P3.5 — Torch-idle advisory | ✅ done | `{type:'torch_idle_suggested'}` event emitted alongside `idle_pause` when torch is on; consumer-driven (library never toggles torch) |
+| P4 — OCR downscale + per-page memory budget | ✅ done | Tier-tiered long-edge downscale (HIGH uncapped / MID 1600 / LOW 1280) before recognition; tier-aware JPEG quality |
+| P5 — Hardening + sign-off | pending | Re-bench on Moto G Power / Pixel 8 / SE 3 / 15 Pro; tag `v1.1.0` |
+
+### v1.2 — Active phases
+
+v1.2 inherits the same constraints as v1.1: drop-in compatibility, on-device only, no paid SDK dep, channel stays at `io.supy.scanner/v1` unless a surface genuinely breaks.
+
+#### Phase CXD — CameraX document fallback (non-GMS Android)
+
+Replaces the current `model_unavailable` failure on non-GMS Android devices (Huawei, AOSP, locked-down enterprise images) with a first-party CameraX-backed document capture flow. **Auto-detected** via `GoogleApiAvailability` at call-time — no public API change. Pages flow through the existing `OcrRunner` so OCR coverage is unchanged.
+
+| Sub-phase | Status | Scope |
+|---|---|---|
+| CXD1 — Availability gate | pending | `GmsAvailability` helper wraps `GoogleApiAvailability.isGooglePlayServicesAvailable`. `DocumentScannerLauncher.launch` branches before touching the GMS client; existing GMS path unchanged when available. |
+| CXD2 — CameraX capture Activity | pending | New `CameraXDocumentScannerActivity` (manual capture UX): preview + tap-to-capture button + page-thumbnail strip + retake/delete + done. Returns JPEG URIs back to `DocumentScannerLauncher` via `ActivityResultLauncher`. No edge detection in v1.2 — auto-snap is a v1.3 candidate. |
+| CXD3 — OCR + JPEG pipeline reuse | pending | Captured frames re-encoded via existing `JpegReencoder` (tier-aware quality) and fed to `OcrRunner`. No new OCR code. |
+| CXD4 — Permission + cancel paths | pending | Camera permission via existing `SupyPermissions`. User back/cancel → resolves `scanDocument` with `[]` (matches D4 in QA.md). Permission denied → `permission_denied`. |
+| CXD5 — Docs + QA | pending | `docs/CAMERAX_FALLBACK.md` design doc; `docs/ARCHITECTURE.md` Android module table row; `docs/QA.md` adds D12 (Huawei/AOSP fallback path) + revises D10 (GMS-unavailable no longer fails; now exercises the new path). |
+| CXD6 — Sign-off | pending | Manual walkthrough on one non-GMS device (Huawei P30 or emulator with GMS stripped); D1/D2/D4/D10/D12 all pass; tag `v1.2.0`. |
+
+**Exit:** `SupyDocumentScanner.startMultiPage` succeeds on a non-GMS device; result shape identical to GMS path; retailer code is unchanged.
+
+#### Post-v1.2 — candidates
+
+Scope sketch only — nothing ships until promoted.
+
+| Candidate | Why | Promotion gate |
+|---|---|---|
+| **MRZ / ID-card recognition** | Out-of-Scope §3 today — Scanbot specialty we don't currently use. | Concrete product ask from retailer or another internal app. |
+| **Image-filter pipeline for document enhancement (B&W, color, perspective polish)** | Out-of-Scope §5. Scanbot exposes these knobs; not yet needed. | Retailer-side UX feedback after v1.1 cutover shows OCR quality gap. |
+| **Reliability stress harness in CI** | Mentioned in v1.0 sign-off pending list. Currently a manual Instruments / Profiler pass; would catch leak regressions earlier. | Bench-rig automation available on CI runners. |
+| **Tier debug override** | `debugForceTier` was speculatively documented then removed in v1.1 because no surface existed. If QA churn around tier behavior recurs, expose a `SupyScanOptions.debugForceTier: SupyDeviceTier?` (debug builds only). | A second perf bug where reproducing requires forcing tier on a flagship. |
+
+Anything we add to this list crosses a phase boundary and updates `docs/PLAN.md`, `TODO.md`, and the relevant phase doc in `docs/`.
+
 ## 5. Risks & Mitigations
 
 | # | Risk | Likelihood | Impact | Mitigation |
@@ -345,5 +390,4 @@ Each phase exits only when its checklist passes. v1.0.0 ships only after the **a
 1. **Retailer cutover** — feature-flag rollout, parity QA, Scanbot dependency removal.
 2. **Vendor app cutover** — once retailer is stable.
 3. **MRZ / ID-card** — only if a concrete product need lands.
-4. **CameraX fallback** for non-GMS Android — only if a customer surfaces this.
-5. **Image filter pipeline** — additional document enhancement (B&W, color, etc.).
+4. **Image filter pipeline** — additional document enhancement (B&W, color, etc.).

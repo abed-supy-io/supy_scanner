@@ -1,12 +1,14 @@
 package io.supy.scanner.document
 
 import android.content.Context
+import android.graphics.Bitmap
 import android.graphics.BitmapFactory
 import android.net.Uri
 import com.google.mlkit.vision.common.InputImage
 import com.google.mlkit.vision.text.TextRecognition
 import com.google.mlkit.vision.text.TextRecognizer
 import com.google.mlkit.vision.text.latin.TextRecognizerOptions
+import io.supy.scanner.perf.DeviceTier
 import java.io.IOException
 
 /**
@@ -42,10 +44,12 @@ internal class OcrRunner {
         val results = arrayOfNulls<PageOcr>(pageUris.size)
         var remaining = pageUris.size
 
+        val longEdgeCap = DeviceTier.detect(context).ocrLongEdgeCap()
+
         pageUris.forEachIndexed { index, uri ->
             val (width, height) = readDimensions(context, uri)
             val image = try {
-                InputImage.fromFilePath(context, uri)
+                buildInputImage(context, uri, width, height, longEdgeCap)
             } catch (e: IOException) {
                 results[index] = PageOcr(uri, width, height, "")
                 remaining -= 1
@@ -88,6 +92,38 @@ internal class OcrRunner {
             .joinToString(separator = "\n\n") { it.text }
             .trim()
         onComplete(pages, text)
+    }
+
+    /**
+     * Returns an `InputImage` for [uri], downscaled to roughly [longEdgeCap]
+     * pixels on the long edge when a cap applies and the page is larger than
+     * it. The persisted JPEG on disk is left untouched — only the in-memory
+     * copy fed to ML Kit is reduced.
+     */
+    private fun buildInputImage(
+        context: Context,
+        uri: Uri,
+        width: Int,
+        height: Int,
+        longEdgeCap: Int?,
+    ): InputImage {
+        val longEdge = maxOf(width, height)
+        if (longEdgeCap == null || longEdge <= 0 || longEdge <= longEdgeCap) {
+            return InputImage.fromFilePath(context, uri)
+        }
+
+        var sampleSize = 1
+        while (longEdge / (sampleSize * 2) >= longEdgeCap) {
+            sampleSize *= 2
+        }
+        val options = BitmapFactory.Options().apply {
+            inSampleSize = sampleSize
+            inPreferredConfig = Bitmap.Config.ARGB_8888
+        }
+        val bitmap = context.contentResolver.openInputStream(uri)?.use { stream ->
+            BitmapFactory.decodeStream(stream, null, options)
+        } ?: throw IOException("Failed to decode $uri for OCR downscale")
+        return InputImage.fromBitmap(bitmap, 0)
     }
 
     private fun readDimensions(context: Context, uri: Uri): Pair<Int, Int> {

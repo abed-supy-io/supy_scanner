@@ -18,13 +18,23 @@
                    │
 ┌──────────────────▼────────────────────────────┐
 │  supy_scanner (Dart)                          │
-│  ┌────────────────┐  ┌─────────────────────┐ │
-│  │ widgets/        │  │ services/           │ │
-│  │  BarcodeView    │  │  DocumentScanner    │ │
-│  │  Controller     │  │  InvoiceScannerSvc  │ │
-│  └────────┬───────┘  └─────────┬───────────┘ │
-│           │                    │              │
-│  ┌────────▼────────────────────▼───────────┐ │
+│  ┌────────────────────────┐  ┌──────────────┐│
+│  │ widgets/               │  │ services/    ││
+│  │  BarcodeScannerScreen  │  │  Document    ││
+│  │   ├ ArOverlay          │  │  Permissions ││
+│  │   ├ TopBar/ActionBar   │  │              ││
+│  │   └ Sheets (single/    │  └──────┬───────┘│
+│  │      multi/find&pick)  │         │        │
+│  │  BarcodeScannerView    │         │        │
+│  │  Controller            │         │        │
+│  └────────┬───────────────┘         │        │
+│  ┌────────▼─────────────────────────▼──────┐ │
+│  │ models/ui/  (v1.1 frozen UI configs)    │ │
+│  │  Palette · TopBar · ViewFinder ·        │ │
+│  │  UserGuidance · ActionBar · ArOverlay · │ │
+│  │  Camera · sealed ScanUseCase            │ │
+│  └────────┬────────────────────────────────┘ │
+│  ┌────────▼────────────────────────────────┐ │
 │  │ channel/                                │ │
 │  │  MethodChannel('io.supy.scanner/v1')    │ │
 │  │  EventChannel('.../barcode/<viewId>')   │ │
@@ -47,10 +57,16 @@
 | Module | Responsibility |
 |---|---|
 | `models/` | Frozen value types — `SupyBarcode`, `SupyBarcodeFormat`, `SupyDocumentData`, `SupyDocumentPage`, `SupyScanOptions`, `SupyScanError`. |
+| `models/ui/` | v1.1 frozen UI-config types — `SupyScannerPalette`, `SupyTopBarConfiguration`, `SupyViewFinderConfiguration`, `SupyUserGuidanceConfiguration`, `SupyActionBarConfiguration` (+ `SupyActionButtonSpec`), `SupyArOverlayConfiguration`, `SupyCameraConfiguration` (+ `SupyScanRange`), sealed `SupyScanUseCase` (+ `SupySingleScanUseCase` / `SupyMultipleScanUseCase` / `SupyFindAndPickUseCase`) and their per-variant configurations (`SupySingleScanUseCaseConfiguration`, `SupyMultipleScanUseCaseConfiguration` (+ `SupyMultipleScanMode`), `SupyFindAndPickUseCaseConfiguration` (+ `SupyExpectedBarcode`)). See `docs/UI_CONFIGURATION.md`. |
 | `channel/method_channel.dart` | Single point of `MethodChannel('io.supy.scanner/v1')` access. All native calls go through here. |
 | `channel/event_channel.dart` | Per-view EventChannel for barcode detections. |
 | `widgets/supy_barcode_scanner_view.dart` | The `StatefulWidget` that composes an `AndroidView`/`UiKitView`, a finder overlay, and slot Stack for header/footer. |
-| `widgets/supy_barcode_scanner_controller.dart` | Holds pause/torch state, talks to the per-view MethodChannel. |
+| `widgets/supy_barcode_scanner_controller.dart` | Holds pause/torch/zoom/camera-position state, talks to the per-view MethodChannel. |
+| `widgets/supy_barcode_scanner_screen.dart` | v1.1 — full-screen composite (`Scaffold`) that pattern-switches on the sealed `SupyScanUseCase` to wire the correct sheet + result callback. Owns its own controller unless one is supplied. |
+| `widgets/supy_ar_overlay.dart` | v1.1 — `CustomPaint` over the preview rendering normalized `[0..1]` bounding boxes + label chips. |
+| `widgets/supy_single_scan_confirmation_sheet.dart` | v1.1 — bottom sheet for `SupySingleScanUseCase`. |
+| `widgets/supy_multiple_scan_accumulator.dart` + `supy_multiple_scan_sheet.dart` | v1.1 — `ChangeNotifier` (counting/unique modes + debounce) and its collapsible sheet for `SupyMultipleScanUseCase`. |
+| `widgets/supy_find_and_pick_accumulator.dart` + `supy_find_and_pick_sheet.dart` | v1.1 — pick-list accumulator (per-row progress capped at `expectedCount`, `isComplete`) and its sheet for `SupyFindAndPickUseCase`. |
 | `services/supy_document_scanner.dart` | Static entrypoint `startMultiPage(...)` and `prewarm()`. |
 | `services/supy_permissions.dart` | Thin wrapper over `permission_handler` for camera permission. |
 
@@ -62,8 +78,10 @@
 | `barcode/BarcodeScannerView.kt` | Implements `PlatformView`, builds a `PreviewView` + `LifecycleCameraController`, attaches an `ImageAnalysis` analyzer wired to `BarcodeScanning.getClient(...)`. Streams to EventChannel. |
 | `barcode/BarcodeScannerViewFactory.kt` | `PlatformViewFactory` — wires creation params (formats, finder, etc.). |
 | `barcode/FormatMapper.kt` | `SupyBarcodeFormat` ↔ ML Kit `Barcode.FORMAT_*` mapping. |
-| `document/DocumentScannerLauncher.kt` | Calls `GmsDocumentScanning.getClient(...)` and `startScanIntent(...)`, awaits result via `ActivityResultLauncher`. |
+| `document/DocumentScannerLauncher.kt` | Calls `GmsDocumentScanning.getClient(...)` and `startScanIntent(...)`, awaits result via `startActivityForResult`. v1.2: pre-flights `GmsAvailability.isUsable(activity)` and branches to `CameraXDocumentScannerActivity` on non-GMS devices — result pipeline (`PageReencoder` + `OcrRunner`) is shared so wire shape is identical. |
 | `document/OcrRunner.kt` | Loops `TextRecognition.getClient(...)` over JPEGs, concatenates results. |
+| `document/GmsAvailability.kt` | v1.2 helper wrapping `GoogleApiAvailability.isGooglePlayServicesAvailable(context) == SUCCESS`. Single decision point for "should we route to GMS or to the CameraX fallback?". |
+| `document/CameraXDocumentScannerActivity.kt` | v1.2 non-GMS fallback Activity. CameraX `Preview` + `ImageCapture` use cases, tap-to-capture FAB, thumbnail strip with delete, done CTA gated on `pages.isNotEmpty()`. Writes JPEGs to `cacheDir/supy_camx/`, returns URIs via `EXTRA_RESULT_URIS` (ArrayList<String>). Exposes `RESULT_PERMISSION_DENIED` / `RESULT_CAMERA_UNAVAILABLE` sentinel result codes which the launcher maps to `permission_denied` / `camera_unavailable`. PDF output not emitted on this path. |
 
 ### iOS layer
 
@@ -82,10 +100,11 @@
 
 | Method | Args | Returns | Errors |
 |---|---|---|---|
-| `scanDocument` | `{ maxPages: int, ocrLanguages: [string], jpegQuality: int (0-100), locale: 'en' \| 'ar', palettePrimary: '#RRGGBB', paletteOnPrimary: '#RRGGBB' }` | `{ pages: [{ uri: string, width: int, height: int }], ocrText: string }` | `cancelled`, `permission_denied`, `model_unavailable`, `unknown` |
+| `scanDocument` | `{ maxPages: int, ocrLanguages: [string], jpegQuality: int (0-100), locale: 'en' \| 'ar', palettePrimary: '#RRGGBB', paletteOnPrimary: '#RRGGBB', outputFormat: 'jpg' \| 'png' \| 'pdf' (v1.1) }` | `{ pages: [{ uri: string, width: int, height: int, quality?: 'veryPoor' \| 'poor' \| 'ok' \| 'good' \| 'excellent' (v1.1), qualityScore?: double 0..1 (v1.1) }], ocrText: string, pdfUri?: string (v1.1 — only when outputFormat == 'pdf') }` | `cancelled`, `permission_denied`, `model_unavailable`, `unknown` |
 | `scanBarcodesBatch` | `{ formats: [string], maxBatchCount: int (0=unlimited), dedupeWindowMs: int, beep: bool, vibrate: bool }` | `{ items: [{ rawValue: string, format: string }], duplicateCount: int }` | `cancelled`, `permission_denied`, `camera_unavailable`, `unknown` |
 | `prewarm` | `{}` | `{}` | `unknown` |
 | `requestCameraPermission` | `{}` | `{ status: 'granted' \| 'denied' \| 'permanentlyDenied' }` | — |
+| `nativeCoreProbe` | `{}` | `{ version: string, abiVersion: int }` | `native_core_unavailable`, `unknown` |
 
 ### `io.supy.scanner/v1/barcode/<viewId>` (per-view MethodChannel)
 
@@ -95,13 +114,79 @@
 | `resume` | — | `{}` |
 | `setTorch` | `{ on: bool }` | `{}` |
 | `setFormats` | `{ formats: [string] }` | `{}` |
+| `setZoom` | `{ factor: double }` | `{}` |
+| `flipCamera` | `{}` | `{ position: 'back' \| 'front' }` |
+| `setMinFocusDistanceLock` | `{ on: bool }` | `{}` |
 
 ### `io.supy.scanner/v1/barcode/<viewId>/events` (EventChannel)
 
 Stream of:
 - `{ type: 'detection', items: [{ rawValue, format, boundingBox: { left, top, width, height } | null }] }`
 - `{ type: 'preview_started', flashAvailable: bool }`
+- `{ type: 'thermal', state: 'nominal' | 'light' | 'fair' | 'moderate' | 'serious' | 'critical', paused: bool, throttled: bool }`
+- `{ type: 'idle_pause' }`
+- `{ type: 'idle_resume' }`
+- `{ type: 'torch_idle_suggested' }`
 - `{ type: 'error', code, message }`
+
+`idle_pause` / `idle_resume` are emitted when the luma-variance idle detector
+flips state on MID/LOW tier devices (HIGH tier disables idle pause). While
+idle, frames are dropped before any ML Kit / Vision work — the camera keeps
+running but barcode detection is skipped until motion reappears.
+
+The `thermal` event is emitted whenever the OS thermal state changes. When
+`paused` is true the analyzer has stopped processing frames (Android API 29+
+`THERMAL_STATUS_SEVERE`+; iOS `.serious`+). When `throttled` is true the
+analyzer is running at a reduced frame cadence. `nominal`/`serious`/`critical`
+are emitted by both platforms; `light`/`moderate` are Android-only; `fair` is
+iOS-only. Android `THERMAL_STATUS_SEVERE` is normalized to wire-string
+`"serious"` so consumers branch on a single vocabulary. Consumers should
+treat unknown strings as "no concern".
+
+### `io.supy.scanner/v1/document/<viewId>` (per-view MethodChannel)
+
+Backs `SupyDocumentScannerView` — the embedded streaming guidance preview
+(distinct from the launcher-style `scanDocument` flow above).
+
+| Method | Args | Returns |
+|---|---|---|
+| `pause` | — | `{}` |
+| `resume` | — | `{}` |
+| `setTorch` | `{ on: bool }` | `{}` |
+| `captureAndRectify` | — | `{ uri: string, width: int, height: int }` or `null` if no document is currently locked. Errors: `capture_failed`, `no_document`, `unknown`. Native rectifies the last smoothed quad to a top-down rectangle (≥300 DPI when `useNativeCore` is on) and persists the JPEG (quality follows `SupyDocumentScanOptions.jpegQuality`). v1.1 / Sprint 6 — depends on Sprint 4 `warpPerspective`. |
+
+### `io.supy.scanner/v1/document/<viewId>/events` (EventChannel)
+
+Stream of:
+- `{ type: 'preview_started', flashAvailable: bool }`
+- `{ type: 'frame_metrics', quad: [{x, y}, …] | [], coverageRatio: double, tiltDegrees: double, meanLuma: double, blurScore: double, clipsEdge: bool }`
+- `{ type: 'error', code, message }`
+
+`quad` is normalized to preview coordinates with a **top-left origin**. An
+empty `quad` signals "no document detected" — the Dart state machine maps
+that to `noDocument`. On iOS the quad is sourced from
+`VNDetectDocumentSegmentationRequest` (iOS 17+) with a
+`VNDetectRectanglesRequest` fallback on iOS 16. On Android the quad is
+**always empty** in v1: ML Kit has no per-frame rectangle detector and the
+GMS Document Scanner is a launcher activity, not a streaming detector. Luma /
+blur are still computed, so `tooDark` and `blurry` hints work on Android even
+without a quad. An Android edge detector is tracked as a follow-up.
+
+### `io.supy.scanner/v1/document_view` PlatformView
+
+View-type id registered by both platforms; no creation params in v1.
+
+### `io.supy.scanner/v1/barcode` PlatformView creation params
+
+Passed once at view construction; serialized from `SupyBarcodeScanOptions.toWire()`.
+
+| Key | Type | Notes |
+|---|---|---|
+| `formats` | `[string]` | Active symbologies (wire names from `SupyBarcodeFormat`). |
+| `useScanWindow` | `bool` | Restrict detection to the on-screen finder. |
+| `findBarcodeAtCenter` | `bool` | Report only the barcode closest to preview center per pass. |
+| `useNativeCore` | `bool` | v1.1 — route frames through the native CV core before ML Kit / Vision. |
+| `camera` | `{ initialZoom: double, minFocusDistanceLock: bool, scanRange: 'standard' \| 'close' \| 'extended' }` | Applied at preview-start. Android honors `initialZoom` via `setZoomRatio`; iOS honors `initialZoom` (clamped) and engages `.near` `autoFocusRangeRestriction` when `minFocusDistanceLock` is true or `scanRange == 'close'`. `scanRange == 'extended'` and Android close-focus are deferred to the v1.1 native CV core. |
 
 ## Threading
 
@@ -126,3 +211,17 @@ All native errors surface as `PlatformException` and are caught in `channel/meth
 | `model_unavailable` | ML Kit Document Scanner model not downloaded and no network. |
 | `format_unsupported` | Requested barcode format not supported on this platform. |
 | `unknown` | Anything else — `message` carries the platform's description. |
+
+## Testing layers
+
+Three independent test layers run on every PR via `.github/workflows/ci.yml`:
+
+| Layer | Where | Runner | Scope |
+|---|---|---|---|
+| Dart | `test/` | `flutter test` (job `analyze-and-test`) | Models, channel boundary (`TestDefaultBinaryMessenger`), document state machine, widget paint behavior. |
+| Android native | `android/src/test/kotlin/` | `./gradlew :supy_scanner:testDebugUnitTest` from `example/android/` (job `android-native-test`) | JVM unit tests. Robolectric is used where ML Kit `Barcode.FORMAT_*` constants need to resolve. No emulator. |
+| iOS native | `ios/Tests/` | `pod lib lint` against `s.test_spec 'Tests'` (job `ios-native-test`) | XCTest unit suite hosted by the podspec test_spec. No simulator. |
+
+Out of scope for the three jobs above: any class that touches `AVCaptureSession`, CameraX, ML Kit detector instances, or a real `PlatformView` — those need instrumented/UI tests, tracked under `TODO.md` H2-05.
+
+The Android job scaffolds `example/android/` at CI time via `flutter create --platforms=android .` because that directory is intentionally not committed.

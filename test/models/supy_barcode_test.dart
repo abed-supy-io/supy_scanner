@@ -32,7 +32,7 @@ void main() {
     });
 
     test('fromMap without bounding box', () {
-      final decoded = SupyBarcode.fromMap(<Object?, Object?>{
+      final decoded = SupyBarcode.fromMap(const <Object?, Object?>{
         'rawValue': 'QR-PAYLOAD',
         'format': 'qr',
       });

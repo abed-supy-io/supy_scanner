@@ -65,6 +65,46 @@ Scenarios mirror the current Scanbot UX as it exists in the retailer app. Pass c
    - Command: `cd example && flutter test integration_test/reliability_harness_test.dart --profile -d <device-id>`
 2. No native exception, no leaked AVCaptureSession (iOS Instruments), no leaked CameraX use case (Android Profiler).
 
+### B10 — Flip camera (alternation)
+1. Open the embedded scanner on a back-facing lens.
+2. Call `controller.flipCamera()` 10 times in a row, alternating back ↔ front.
+3. **Expected each flip:**
+   - Preview never goes black or freezes; detection callbacks resume on the new lens within 500 ms.
+   - `controller.cameraPosition` matches the visible lens after `await`.
+   - A fresh `preview_started` event fires per flip — verified indirectly via B4: torch icon visibility refreshes (front lens on most devices = no flash = icon hidden; back lens = icon shown).
+4. **Failure mode being guarded:** the iOS path used to commit a zero-input session if the new `AVCaptureDeviceInput` could not be added — preview would go black with no recovery.
+
+### B11 — Zoom clamping
+1. On an iPhone SE 3 (max zoom typically ~5x), call `controller.setZoom(100.0)`.
+2. **Expected:** `controller.zoom` after `await` equals the device-reported `maxAvailableVideoZoomFactor` (≈ 5.0), not 100.0.
+3. Repeat on a Pixel 8; `controller.zoom` reflects the CameraX-clamped value.
+4. Call `controller.setZoom(0.001)`; `controller.zoom` reflects the device minimum (≥ 1.0 on cameras without ultrawide).
+
+### B12 — Min-focus-distance lock cross-platform
+1. **iPhone 15 Pro:** call `controller.setMinFocusDistanceLock(on: true)`. The future resolves; `controller.minFocusDistanceLock` is `true`; close-focus on small barcodes improves visibly.
+2. **Pixel 8 (Android):** call `controller.setMinFocusDistanceLock(on: true)`. The future resolves **without throwing**; `controller.minFocusDistanceLock` remains `false` (the native side returns `unsupported_operation`; the controller swallows it and leaves state untouched).
+3. **Failure mode being guarded:** the controller used to cache `_minFocusDistanceLock = true` on Android even though CameraX never applied it — `minFocusDistanceLock` getter lied to callers.
+
+### B13 — Idle pause + torch-idle advisory (v1.1)
+1. On a **MID** or **LOW** tier device (HIGH opts out — see `docs/PERFORMANCE.md` for tier mapping), open the barcode scanner.
+2. Tap the torch icon to turn it on. Then point the camera at a still, uniform surface (e.g., a desk) and hold steady.
+3. **Expected:** within ~700 ms (the tier's `idlePauseThresholdMs` dwell) the EventChannel emits `{type: 'idle_pause'}` immediately followed by `{type: 'torch_idle_suggested'}`. Move the camera — `{type: 'idle_resume'}` fires.
+4. Repeat with the torch **off**: only `idle_pause` / `idle_resume` should fire — `torch_idle_suggested` must NOT be emitted.
+5. **HIGH-tier device (Pixel 8 / iPhone 15 Pro):** neither `idle_pause` nor `torch_idle_suggested` ever fire — flagship opts out of idle gating entirely.
+
+## Native core probe
+
+### NC1 — Probe on a healthy build
+1. From the example app, call `SupyScannerChannel.instance.nativeCoreProbe()`.
+2. **Expected:** the returned `SupyNativeCoreProbe` has a non-empty `version` and `abiVersion ≥ 1` on both Android and iOS.
+
+### NC2 — Probe on a broken build (negative test)
+1. Temporarily patch `SupyNativeCore.version()` (iOS) / `SupyNativeCore.version()` (Android JNI) to return `""` and an `abiVersion` of `0`.
+2. Rebuild and call `nativeCoreProbe()`.
+3. **Expected — iOS:** Dart catches a `PlatformException(code: "native_core_unavailable")` and surfaces it as `SupyScanError`. **Android:** same code path (already in place pre-fix).
+4. **Expected — Dart channel wrapper:** if the response map is missing `version` or `abiVersion` entirely, Dart throws `SupyScanError(code: unknown, message: 'nativeCoreProbe response is missing key "version" | "abiVersion"')` — not a silent fallback to `''` / `0`.
+5. Revert the patch before committing.
+
 ## Document scanner + OCR
 
 ### D1 — Single-page receipt
@@ -112,15 +152,28 @@ Scenarios mirror the current Scanbot UX as it exists in the retailer app. Pass c
 1. Verify the document scanner UI on Android uses `#6448C3` for primary buttons and `#FFFFFF` for on-primary text (matches the Scanbot palette).
 2. iOS uses system UI (palette not configurable) — documented.
 
-### D10 — GMS unavailable
-1. Run on a Huawei device without Play Services.
-2. Calling `SupyDocumentScanner.startMultiPage(...)` rejects with `model_unavailable`.
-3. The retailer-side handler surfaces a localized "Document scanning is not available on this device" message.
+### D10 — GMS unavailable (v1.2 revision — fallback path)
+1. Run on a Huawei device without Play Services (or a GMS-stripped Pixel emulator).
+2. Calling `SupyDocumentScanner.startMultiPage(...)` **no longer rejects** with `model_unavailable` — `DocumentScannerLauncher` pre-flights `GmsAvailability.isUsable(activity)` and launches `CameraXDocumentScannerActivity` instead. See D12 for the exit criteria of the fallback flow itself.
+3. Retailer code is unchanged — no new error surface, no new branch.
+4. `model_unavailable` is now reserved for the edge case where GMS *is* available but the model download itself fails (rare; surfaces from the `addOnFailureListener` on `getStartScanIntent`).
 
 ### D11 — Cold-start model download
 1. Fresh install, no GMS Document Scanner model cached.
 2. First call: progress indicator visible during model download (< 30s on 4G).
 3. Second call: opens immediately (< 1s).
+
+### D12 — CameraX fallback (non-GMS Android, v1.2)
+1. Run on a Huawei device without Play Services (or a GMS-stripped emulator).
+2. Call `SupyDocumentScanner.startMultiPage(maxPages: 3)`.
+3. Native CameraX preview opens (portrait, full-bleed). Tap-to-capture FAB writes one JPEG per tap; thumbnails appear in the bottom strip.
+4. Tap a thumbnail → AlertDialog offers Delete; the thumbnail and underlying file disappear.
+5. Capture 2 pages, tap Done. Result: `pages.length == 2`, each with non-zero `width` / `height`, `ocrText` non-empty on a clear English receipt.
+6. `pdfUri` is `null` even if `outputFormat: pdf` was requested (logged at `launch()`; documented limitation).
+7. Repeat with hardware back / Cancel before tapping Done — `startMultiPage` resolves with `pages == []` (matches D4 / iOS VisionKit cancel semantics). **Not** `cancelled` error.
+8. Revoke camera permission, retry → `startMultiPage` rejects with `permission_denied`.
+9. Force a CameraX bind failure (e.g. emulator with no camera) → `camera_unavailable`.
+10. Retailer app integrated against v1.2: no code change, no new error branch needed.
 
 ## Batch barcode
 
@@ -155,4 +208,4 @@ The harness prints a JSON line per metric to stdout (`BENCH_RESULT {"metric":"..
 
 ## Sign-off
 
-The mobile lead walks scenarios **B1–B9, D1–D11, Bt1–Bt2** end-to-end on at least one Android device and one iPhone before `v1.0.0` is tagged. Results recorded in this file under a `## Sign-off (vX.Y.Z)` heading per release.
+The mobile lead walks scenarios **B1–B12, NC1–NC2, D1–D11, Bt1–Bt2** end-to-end on at least one Android device and one iPhone before `v1.0.0` is tagged. Results recorded in this file under a `## Sign-off (vX.Y.Z)` heading per release.

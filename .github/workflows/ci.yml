@@ -35,8 +35,29 @@ jobs:
       - name: dart analyze
         run: dart analyze --fatal-infos
 
-      - name: flutter test
-        run: flutter test --reporter expanded
+      - name: flutter test (with coverage)
+        run: flutter test --reporter expanded --coverage
+
+      # Gate at 70% — 6pp below the 2026-06-14 baseline of 76.34%. Ratchet up
+      # in follow-up PRs as new code lands with tests.
+      - name: verify dart line coverage >= 70%
+        run: |
+          awk -F: '/^DA:/ { total++; if ($2 ~ /,[1-9]/) hit++ } END {
+            pct = (hit/total)*100
+            printf "dart line coverage: %.2f%% (%d/%d)\n", pct, hit, total
+            if (pct < 70.0) {
+              print "FAIL: coverage below 70% gate"
+              exit 1
+            }
+          }' coverage/lcov.info
+
+      - name: upload dart coverage
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: dart-coverage-lcov
+          path: coverage/lcov.info
+          if-no-files-found: warn
 
   build-android:
     name: build example (android)
@@ -84,3 +105,130 @@ jobs:
       - name: flutter build ios --no-codesign
         working-directory: example
         run: flutter build ios --no-codesign
+
+  android-native-test:
+    name: android unit tests (jvm)
+    runs-on: ubuntu-latest
+    needs: analyze-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: flutter pub get (library)
+        run: flutter pub get
+
+      - name: flutter pub get (example)
+        working-directory: example
+        run: flutter pub get
+
+      # example/android/ is not committed; scaffold it so the plugin can be
+      # consumed as a Gradle subproject by the host app.
+      - name: scaffold example/android wrapper
+        working-directory: example
+        run: flutter create --platforms=android --project-name supy_scanner_example .
+
+      - name: gradle test + kover coverage (plugin :supy_scanner)
+        working-directory: example/android
+        run: ./gradlew :supy_scanner:testDebugUnitTest :supy_scanner:koverXmlReportDebug --stacktrace
+
+      - name: upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-test-reports
+          path: |
+            example/build/supy_scanner/reports/tests/
+            example/build/supy_scanner/test-results/
+          if-no-files-found: ignore
+
+      # H2-07: artifact-only for v1.0.x. Once a baseline is observed in CI,
+      # wire `koverVerify` with a real `minBound` in android/build.gradle.
+      - name: upload kover coverage report
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: android-kover-coverage
+          path: |
+            example/build/supy_scanner/reports/kover/
+          if-no-files-found: warn
+
+  ios-native-test:
+    name: ios unit tests (xctest)
+    runs-on: macos-14
+    needs: analyze-and-test
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: flutter pub get (library)
+        run: flutter pub get
+
+      - name: flutter pub get (example)
+        working-directory: example
+        run: flutter pub get
+
+      # Build (config-only) generates ios/Flutter/Generated.xcconfig and runs
+      # `pod install`, which creates the auto-generated `supy_scanner-Unit-Tests`
+      # scheme for our podspec test_spec.
+      - name: flutter build ios (config + pods)
+        working-directory: example
+        run: flutter build ios --config-only --no-codesign
+
+      - name: pod install
+        working-directory: example/ios
+        run: pod install
+
+      - name: xcodebuild test (supy_scanner-Unit-Tests)
+        working-directory: example/ios
+        run: |
+          set -o pipefail
+          xcodebuild test \
+            -workspace Runner.xcworkspace \
+            -scheme supy_scanner-Unit-Tests \
+            -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
+            -resultBundlePath TestResults.xcresult \
+            -enableCodeCoverage YES \
+            CODE_SIGNING_ALLOWED=NO
+
+      # H2-07: extract coverage summary from the xcresult bundle. Artifact-only
+      # for v1.0.x — the xcresult upload + the JSON report below let a follow-up
+      # PR pick a realistic threshold once observed in CI.
+      - name: extract ios coverage summary
+        if: always()
+        working-directory: example/ios
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xccov view --report --json TestResults.xcresult > ios-coverage.json || true
+            xcrun xccov view --report TestResults.xcresult || true
+          fi
+
+      - name: upload xcresult
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-test-xcresult
+          path: example/ios/TestResults.xcresult
+          if-no-files-found: ignore
+
+      - name: upload ios coverage json
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ios-coverage-json
+          path: example/ios/ios-coverage.json
+          if-no-files-found: ignore

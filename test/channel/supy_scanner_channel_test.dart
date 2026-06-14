@@ -70,6 +70,29 @@ void main() {
     );
   });
 
+  test('nativeCoreProbe decodes version + abiVersion', () async {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'nativeCoreProbe');
+      return <String, Object?>{
+        'version': '1.1.0-dev.1',
+        'abiVersion': 1,
+      };
+    });
+    final probe = await channelUnderTest.nativeCoreProbe();
+    expect(probe.version, '1.1.0-dev.1');
+    expect(probe.abiVersion, 1);
+  });
+
+  test('nativeCoreProbe surfaces PlatformException as SupyScanError', () async {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      throw PlatformException(code: 'native_core_unavailable', message: 'no .so');
+    });
+    expect(
+      channelUnderTest.nativeCoreProbe(),
+      throwsA(isA<SupyScanError>()),
+    );
+  });
+
   test('prewarm forwards through without arguments', () async {
     var called = false;
     messenger.setMockMethodCallHandler(channel, (call) async {

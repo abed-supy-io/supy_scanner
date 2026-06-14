@@ -12,7 +12,7 @@ void main() {
     });
 
     test('fromMap', () {
-      final p = SupyDocumentPage.fromMap(<Object?, Object?>{
+      final p = SupyDocumentPage.fromMap(const <Object?, Object?>{
         'uri': 'file:///page.jpg',
         'width': 1280,
         'height': 1920,
@@ -25,7 +25,7 @@ void main() {
 
   group('SupyDocumentData', () {
     test('fromMap with pages and ocr', () {
-      final data = SupyDocumentData.fromMap(<Object?, Object?>{
+      final data = SupyDocumentData.fromMap(const <Object?, Object?>{
         'pages': <Object?>[
           <Object?, Object?>{
             'uri': 'file:///p1.jpg',
@@ -45,11 +45,59 @@ void main() {
     });
 
     test('fromMap without ocrText defaults to empty', () {
-      final data = SupyDocumentData.fromMap(<Object?, Object?>{
+      final data = SupyDocumentData.fromMap(const <Object?, Object?>{
         'pages': <Object?>[],
       });
       expect(data.ocrText, isEmpty);
       expect(data.pages, isEmpty);
+    });
+
+    test('pdfUri is null when omitted (v1.0 payload)', () {
+      final data = SupyDocumentData.fromMap(const <Object?, Object?>{
+        'pages': <Object?>[],
+        'ocrText': '',
+      });
+      expect(data.pdfUri, isNull);
+    });
+
+    test('pdfUri round-trips from the channel map (v1.1 pdf output)', () {
+      final data = SupyDocumentData.fromMap(const <Object?, Object?>{
+        'pages': <Object?>[
+          <Object?, Object?>{
+            'uri': 'file:///p1.jpg',
+            'width': 800,
+            'height': 1200,
+          },
+        ],
+        'ocrText': '',
+        'pdfUri': 'file:///tmp/scan.pdf',
+      });
+      expect(data.pdfUri, 'file:///tmp/scan.pdf');
+    });
+
+    test('equality includes pdfUri', () {
+      const page = SupyDocumentPage(
+        uri: 'file:///p.jpg',
+        width: 1,
+        height: 1,
+      );
+      const a = SupyDocumentData(
+        pages: [page],
+        ocrText: '',
+        pdfUri: 'file:///a.pdf',
+      );
+      const b = SupyDocumentData(
+        pages: [page],
+        ocrText: '',
+        pdfUri: 'file:///a.pdf',
+      );
+      const c = SupyDocumentData(
+        pages: [page],
+        ocrText: '',
+        pdfUri: 'file:///b.pdf',
+      );
+      expect(a, equals(b));
+      expect(a, isNot(equals(c)));
     });
 
     test('equality across page lists', () {
@@ -58,9 +106,9 @@ void main() {
         width: 100,
         height: 100,
       );
-      final a = SupyDocumentData(pages: const [page], ocrText: 'x');
-      final b = SupyDocumentData(pages: const [page], ocrText: 'x');
-      final c = SupyDocumentData(pages: const [page], ocrText: 'y');
+      const a = SupyDocumentData(pages: [page], ocrText: 'x');
+      const b = SupyDocumentData(pages: [page], ocrText: 'x');
+      const c = SupyDocumentData(pages: [page], ocrText: 'y');
       expect(a, equals(b));
       expect(a, isNot(equals(c)));
     });

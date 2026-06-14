@@ -4,6 +4,8 @@ import android.annotation.SuppressLint
 import android.content.Context
 import android.content.Intent
 import android.graphics.Color
+import android.graphics.Typeface
+import android.graphics.drawable.GradientDrawable
 import android.media.AudioManager
 import android.media.ToneGenerator
 import android.os.Build
@@ -17,9 +19,7 @@ import android.view.Gravity
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.widget.Button
 import android.widget.FrameLayout
-import android.widget.LinearLayout
 import android.widget.TextView
 import androidx.appcompat.app.AppCompatActivity
 import androidx.camera.core.ExperimentalGetImage
@@ -52,7 +52,7 @@ class BatchBarcodeScannerActivity : AppCompatActivity() {
 
     private lateinit var previewView: PreviewView
     private lateinit var counterLabel: TextView
-    private lateinit var doneButton: Button
+    private lateinit var doneButton: TextView
 
     private var cameraController: LifecycleCameraController? = null
     private var barcodeScanner: BarcodeScanner? = null
@@ -129,53 +129,78 @@ class BatchBarcodeScannerActivity : AppCompatActivity() {
         counterLabel = TextView(this).apply {
             text = formatCounter()
             setTextColor(Color.WHITE)
-            setBackgroundColor(Color.argb(160, 0, 0, 0))
-            setPadding(padding, padding, padding, padding)
-            setTextSize(TypedValue.COMPLEX_UNIT_SP, 16f)
+            background = pillBackground(SCRIM_BLACK_055, dp(14))
+            setPadding(dp(16), dp(8), dp(16), dp(8))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            typeface = Typeface.create(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
-                gravity = Gravity.TOP or Gravity.START
-                topMargin = dp(48)
-                leftMargin = padding
+                gravity = Gravity.TOP or Gravity.CENTER_HORIZONTAL
+                topMargin = dp(16) + statusBarInset()
+                minimumWidth = dp(120)
             }
         }
         root.addView(counterLabel)
 
-        doneButton = Button(this).apply {
+        val cancelButton = TextView(this).apply {
+            text = "Cancel"
+            setTextColor(Color.WHITE)
+            background = pillBackground(SCRIM_BLACK_055, dp(22))
+            setPadding(dp(22), dp(10), dp(22), dp(10))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
+            setOnClickListener { finishCancelled() }
+            layoutParams = FrameLayout.LayoutParams(
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+                FrameLayout.LayoutParams.WRAP_CONTENT,
+            ).apply {
+                gravity = Gravity.BOTTOM or Gravity.START
+                bottomMargin = dp(24)
+                leftMargin = dp(20)
+            }
+        }
+        root.addView(cancelButton)
+
+        doneButton = TextView(this).apply {
             text = "Done"
+            setTextColor(Color.WHITE)
+            background = pillBackground(SUPY_PRIMARY, dp(22))
+            setPadding(dp(28), dp(10), dp(28), dp(10))
+            setTextSize(TypedValue.COMPLEX_UNIT_SP, 17f)
+            typeface = Typeface.create(typeface, Typeface.BOLD)
+            gravity = Gravity.CENTER
+            isClickable = true
+            isFocusable = true
             setOnClickListener { finishOk() }
             layoutParams = FrameLayout.LayoutParams(
                 FrameLayout.LayoutParams.WRAP_CONTENT,
                 FrameLayout.LayoutParams.WRAP_CONTENT,
             ).apply {
                 gravity = Gravity.BOTTOM or Gravity.END
-                bottomMargin = dp(32)
-                rightMargin = padding
+                bottomMargin = dp(24)
+                rightMargin = dp(20)
             }
         }
         root.addView(doneButton)
 
-        val controlsRow = LinearLayout(this).apply {
-            orientation = LinearLayout.HORIZONTAL
-            layoutParams = FrameLayout.LayoutParams(
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-                FrameLayout.LayoutParams.WRAP_CONTENT,
-            ).apply {
-                gravity = Gravity.BOTTOM or Gravity.START
-                bottomMargin = dp(32)
-                leftMargin = padding
-            }
-        }
-        val cancelButton = Button(this).apply {
-            text = "Cancel"
-            setOnClickListener { finishCancelled() }
-        }
-        controlsRow.addView(cancelButton)
-        root.addView(controlsRow)
-
         return root
+    }
+
+    private fun pillBackground(color: Int, radius: Int): GradientDrawable =
+        GradientDrawable().apply {
+            shape = GradientDrawable.RECTANGLE
+            cornerRadius = radius.toFloat()
+            setColor(color)
+        }
+
+    private fun statusBarInset(): Int {
+        val id = resources.getIdentifier("status_bar_height", "dimen", "android")
+        return if (id > 0) resources.getDimensionPixelSize(id) else 0
     }
 
     private fun dp(value: Int): Int =
@@ -362,5 +387,12 @@ class BatchBarcodeScannerActivity : AppCompatActivity() {
         private const val BEEP_VOLUME = 80
         private const val BEEP_DURATION_MS = 120
         private const val VIBRATE_DURATION_MS: Long = 40L
+
+        // Supy brand primary (matches `SupyScannerPalette.scanbotDark.primary`
+        // = 0xFF1AC0E5). Mirrored on iOS in BatchBarcodeScannerPresenter.swift.
+        private const val SUPY_PRIMARY: Int = 0xFF1AC0E5.toInt()
+        // Translucent black scrim used for the counter chip and Cancel chip.
+        // alpha 140/255 ≈ 0.55, matching iOS UIColor.black.withAlphaComponent(0.55).
+        private const val SCRIM_BLACK_055: Int = 0x8C000000.toInt()
     }
 }

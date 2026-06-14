@@ -164,6 +164,12 @@ final class BatchBarcodeScannerViewController: UIViewController {
   private var duplicateCount: Int = 0
   private var finished: Bool = false
 
+  /// Mirrors `SupyBarcodeScannerView.sessionInterrupted`. AVFoundation keeps
+  /// an internal config block open across interruptions; calling
+  /// `startRunning()` while interrupted raises NSGenericException on some
+  /// iPhones. Gate on this in `safeStartRunning()`.
+  private var sessionInterrupted: Bool = false
+
   private let counterLabel: UILabel = UILabel()
   private let doneButton: UIButton = UIButton(type: .system)
   private let cancelButton: UIButton = UIButton(type: .system)
@@ -195,6 +201,7 @@ final class BatchBarcodeScannerViewController: UIViewController {
     super.viewDidLoad()
     view.backgroundColor = .black
     buildChrome()
+    registerSessionNotifications()
 
     detector.setSymbologies(symbologies)
     detector.onDetections = { [weak self] detections in
@@ -239,6 +246,62 @@ final class BatchBarcodeScannerViewController: UIViewController {
     }
   }
 
+  deinit {
+    NotificationCenter.default.removeObserver(self)
+  }
+
+  // MARK: - Session interruption guard
+
+  private func registerSessionNotifications() {
+    let center = NotificationCenter.default
+    center.addObserver(
+      self,
+      selector: #selector(handleSessionWasInterrupted(_:)),
+      name: .AVCaptureSessionWasInterrupted,
+      object: session
+    )
+    center.addObserver(
+      self,
+      selector: #selector(handleSessionInterruptionEnded(_:)),
+      name: .AVCaptureSessionInterruptionEnded,
+      object: session
+    )
+    center.addObserver(
+      self,
+      selector: #selector(handleSessionRuntimeError(_:)),
+      name: .AVCaptureSessionRuntimeError,
+      object: session
+    )
+  }
+
+  @objc private func handleSessionWasInterrupted(_ note: Notification) {
+    sessionInterrupted = true
+  }
+
+  @objc private func handleSessionInterruptionEnded(_ note: Notification) {
+    sessionInterrupted = false
+    sessionQueue.async { [weak self] in
+      self?.safeStartRunning()
+    }
+  }
+
+  @objc private func handleSessionRuntimeError(_ note: Notification) {
+    let error = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+    DispatchQueue.main.async { [weak self] in
+      self?.finishFailed(
+        code: "camera_unavailable",
+        message: "AVCaptureSession runtime error: \(error?.localizedDescription ?? "unknown")"
+      )
+    }
+  }
+
+  /// Must be called from `sessionQueue`.
+  private func safeStartRunning() {
+    guard !sessionInterrupted else { return }
+    guard !session.isRunning else { return }
+    session.startRunning()
+  }
+
   // MARK: - UI
 
   private func buildChrome() {
@@ -267,7 +330,10 @@ final class BatchBarcodeScannerViewController: UIViewController {
     doneButton.setTitle("Done", for: .normal)
     doneButton.setTitleColor(.white, for: .normal)
     doneButton.titleLabel?.font = .systemFont(ofSize: 17, weight: .semibold)
-    doneButton.backgroundColor = view.tintColor
+    // Supy brand primary (matches `SupyScannerPalette.scanbotDark.primary`).
+    // Mirrored on Android in BatchBarcodeScannerActivity.kt.
+    doneButton.backgroundColor = UIColor(
+      red: 0x1A / 255.0, green: 0xC0 / 255.0, blue: 0xE5 / 255.0, alpha: 1.0)
     doneButton.layer.cornerRadius = 22
     doneButton.contentEdgeInsets = UIEdgeInsets(
       top: 10, left: 28, bottom: 10, right: 28)
@@ -370,7 +436,7 @@ final class BatchBarcodeScannerViewController: UIViewController {
       self?.attachPreview()
     }
 
-    session.startRunning()
+    safeStartRunning()
   }
 
   private func attachPreview() {

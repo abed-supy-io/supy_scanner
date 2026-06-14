@@ -202,6 +202,72 @@ The shim is provided as a transitional courtesy. The recommendation is to rename
 
 ---
 
+## v1.1 Performance — advisory events (additive, opt-in)
+
+`v1.1.0` adds two event families to the existing barcode EventChannel payload. **Both are advisory** — the existing Scanbot-parity call sites work unchanged if the consumer ignores them. The library still pauses analyzer work, drops idle frames, and tier-adapts resolution/FPS internally regardless of whether the host listens.
+
+| Event payload | When emitted | Consumer action (optional) |
+|---|---|---|
+| `{type: 'thermal', state: <nominal\|light\|fair\|moderate\|serious\|critical>, paused: bool, throttled: bool}` | On thermal-state transition (Android API 29+ `PowerManager.OnThermalStatusChangedListener`; iOS `ProcessInfo.thermalStateDidChangeNotification`). | Show a toast / banner. When `paused=true`, the analyzer is stopped — surface "Device too hot, scanning paused" to avoid the user thinking the camera is broken. |
+| `{type: 'idle_pause'}` / `{type: 'idle_resume'}` | Luma-variance gate flips state (only on MID/LOW tiers — HIGH opts out). | Usually ignore. A debug overlay can show "idle — waiting for motion" to explain why decode stopped without crashing. |
+| `{type: 'torch_idle_suggested'}` | Emitted alongside `idle_pause` when the torch is currently on. Advisory only — native does NOT toggle the torch off automatically. | Consumer may choose to call `setTorch(false)` to save battery, or prompt the user. Safe to ignore — torch stays on otherwise. |
+
+These events flow through the same EventChannel as `barcode_detected` payloads — discriminate on `type`. The current Scanbot consumers (which only listen for `barcode_detected`) will silently drop these and continue to work.
+
+**Tier resolution** (`SupyDeviceTier.detect()` on each platform) is internal — it is not exposed through the public Dart surface and cannot be overridden from the host. QA verifies tier behavior by running on the four reference devices listed in `docs/PERFORMANCE.md`.
+
+---
+
+## Scanbot RTU-UI → supy_scanner mapping
+
+Scanbot's Ready-To-Use (RTU) UI exposes a `BarcodeScannerConfiguration` with sub-configurations (top bar, action bar, view finder, user guidance, use-case mode, AR overlay, palette). `supy_scanner` v1.1 mirrors the same axes through `SupyBarcodeScannerScreen` + per-layer `Supy*Configuration` value types. See `docs/UI_CONFIGURATION.md` for the per-knob catalog.
+
+| Scanbot RTU concept | `supy_scanner` equivalent | Notes |
+|---|---|---|
+| `BarcodeScannerConfiguration` | `SupyBarcodeScannerScreen` (full-screen widget) | Composite over `SupyBarcodeScannerView` + sheet layers. |
+| `Palette` | `SupyScannerPalette` | 16 tokens; `scanbotDark()` / `scanbotLight()` const factories match RTU defaults. |
+| `TopBarConfiguration` | `SupyTopBarConfiguration` | `solid` / `gradient` styles, cancel icon + tooltip. |
+| `ActionBarConfiguration` (flash / zoom / flip-camera / close-focus) | `SupyActionBarConfiguration` + `SupyActionButtonSpec` | Each button individually toggle-able; wired to `SupyBarcodeScannerController`. |
+| `ViewFinderConfiguration` (cornered frame + dim overlay) | `SupyViewFinderConfiguration` + `SupyFinderPainter` | `CustomPainter`-based; no PlatformView dependency. |
+| `UserGuidanceConfiguration` | `SupyUserGuidanceConfiguration` | Pill-shaped guidance card. |
+| `ArOverlayConfiguration` | `SupyArOverlayConfiguration` + `SupyArOverlay` | RRect bounding boxes + label chips over normalized `[0..1]` coordinates from native. |
+| `CameraConfiguration` (zoom, AF, scan range) | `SupyCameraConfiguration` (`initialZoom`, `minFocusDistanceLock`, `scanRange`) | Set via `SupyBarcodeScanOptions.camera`. `scanRange = extended` engages the v1.1 native core when `useNativeCore: true`. |
+| `SingleScanningMode` (+ confirmation sheet) | `SupySingleScanUseCase` + `SupySingleScanUseCaseConfiguration` | `confirmationSheetEnabled: false` matches RTU's "no confirmation" toggle. |
+| `MultipleScanningMode` — counting | `SupyMultipleScanUseCase(config: ..., mode: counting)` + `SupyMultipleScanAccumulator` | `countingRepeatDelay` debounces identical successive scans. |
+| `MultipleScanningMode` — unique | `SupyMultipleScanUseCase(config: ..., mode: unique)` | Default. |
+| `FindAndPickScanningMode` | `SupyFindAndPickUseCase` + `SupyFindAndPickUseCaseConfiguration` (pick-list of `SupyExpectedBarcode`) | Submit gated on `SupyFindAndPickAccumulator.isComplete`. `allowUnexpected: true` surfaces non-list scans as warnings. |
+| `Localization` strings | Pass strings via the relevant `Supy*Configuration` constructor | See `docs/LOCALIZATION.md`. No global locale registry; consumer-owned. |
+
+What does **not** map 1:1:
+
+- Scanbot's per-screen `Localization` registry is not reproduced — every label is a direct field on its config (`SupyTopBarConfiguration.cancelTooltip`, sheet button texts, etc.). Cleaner for type-checking; the migration cost is a one-time `flutter intl`-style sweep on the consumer side.
+- Scanbot's "use case modes" enum is replaced by a Dart 3 sealed class (`SupyScanUseCase`). Switching modes at runtime means rebuilding the screen with a different variant — there is no setter-based mode swap. This is intentional: pattern-switching the sealed variant gives compile-time exhaustiveness in the result-callback wiring.
+- Scanbot's image-result event (returning a JPEG of the captured frame) is not part of v1.1 — `SupyBarcode` returns `rawValue` + `format` + optional normalized bounding box only. File-frame capture is on the v1.2 backlog.
+
+---
+
+## Scanbot document → supy_scanner v1.1 field mapping
+
+Sprint 7 (v1.1) widens the document result surface. The table below maps Scanbot's `DocumentQuality` + `DocumentFileFormat` axes onto the Supy equivalents — consumers porting from Scanbot's RTU document scanner can read this row-by-row.
+
+| Scanbot concept | `supy_scanner` equivalent | Notes |
+|---|---|---|
+| `DocumentQuality.VERY_POOR` (1) | `SupyDocumentPageQuality.veryPoor` | Bucket order matches; integer mapping `1..5` is internal only — Supy uses the named enum on the wire. |
+| `DocumentQuality.POOR` (2) | `SupyDocumentPageQuality.poor` | — |
+| `DocumentQuality.REASONABLE` (3) | `SupyDocumentPageQuality.ok` | Renamed — `ok` reads better than `reasonable` at call sites. |
+| `DocumentQuality.GOOD` (4) | `SupyDocumentPageQuality.good` | — |
+| `DocumentQuality.EXCELLENT` (5) | `SupyDocumentPageQuality.excellent` | — |
+| `DocumentQuality` raw float (where exposed) | `SupyDocumentPage.qualityScore` (0..1) | Supy normalizes to `[0..1]`; the enum is derived from this score via fixed bucket thresholds (`<0.2`, `<0.4`, `<0.6`, `<0.8`, `≥0.8`). |
+| `DocumentFileFormat.JPG` | `SupyDocumentOutputFormat.jpg` | Default — preserves v1.0 behaviour. `SupyDocumentScanOptions.jpegQuality` still applies. |
+| `DocumentFileFormat.PNG` | `SupyDocumentOutputFormat.png` | Lossless. `jpegQuality` is ignored. |
+| `DocumentFileFormat.PDF` | `SupyDocumentOutputFormat.pdf` | Pages still persist individually (as JPG); the assembled multi-page PDF URI is surfaced on `SupyDocumentData.pdfUri`. |
+| `Document.pdfUrl` | `SupyDocumentData.pdfUri` | `null` when `outputFormat` is not `pdf`. File URI (`file:///...`), not HTTP. |
+| Scanbot `acceptedAngleScore` / `acceptedSizeScore` gates | Not exposed (yet) | The native scorer drives a single `qualityScore`; per-axis gating is on the v1.2 backlog. |
+
+Forward-compat note: unknown `quality` wire strings from a newer native side deserialize to `null` rather than throwing — older Dart clients continue to work against newer native cores.
+
+---
+
 ## Cutover checklist (for a future migration PR)
 
 This is **not** scope for the supy_scanner package itself — it's the consumer-side checklist the retailer-app team will follow when cutover happens.

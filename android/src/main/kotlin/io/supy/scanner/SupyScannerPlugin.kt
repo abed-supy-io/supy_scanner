@@ -12,6 +12,8 @@ import io.supy.scanner.barcode.ActivityHolder
 import io.supy.scanner.barcode.BatchBarcodeScannerLauncher
 import io.supy.scanner.barcode.SupyBarcodeScannerViewFactory
 import io.supy.scanner.document.DocumentScannerLauncher
+import io.supy.scanner.document.SupyDocumentScannerViewFactory
+import io.supy.scanner.nativecore.SupyNativeCore
 import io.supy.scanner.permissions.CameraPermissionHandler
 
 /**
@@ -38,6 +40,11 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             SupyBarcodeScannerViewFactory.VIEW_TYPE_ID,
             SupyBarcodeScannerViewFactory(binding.binaryMessenger, activityHolder),
         )
+
+        binding.platformViewRegistry.registerViewFactory(
+            SupyDocumentScannerViewFactory.VIEW_TYPE_ID,
+            SupyDocumentScannerViewFactory(binding.binaryMessenger, activityHolder),
+        )
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
@@ -48,21 +55,56 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         when (call.method) {
             "requestCameraPermission" -> cameraPermissions.request(activityHolder.activity, result)
             "scanDocument" -> {
-                @Suppress("UNCHECKED_CAST")
-                val args = call.arguments as? Map<String, Any?>
+                val args = expectMapArgs(call, result) ?: return
                 documentLauncher.launch(activityHolder.activity, args, result)
             }
             "scanBarcodesBatch" -> {
-                @Suppress("UNCHECKED_CAST")
-                val args = call.arguments as? Map<String, Any?>
+                val args = expectMapArgs(call, result) ?: return
                 batchBarcodeLauncher.launch(activityHolder.activity, args, result)
             }
             "prewarm" -> {
                 documentLauncher.prewarm(activityHolder.activity?.applicationContext)
                 result.success(null)
             }
+            "nativeCoreProbe" -> {
+                try {
+                    result.success(
+                        mapOf(
+                            "version" to SupyNativeCore.version(),
+                            "abiVersion" to SupyNativeCore.abiVersion(),
+                        ),
+                    )
+                } catch (t: Throwable) {
+                    // Use the canonical `unknown` wire code (see
+                    // `lib/src/models/supy_scan_error.dart`); the detail is
+                    // preserved in the human-readable message.
+                    result.error(
+                        "unknown",
+                        "Native core unavailable: ${t.message ?: t.javaClass.simpleName}",
+                        null,
+                    )
+                }
+            }
             else -> result.notImplemented()
         }
+    }
+
+    /// Validates that `call.arguments` is either null or a `Map<String, Any?>`.
+    /// A non-null, non-map payload means a malformed caller — surface the
+    /// canonical `unknown` error instead of silently dropping args.
+    @Suppress("UNCHECKED_CAST")
+    private fun expectMapArgs(call: MethodCall, result: Result): Map<String, Any?>? {
+        val raw = call.arguments ?: return emptyMap()
+        if (raw !is Map<*, *>) {
+            result.error(
+                "unknown",
+                "${call.method}: arguments must be a Map<String, Any?>, " +
+                    "got ${raw.javaClass.simpleName}",
+                null,
+            )
+            return null
+        }
+        return raw as Map<String, Any?>
     }
 
     override fun onAttachedToActivity(binding: ActivityPluginBinding) {
