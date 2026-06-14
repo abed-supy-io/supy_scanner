@@ -53,7 +53,7 @@ internal object SupyNativeCore {
     @JvmStatic private external fun nativeVersion(): String
     @JvmStatic private external fun nativeAbiVersion(): Int
 
-    @JvmStatic external fun nativeDetectQuad(
+    @JvmStatic private external fun nativeDetectQuad(
         yPlane: ByteBuffer,
         width: Int, height: Int, rowStride: Int,
     ): FloatArray? // null when no quad; else [x0..y3, coverage, tilt]
@@ -80,4 +80,7 @@ internal data class NativeQuad(
         result = 31 * result + tiltDegrees.hashCode()
         return result
     }
+
+    override fun toString(): String =
+        "NativeQuad(corners=${corners.contentToString()}, coverageRatio=$coverageRatio, tiltDegrees=$tiltDegrees)"
 }
