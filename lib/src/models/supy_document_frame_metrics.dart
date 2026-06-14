@@ -17,6 +17,8 @@ class SupyDocumentFrameMetrics {
     this.meanLuma = 0.0,
     this.blurScore = 0.0,
     this.clipsEdge = false,
+    this.quadStability = 0.0,
+    this.interiorVariance = 0.0,
   });
 
   /// Parses a raw map from the native event channel.
@@ -37,6 +39,8 @@ class SupyDocumentFrameMetrics {
       meanLuma: (map['meanLuma'] as num?)?.toDouble() ?? 0.0,
       blurScore: (map['blurScore'] as num?)?.toDouble() ?? 0.0,
       clipsEdge: (map['clipsEdge'] as bool?) ?? false,
+      quadStability: (map['quadStability'] as num?)?.toDouble() ?? 0.0,
+      interiorVariance: (map['interiorVariance'] as num?)?.toDouble() ?? 0.0,
     );
   }
 
@@ -63,6 +67,15 @@ class SupyDocumentFrameMetrics {
   /// partially out of frame).
   final bool clipsEdge;
 
+  /// Stability of the detected quad across the last few frames (0–1).
+  /// 1 = no centroid/corner drift. 0.0 when [quad] is empty.
+  final double quadStability;
+
+  /// Variance-of-Laplacian *inside* the detected quad. Used to reject low-
+  /// texture surfaces (laptop screens showing a single image). 0.0 when [quad]
+  /// is empty.
+  final double interiorVariance;
+
   /// `true` when the frame contains a usable document quad.
   bool get hasDocument => quad.length == 4;
 
@@ -75,7 +88,9 @@ class SupyDocumentFrameMetrics {
           other.tiltDegrees == tiltDegrees &&
           other.meanLuma == meanLuma &&
           other.blurScore == blurScore &&
-          other.clipsEdge == clipsEdge;
+          other.clipsEdge == clipsEdge &&
+          other.quadStability == quadStability &&
+          other.interiorVariance == interiorVariance;
 
   @override
   int get hashCode => Object.hash(
@@ -85,6 +100,8 @@ class SupyDocumentFrameMetrics {
         meanLuma,
         blurScore,
         clipsEdge,
+        quadStability,
+        interiorVariance,
       );
 
   @override
@@ -94,7 +111,9 @@ class SupyDocumentFrameMetrics {
       'tilt: ${tiltDegrees.toStringAsFixed(1)}°, '
       'luma: ${meanLuma.toStringAsFixed(0)}, '
       'blur: ${blurScore.toStringAsFixed(0)}, '
-      'clipsEdge: $clipsEdge)';
+      'clipsEdge: $clipsEdge, '
+      'stability: ${quadStability.toStringAsFixed(2)}, '
+      'interior: ${interiorVariance.toStringAsFixed(0)})';
 }
 
 bool _listEquals(List<Offset> a, List<Offset> b) {
