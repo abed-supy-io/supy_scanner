@@ -9,17 +9,20 @@ import java.nio.ByteBuffer
  */
 internal object SupyNativeCore {
     @Volatile private var loaded = false
+    @Volatile private var loadFailed = false
 
     // Returns true if the native lib loaded successfully, false on UnsatisfiedLinkError.
     fun ensureLoaded(): Boolean {
         if (loaded) return true
+        if (loadFailed) return false
         synchronized(this) {
             if (loaded) return true
+            if (loadFailed) return false
             try {
                 System.loadLibrary("supy_scanner_core")
                 loaded = true
             } catch (_: UnsatisfiedLinkError) {
-                loaded = false
+                loadFailed = true
                 return false
             }
         }
