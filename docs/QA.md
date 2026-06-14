@@ -175,6 +175,21 @@ Scenarios mirror the current Scanbot UX as it exists in the retailer app. Pass c
 9. Force a CameraX bind failure (e.g. emulator with no camera) → `camera_unavailable`.
 10. Retailer app integrated against v1.2: no code change, no new error branch needed.
 
+### Document Scanner Smart Guidance (2026-06-14)
+
+Run on Pixel 6a + iPhone 13:
+
+- [ ] Invoice on dark desk → quad detected within 1s, ring countdown fires.
+- [ ] Invoice held in hand (motion) → `holdSteady` shows, never auto-snaps until stable.
+- [ ] Invoice on a laptop screen showing the same scan → must NOT trigger ready (interior-variance gate).
+- [ ] Invoice partially off-frame → `tooClose` with `clipsEdge`.
+- [ ] Low-light desk → `tooDark`.
+- [ ] Tilted 30° → `tooSkewed`.
+- [ ] Auto-snap: ring countdown visible, cancellable by tilting, fires capture; manual button still works while countdown not active.
+- [ ] Capture JPEG: open the file from the example app's surfaced path; verify rectification on iOS, full-frame on Android.
+
+> **Note:** All boxes above are intentionally unchecked. This QA pass is human-only and must be run on real Pixel 6a + iPhone 13 hardware post-merge against the published example app.
+
 ## Batch barcode
 
 ### Bt1 — 20 unique scans in 30s
@@ -208,4 +223,67 @@ The harness prints a JSON line per metric to stdout (`BENCH_RESULT {"metric":"..
 
 ## Sign-off
 
-The mobile lead walks scenarios **B1–B12, NC1–NC2, D1–D11, Bt1–Bt2** end-to-end on at least one Android device and one iPhone before `v1.0.0` is tagged. Results recorded in this file under a `## Sign-off (vX.Y.Z)` heading per release.
+The mobile lead walks the **release-scoped scenario set** end-to-end on at least one Android device and one iPhone before each `vX.Y.Z` tag is pushed. Results are recorded in this file under a `## Sign-off (vX.Y.Z)` heading per release.
+
+Scenario scope per release line:
+
+| Release line | In-scope scenarios | Out-of-scope (why) |
+|---|---|---|
+| **v1.0.x** (drop-in Scanbot replacement) | B1–B12, NC1–NC2, D1–D11, Bt1–Bt2 | B13 (v1.1 idle/torch-idle), D12 (v1.2 CameraX fallback) |
+| **v1.1.x** (perf workstream) | v1.0.x set **+** B13 | D12 (v1.2) |
+| **v1.2.x** (CameraX fallback) | v1.1.x set **+** D12 | — |
+
+For a **patch release** (e.g. v1.0.1 over v1.0.0) the walk is **regression-only**: the public Dart, MethodChannel, and native error-code surface are byte-compatible with the prior tag, so the criterion is "tester noticing no behavioral change from the prior tag." If a scenario diverges, that's a release blocker — investigate before tagging.
+
+The Performance table (above) is **not** part of the per-release sign-off — those metrics are tracked separately and only block the first release that closes the S3-09 "real-device perf numbers" debt from `CHANGELOG.md` v1.0.0 pending items.
+
+### Sign-off template
+
+Copy this block under a fresh `## Sign-off (vX.Y.Z)` heading. Fill in device + tester. Tick each scenario; if any fail, link the issue + decide tag-block vs. defer.
+
+```markdown
+## Sign-off (v1.0.1)
+
+- Tag candidate commit: <sha>
+- Walker: <name> (<role>)
+- Date: YYYY-MM-DD
+- Android device: <model + OS>
+- iPhone: <model + iOS>
+- Walk basis: regression-only vs. v1.0.0 (no public API changes)
+
+### Results
+
+| Scenario | Android | iPhone | Notes |
+|---|---|---|---|
+| B1  | [ ] | [ ] | |
+| B2  | [ ] | [ ] | |
+| B3  | [ ] | [ ] | |
+| B4  | [ ] | [ ] | |
+| B5  | [ ] | [ ] | |
+| B6  | [ ] | [ ] | |
+| B7  | [ ] | [ ] | |
+| B8  | [ ] | [ ] | |
+| B9  | [ ] | [ ] | |
+| B10 | [ ] | [ ] | |
+| B11 | [ ] | [ ] | |
+| B12 | [ ] | [ ] | |
+| NC1 | [ ] | [ ] | |
+| NC2 | [ ] | [ ] | |
+| D1  | [ ] | [ ] | |
+| D2  | [ ] | [ ] | |
+| D3  | [ ] | [ ] | |
+| D4  | [ ] | [ ] | |
+| D5  | [ ] | [ ] | |
+| D6  | [ ] | [ ] | |
+| D7  | [ ] | [ ] | |
+| D8  | [ ] | [ ] | |
+| D9  | [ ] | [ ] | |
+| D10 | [ ] | [ ] | |
+| D11 | [ ] | [ ] | |
+| Bt1 | [ ] | [ ] | |
+| Bt2 | [ ] | [ ] | |
+
+### Decision
+- [ ] All scenarios pass — clear to tag v1.0.1 via `tools/release.sh 1.0.1`.
+- [ ] Failures listed above — tag blocked pending fix.
+```
