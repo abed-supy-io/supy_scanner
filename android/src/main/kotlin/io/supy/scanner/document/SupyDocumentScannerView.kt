@@ -1,16 +1,20 @@
 package io.supy.scanner.document
 
 import android.content.Context
+import android.graphics.BitmapFactory
 import android.graphics.Color
 import android.os.Handler
 import android.os.Looper
 import android.view.View
 import android.widget.FrameLayout
 import androidx.camera.core.ImageAnalysis
+import androidx.camera.core.ImageCapture
+import androidx.camera.core.ImageCaptureException
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
+import java.io.File
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -168,6 +172,40 @@ class SupyDocumentScannerView(
                 val on = call.argument<Boolean>("on") ?: false
                 cameraController?.enableTorch(on)
                 result.success(null)
+            }
+            "captureFullFrame" -> {
+                val controller = cameraController
+                if (controller == null) {
+                    result.error("camera_unavailable", "Camera controller is not bound", null)
+                    return
+                }
+                val file = try {
+                    File.createTempFile("supy-doc-", ".jpg", context.cacheDir)
+                } catch (e: Exception) {
+                    result.error("captureFailed", e.message ?: "could not create temp file", null)
+                    return
+                }
+                val output = ImageCapture.OutputFileOptions.Builder(file).build()
+                controller.takePicture(
+                    output,
+                    ContextCompat.getMainExecutor(context),
+                    object : ImageCapture.OnImageSavedCallback {
+                        override fun onImageSaved(outputResults: ImageCapture.OutputFileResults) {
+                            val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
+                            BitmapFactory.decodeFile(file.absolutePath, opts)
+                            result.success(
+                                mapOf(
+                                    "path" to file.absolutePath,
+                                    "widthPx" to opts.outWidth,
+                                    "heightPx" to opts.outHeight,
+                                )
+                            )
+                        }
+                        override fun onError(exc: ImageCaptureException) {
+                            result.error("captureFailed", exc.message ?: "capture failed", null)
+                        }
+                    }
+                )
             }
             "captureAndRectify" -> {
                 // V1-S6-02 stub. Sprint 4 must land `warpPerspective` in the
