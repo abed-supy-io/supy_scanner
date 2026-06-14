@@ -35,3 +35,18 @@ TEST(DocumentEdgeDetector, ReturnsNulloptOnUniformInput) {
     DetectionInput in{img.data(), 256, 256, 256};
     EXPECT_FALSE(detectDocument(in).has_value());
 }
+
+TEST(DocumentEdgeDetector, DetectsRectangleWithPaddedStride) {
+    // rowStride = width + 16 (typical CameraX padding).
+    constexpr int w = 256, h = 256, stride = w + 16;
+    std::vector<uint8_t> img(static_cast<size_t>(stride) * h, 30);
+    // Bright rectangle from (40,60)..(220,200), but written into a stride-padded buffer.
+    for (int y = 60; y < 200; ++y)
+        for (int x = 40; x < 220; ++x)
+            img[static_cast<size_t>(y) * stride + x] = 200;
+    DetectionInput in{img.data(), w, h, stride};
+    auto q = detectDocument(in);
+    ASSERT_TRUE(q.has_value());
+    EXPECT_NEAR(q->corners[0].x, 40.f / w, 0.05f);
+    EXPECT_NEAR(q->corners[2].y, 200.f / h, 0.05f);
+}

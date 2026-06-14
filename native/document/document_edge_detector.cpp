@@ -22,6 +22,9 @@ namespace {
 // ---------------------------------------------------------------------------
 static constexpr int kMaxDimension = 16384;
 
+// Pi constant — avoids MSVC/strict-C++ issues with M_PI.
+static constexpr float kPi = 3.14159265358979323846f;
+
 // ---------------------------------------------------------------------------
 // Types used internally
 // ---------------------------------------------------------------------------
@@ -74,10 +77,10 @@ static std::vector<uint8_t> downsampleAndCrop(const DetectionInput& in,
 }
 
 // ---------------------------------------------------------------------------
-// Stage 2: separable 3×3 box blur (acceptable Gaussian approximation).
+// Stage 2: separable 3×3 box blur (uniform 1/3 kernel per pass).
 // ---------------------------------------------------------------------------
-static std::vector<uint8_t> gaussianBlur3x3(const std::vector<uint8_t>& src,
-                                            int w, int h) {
+static std::vector<uint8_t> boxBlur3x3(const std::vector<uint8_t>& src,
+                                       int w, int h) {
     std::vector<uint8_t> tmp(src.size());
     std::vector<uint8_t> dst(src.size());
 
@@ -149,12 +152,12 @@ static void adaptiveCannyThresholds(const std::vector<uint16_t>& mag,
 }
 
 // ---------------------------------------------------------------------------
-// Stage 5: Canny non-maximum suppression + hysteresis thresholding.
+// Stage 5: Canny hysteresis thresholding.
 // Returns a byte map: 255 = edge, 0 = non-edge.
 // ---------------------------------------------------------------------------
-static std::vector<uint8_t> cannyNonMaxSuppression(const std::vector<uint16_t>& mag,
-                                                   int w, int h,
-                                                   uint16_t lo, uint16_t hi) {
+static std::vector<uint8_t> cannyHysteresis(const std::vector<uint16_t>& mag,
+                                            int w, int h,
+                                            uint16_t lo, uint16_t hi) {
     // Simple threshold-based edge map (no angle-based NMS for brevity;
     // works well on bright-rect synthetic images and real docs).
     std::vector<uint8_t> edges(static_cast<size_t>(w * h), 0);
@@ -170,7 +173,7 @@ static std::vector<uint8_t> cannyNonMaxSuppression(const std::vector<uint16_t>& 
 
     // Hysteresis: weak edge becomes real if 8-connected to a strong edge.
     std::vector<int> stack;
-    stack.reserve(512);
+    stack.reserve(static_cast<size_t>(w * h));
     for (int y = 0; y < h; ++y)
         for (int x = 0; x < w; ++x)
             if (strong[static_cast<size_t>(y * w + x)]) {
@@ -207,7 +210,7 @@ static std::vector<Line> houghLines(const std::vector<uint8_t>& edges,
                                     int w, int h,
                                     int maxLines = 120) {
     const int numTheta = 180;
-    const float dTheta = static_cast<float>(M_PI) / numTheta;
+    const float dTheta = kPi / numTheta;
     const float diagLen = std::sqrt(static_cast<float>(w * w + h * h));
     const int numRho = static_cast<int>(2.0f * diagLen) + 1;
     const float rhoOffset = diagLen;
@@ -226,7 +229,7 @@ static std::vector<Line> houghLines(const std::vector<uint8_t>& edges,
             if (edges[static_cast<size_t>(y * w + x)] == 0) continue;
             for (int t = 0; t < numTheta; ++t) {
                 const float rho = x * cosT[t] + y * sinT[t];
-                const int ri = static_cast<int>(rho + rhoOffset);
+                const int ri = static_cast<int>(rho + rhoOffset + 0.5f);
                 if (ri >= 0 && ri < numRho)
                     acc[static_cast<size_t>(ri * numTheta + t)]++;
             }
@@ -235,7 +238,7 @@ static std::vector<Line> houghLines(const std::vector<uint8_t>& edges,
 
     // Peak pick — collect (count, index) pairs then sort descending.
     std::vector<std::pair<int, int>> peaks;
-    peaks.reserve(static_cast<size_t>(maxLines * 4));
+    peaks.reserve(static_cast<size_t>(numRho * numTheta));
     for (int i = 0; i < numRho * numTheta; ++i)
         if (acc[i] > 0) peaks.emplace_back(acc[i], i);
 
@@ -266,7 +269,7 @@ static void clusterDominantAngles(const std::vector<Line>& lines,
                                   std::vector<Line>& vert) {
     // Horizontal: theta in [0, pi/4) ∪ (3pi/4, pi)
     // Vertical:   theta in [pi/4, 3pi/4]
-    const float quarter = static_cast<float>(M_PI) / 4.0f;
+    const float quarter = kPi / 4.0f;
     const float three_quarter = 3.0f * quarter;
     for (const auto& l : lines) {
         if (l.theta < quarter || l.theta > three_quarter) horiz.push_back(l);
@@ -450,7 +453,7 @@ SUPY_EXPORT std::optional<DetectedQuad> detectDocument(const DetectionInput& in)
     const auto work = downsampleAndCrop(in, wW, wH);
 
     // Stage 2: blur.
-    const auto blurred = gaussianBlur3x3(work, wW, wH);
+    const auto blurred = boxBlur3x3(work, wW, wH);
 
     // Stage 3: Sobel magnitude.
     const auto mag = sobelMagnitude(blurred, wW, wH);
@@ -461,7 +464,7 @@ SUPY_EXPORT std::optional<DetectedQuad> detectDocument(const DetectionInput& in)
     if (hi == 0) return std::nullopt;
 
     // Stage 5: Canny edges.
-    const auto edges = cannyNonMaxSuppression(mag, wW, wH, lo, hi);
+    const auto edges = cannyHysteresis(mag, wW, wH, lo, hi);
 
     // Stage 6: Hough lines.
     const auto lines = houghLines(edges, wW, wH, 120);
@@ -505,8 +508,7 @@ SUPY_EXPORT std::optional<DetectedQuad> detectDocument(const DetectionInput& in)
     // tiltDegrees: angle of the top edge (TL→TR) from horizontal.
     const float dx = c[1].x - c[0].x;
     const float dy = c[1].y - c[0].y;
-    result.tiltDegrees = std::atan2(dy, dx) * 180.f /
-                         static_cast<float>(M_PI);
+    result.tiltDegrees = std::atan2(dy, dx) * 180.f / kPi;
 
     return result;
 }
