@@ -36,6 +36,8 @@ class SupyDocumentMetricsSmoother {
   double? _tilt;
   double? _luma;
   double? _blur;
+  double? _stability;
+  double? _interior;
   List<Offset>? _quad;
   bool _lastClipsEdge = false;
 
@@ -45,6 +47,8 @@ class SupyDocumentMetricsSmoother {
       _tilt != null ||
       _luma != null ||
       _blur != null ||
+      _stability != null ||
+      _interior != null ||
       _quad != null;
 
   /// Smoothed metrics derived from the stream so far. Returns the zero-default
@@ -58,6 +62,8 @@ class SupyDocumentMetricsSmoother {
       meanLuma: _luma ?? 0.0,
       blurScore: _blur ?? 0.0,
       clipsEdge: _lastClipsEdge,
+      quadStability: _stability ?? 0.0,
+      interiorVariance: _interior ?? 0.0,
     );
   }
 
@@ -74,6 +80,8 @@ class SupyDocumentMetricsSmoother {
     _tilt = _ema(_tilt, sample.tiltDegrees);
     _luma = _ema(_luma, sample.meanLuma);
     _blur = _ema(_blur, sample.blurScore);
+    _stability = _ema(_stability, sample.quadStability);
+    _interior = _ema(_interior, sample.interiorVariance);
     _quad = _smoothQuad(_quad, sample.quad);
     return current;
   }
@@ -85,6 +93,8 @@ class SupyDocumentMetricsSmoother {
     _tilt = null;
     _luma = null;
     _blur = null;
+    _stability = null;
+    _interior = null;
     _quad = null;
     _lastClipsEdge = false;
   }

@@ -15,6 +15,11 @@ SupyDocumentFrameMetrics _goodFrame({
   double meanLuma = 140.0,
   double blurScore = 200.0,
   bool clipsEdge = false,
+  // Task 3 added the stability + interior-variance gates. Default both to
+  // comfortably-passing values so tests that pre-date the gates continue to
+  // exercise the failure classification they were written for.
+  double quadStability = 1.0,
+  double interiorVariance = 50.0,
 }) {
   return SupyDocumentFrameMetrics(
     quad: quad,
@@ -23,6 +28,8 @@ SupyDocumentFrameMetrics _goodFrame({
     meanLuma: meanLuma,
     blurScore: blurScore,
     clipsEdge: clipsEdge,
+    quadStability: quadStability,
+    interiorVariance: interiorVariance,
   );
 }
 

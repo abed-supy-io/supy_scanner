@@ -116,10 +116,17 @@ class SupyDocumentStateMachine {
   SupyDocumentFrameMetrics get lastMetrics => _lastSmoothed;
 
   SupyDocumentFrameState _classify(SupyDocumentFrameMetrics m) {
-    if (!m.hasDocument) {
+    final c = _configuration;
+    // A quad with too-low interior variance (e.g. a phone screen showing a
+    // single flat image) is not a usable document — fold it into the
+    // missing-doc branch so the FSM degrades to `noDocument` rather than
+    // surfacing `holdSteady` on a non-document surface.
+    final hasUsableDoc =
+        m.hasDocument && m.interiorVariance >= c.interiorVarianceFloor;
+    if (!hasUsableDoc) {
       _goodStreak = 0;
       _missingStreak += 1;
-      if (_missingStreak <= _configuration.lostDocumentGraceFrames &&
+      if (_missingStreak <= c.lostDocumentGraceFrames &&
           _state != SupyDocumentFrameState.noDocument) {
         return _state;
       }
@@ -133,8 +140,22 @@ class SupyDocumentStateMachine {
       return failing;
     }
 
+    // All hard failures pass — but require quad stability before promoting
+    // to `ready`. While holding in `holdSteady`, relax the floor by
+    // `exitMargin` so we don't bounce out on a micro-jitter.
+    final stabilityFloor = _state == SupyDocumentFrameState.holdSteady
+        ? c.readyStabilityFloor * (1.0 - c.exitMargin)
+        : c.readyStabilityFloor;
+    if (m.quadStability < stabilityFloor) {
+      _goodStreak = 0;
+      return SupyDocumentFrameState.holdSteady;
+    }
+
     _goodStreak += 1;
-    if (_goodStreak >= _configuration.readyStableFrames) {
+    final framesNeeded = _state == SupyDocumentFrameState.holdSteady
+        ? c.holdSteadyFrames
+        : c.readyStableFrames;
+    if (_goodStreak >= framesNeeded) {
       return SupyDocumentFrameState.ready;
     }
     return _holdingState();
@@ -207,17 +228,17 @@ class SupyDocumentStateMachine {
       case SupyDocumentFrameState.blurry:
         return 5;
       case SupyDocumentFrameState.holdSteady:
-        // Mirrors `blurry` priority: gate-style state the FSM itself doesn't
-        // emit yet (Task 3 wires it). Keeps the switch exhaustive.
-        return 5;
-      case SupyDocumentFrameState.ready:
+        // Sits between `blurry` and `ready`: all hard quality checks pass,
+        // but the quad still needs to settle before we promote.
         return 6;
+      case SupyDocumentFrameState.ready:
+        return 7;
       case SupyDocumentFrameState.capturing:
       case SupyDocumentFrameState.captured:
         // UI-only terminal states — the FSM never classifies into them so
         // this branch is unreachable. Treated as least-urgent for the sake of
         // the exhaustive switch.
-        return 7;
+        return 8;
     }
   }
 }
