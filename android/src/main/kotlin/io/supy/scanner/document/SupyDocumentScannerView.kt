@@ -15,6 +15,7 @@ import androidx.camera.view.PreviewView
 import androidx.core.content.ContextCompat
 import androidx.lifecycle.LifecycleOwner
 import java.io.File
+import java.io.IOException
 import io.flutter.plugin.common.BinaryMessenger
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodCall
@@ -72,6 +73,7 @@ class SupyDocumentScannerView(
     private var cameraController: LifecycleCameraController? = null
     private var eventSink: EventChannel.EventSink? = null
     private var previewStartedAnnounced: Boolean = false
+    @Volatile private var isCapturing: Boolean = false
 
     private val analyzer: DocumentFrameAnalyzer = DocumentFrameAnalyzer { metrics ->
         emitFrameMetrics(metrics)
@@ -174,17 +176,27 @@ class SupyDocumentScannerView(
                 result.success(null)
             }
             "captureFullFrame" -> {
+                if (isCapturing) {
+                    result.error("captureFailed", "capture already in progress", null)
+                    return
+                }
                 val controller = cameraController
                 if (controller == null) {
                     result.error("camera_unavailable", "Camera controller is not bound", null)
                     return
                 }
+                val cacheDir = context.cacheDir
+                if (cacheDir == null) {
+                    result.error("captureFailed", "cache directory unavailable", null)
+                    return
+                }
                 val file = try {
-                    File.createTempFile("supy-doc-", ".jpg", context.cacheDir)
-                } catch (e: Exception) {
+                    File.createTempFile("supy-doc-", ".jpg", cacheDir)
+                } catch (e: IOException) {
                     result.error("captureFailed", e.message ?: "could not create temp file", null)
                     return
                 }
+                isCapturing = true
                 val output = ImageCapture.OutputFileOptions.Builder(file).build()
                 controller.takePicture(
                     output,
@@ -193,6 +205,12 @@ class SupyDocumentScannerView(
                         override fun onImageSaved(outputResults: ImageCapture.OutputFileResults) {
                             val opts = BitmapFactory.Options().apply { inJustDecodeBounds = true }
                             BitmapFactory.decodeFile(file.absolutePath, opts)
+                            isCapturing = false
+                            if (opts.outWidth <= 0 || opts.outHeight <= 0) {
+                                file.delete()
+                                result.error("captureFailed", "saved JPEG could not be decoded", null)
+                                return
+                            }
                             result.success(
                                 mapOf(
                                     "path" to file.absolutePath,
@@ -202,6 +220,8 @@ class SupyDocumentScannerView(
                             )
                         }
                         override fun onError(exc: ImageCaptureException) {
+                            isCapturing = false
+                            file.delete()
                             result.error("captureFailed", exc.message ?: "capture failed", null)
                         }
                     }
