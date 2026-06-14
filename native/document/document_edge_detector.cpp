@@ -16,6 +16,13 @@ namespace supy::scanner::document {
 namespace {
 
 // ---------------------------------------------------------------------------
+// Dimension cap
+// Why: prevents int*int overflow in caller-supplied luma index arithmetic;
+// 16384 exceeds any real camera resolution (e.g. 12 MP ≈ 4000×3000).
+// ---------------------------------------------------------------------------
+static constexpr int kMaxDimension = 16384;
+
+// ---------------------------------------------------------------------------
 // Types used internally
 // ---------------------------------------------------------------------------
 struct Line {
@@ -51,10 +58,10 @@ static std::vector<uint8_t> downsampleAndCrop(const DetectionInput& in,
             const int sx0 = std::max(0, static_cast<int>(fx));
             const int sx1 = std::min(srcW - 1, sx0 + 1);
             const float wx = fx - sx0;
-            const float v00 = in.luma[sy0 * in.rowStride + sx0];
-            const float v10 = in.luma[sy0 * in.rowStride + sx1];
-            const float v01 = in.luma[sy1 * in.rowStride + sx0];
-            const float v11 = in.luma[sy1 * in.rowStride + sx1];
+            const float v00 = in.luma[static_cast<size_t>(sy0) * in.rowStride + sx0];
+            const float v10 = in.luma[static_cast<size_t>(sy0) * in.rowStride + sx1];
+            const float v01 = in.luma[static_cast<size_t>(sy1) * in.rowStride + sx0];
+            const float v11 = in.luma[static_cast<size_t>(sy1) * in.rowStride + sx1];
             const float val = v00 * (1 - wx) * (1 - wy)
                             + v10 *      wx  * (1 - wy)
                             + v01 * (1 - wx) *      wy
@@ -434,6 +441,8 @@ sortCornersTLTRBRBL(const RawQuad& q) {
 // ---------------------------------------------------------------------------
 SUPY_EXPORT std::optional<DetectedQuad> detectDocument(const DetectionInput& in) {
     if (!in.luma || in.width <= 0 || in.height <= 0 || in.rowStride < in.width)
+        return std::nullopt;
+    if (in.width > kMaxDimension || in.height > kMaxDimension || in.rowStride > kMaxDimension)
         return std::nullopt;
 
     // Stage 1: downsample to ≤256px working image.
