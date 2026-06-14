@@ -17,6 +17,14 @@ struct DocumentFrameMetrics {
   let meanLuma: Double
   let blurScore: Double
   let clipsEdge: Bool
+  /// Variance-of-Laplacian computed over the *quad interior*. Distinct from
+  /// `blurScore`, which is the variance over a fixed center crop. Used by the
+  /// Dart FSM to reject uniform patches that Vision incidentally rectangulated.
+  let interiorVariance: Double
+  /// 0..1 measure of corner stability across a small rolling window. 1.0 is
+  /// rock-still; 0.0 is wildly jittery. Used by the FSM as a hard
+  /// `holdSteady → ready` gate.
+  let quadStability: Double
 
   static let empty = DocumentFrameMetrics(
     quad: [],
@@ -24,7 +32,9 @@ struct DocumentFrameMetrics {
     tiltDegrees: 0,
     meanLuma: 0,
     blurScore: 0,
-    clipsEdge: false
+    clipsEdge: false,
+    interiorVariance: 0,
+    quadStability: 0
   )
 
   func toMap() -> [String: Any] {
@@ -35,6 +45,8 @@ struct DocumentFrameMetrics {
       "meanLuma": meanLuma,
       "blurScore": blurScore,
       "clipsEdge": clipsEdge,
+      "interiorVariance": interiorVariance,
+      "quadStability": quadStability,
     ]
   }
 }
@@ -72,6 +84,27 @@ final class DocumentDetector: NSObject,
   // is still in flight. Prevents Vision backpressure on slow devices.
   private var inFlight: Bool = false
 
+  /// Quad-aspect / area / confidence gates applied uniformly to both the
+  /// iOS-16 rectangles request and the iOS-17 segmentation post-processing.
+  /// Kept tighter than Vision's defaults so we don't promote laptop screens
+  /// or table edges to "candidate document".
+  private static let minAspectRatio: CGFloat = 0.4
+  private static let maxAspectRatio: CGFloat = 1.0
+  private static let minBoundingArea: CGFloat = 0.2
+  private static let minConfidence: VNConfidence = 0.7
+
+  /// Quads whose interior variance falls below this floor are treated as
+  /// uniform patches (blank table, monitor, sky) and discarded. Empirically
+  /// well below textured paper but above sensor noise on a uniform surface.
+  private static let interiorVarianceFloor: Double = 5.0
+
+  /// Owns the rolling per-corner drift buffer used to compute `quadStability`.
+  /// Cleared on every no-quad frame so the buffer never bleeds across
+  /// re-acquisitions of the document.
+  // Mutated only from `sampleBufferQueue` via the synchronous `handler.perform`
+  // completion. Do not touch from any other queue.
+  private let stabilityTracker = QuadStabilityTracker(windowSize: 6)
+
   func captureOutput(
     _ output: AVCaptureOutput,
     didOutput sampleBuffer: CMSampleBuffer,
@@ -94,11 +127,41 @@ final class DocumentDetector: NSObject,
     let request = Self.makeRequest { [weak self] quad in
       guard let self = self else { return }
       defer { self.inFlight = false }
+
+      // Variance gate: kill quads whose interior is too uniform to be a real
+      // document. The Vision-space quad is fine here — `computeInteriorVariance`
+      // only cares about the axis-aligned bounding box of the points.
+      let interiorVariance: Double
+      if quad.count == 4 {
+        interiorVariance = self.computeInteriorVariance(
+          pixelBuffer: pixelBuffer,
+          normalizedQuad: quad
+        )
+      } else {
+        interiorVariance = 0
+      }
+
+      let acceptedQuad: [CGPoint]
+      let stability: Double
+      if quad.count == 4 && interiorVariance >= Self.interiorVarianceFloor {
+        acceptedQuad = quad
+        // Push the *flipped* (top-left-origin) quad into the tracker so
+        // stability units match what downstream consumers see.
+        let flipped = quad.map { CGPoint(x: $0.x, y: 1 - $0.y) }
+        stability = self.stabilityTracker.push(flipped)
+      } else {
+        acceptedQuad = []
+        self.stabilityTracker.reset()
+        stability = 0
+      }
+
       let metrics = Self.buildMetrics(
-        rawQuad: quad,
+        rawQuad: acceptedQuad,
         meanLuma: lumaMetrics.meanLuma,
         blurScore: lumaMetrics.blurScore,
-        edgeClipMargin: self.edgeClipMargin
+        edgeClipMargin: self.edgeClipMargin,
+        interiorVariance: interiorVariance,
+        quadStability: stability
       )
       self.onMetrics?(metrics)
     }
@@ -108,6 +171,7 @@ final class DocumentDetector: NSObject,
     } catch {
       inFlight = false
       onError?("Vision request failed: \(error.localizedDescription)")
+      stabilityTracker.reset()
       onMetrics?(
         DocumentFrameMetrics(
           quad: [],
@@ -115,7 +179,9 @@ final class DocumentDetector: NSObject,
           tiltDegrees: 0,
           meanLuma: lumaMetrics.meanLuma,
           blurScore: lumaMetrics.blurScore,
-          clipsEdge: false
+          clipsEdge: false,
+          interiorVariance: 0,
+          quadStability: 0
         )
       )
     }
@@ -132,7 +198,20 @@ final class DocumentDetector: NSObject,
     if #available(iOS 17.0, *) {
       let req = VNDetectDocumentSegmentationRequest { request, _ in
         let results = request.results as? [VNRectangleObservation] ?? []
-        guard let best = results.first else {
+        // Mirror the iOS-16 gates on the segmentation observation. The
+        // segmentation model doesn't expose tunable knobs the way
+        // `VNDetectRectanglesRequest` does, so we filter post-hoc.
+        let filtered = results.filter { obs in
+          guard obs.confidence >= minConfidence else { return false }
+          let a = aspect(of: obs)
+          guard a >= minAspectRatio && a <= maxAspectRatio else { return false }
+          return boundingArea(of: obs) >= minBoundingArea
+        }
+        guard
+          let best = filtered.max(by: { lhs, rhs in
+            area(of: lhs) < area(of: rhs)
+          })
+        else {
           completion([])
           return
         }
@@ -162,11 +241,12 @@ final class DocumentDetector: NSObject,
         best.bottomLeft,
       ])
     }
-    req.minimumAspectRatio = 0.3
-    req.maximumAspectRatio = 1.0
-    req.minimumSize = 0.2
+    req.minimumConfidence = minConfidence
+    req.minimumAspectRatio = Float(minAspectRatio)
+    req.maximumAspectRatio = Float(maxAspectRatio)
+    req.minimumSize = Float(minBoundingArea)
     req.maximumObservations = 1
-    req.quadratureTolerance = 25
+    req.quadratureTolerance = 30
     return req
   }
 
@@ -174,6 +254,27 @@ final class DocumentDetector: NSObject,
     let w = hypot(obs.topRight.x - obs.topLeft.x, obs.topRight.y - obs.topLeft.y)
     let h = hypot(obs.bottomLeft.x - obs.topLeft.x, obs.bottomLeft.y - obs.topLeft.y)
     return w * h
+  }
+
+  /// Shorter-edge / longer-edge ratio of the quad. Always in (0, 1].
+  /// Used to discard obvious non-document candidates (very narrow strips,
+  /// table edges, etc.).
+  private static func aspect(of obs: VNRectangleObservation) -> CGFloat {
+    let w = hypot(obs.topRight.x - obs.topLeft.x, obs.topRight.y - obs.topLeft.y)
+    let h = hypot(obs.bottomLeft.x - obs.topLeft.x, obs.bottomLeft.y - obs.topLeft.y)
+    guard w > 0 && h > 0 else { return 0 }
+    return min(w, h) / max(w, h)
+  }
+
+  /// Area of the quad's axis-aligned bounding box in normalized units.
+  /// Mirrors `VNDetectRectanglesRequest.minimumSize` semantics for the
+  /// segmentation path (which has no equivalent knob).
+  private static func boundingArea(of obs: VNRectangleObservation) -> CGFloat {
+    let xs = [obs.topLeft.x, obs.topRight.x, obs.bottomLeft.x, obs.bottomRight.x]
+    let ys = [obs.topLeft.y, obs.topRight.y, obs.bottomLeft.y, obs.bottomRight.y]
+    guard let xMin = xs.min(), let xMax = xs.max(),
+          let yMin = ys.min(), let yMax = ys.max() else { return 0 }
+    return (xMax - xMin) * (yMax - yMin)
   }
 
   // MARK: - Metrics
@@ -184,7 +285,9 @@ final class DocumentDetector: NSObject,
     rawQuad: [CGPoint],
     meanLuma: Double,
     blurScore: Double,
-    edgeClipMargin: CGFloat
+    edgeClipMargin: CGFloat,
+    interiorVariance: Double,
+    quadStability: Double
   ) -> DocumentFrameMetrics {
     guard rawQuad.count == 4 else {
       return DocumentFrameMetrics(
@@ -193,7 +296,9 @@ final class DocumentDetector: NSObject,
         tiltDegrees: 0,
         meanLuma: meanLuma,
         blurScore: blurScore,
-        clipsEdge: false
+        clipsEdge: false,
+        interiorVariance: interiorVariance,
+        quadStability: 0
       )
     }
 
@@ -211,7 +316,9 @@ final class DocumentDetector: NSObject,
       tiltDegrees: Double(tilt),
       meanLuma: meanLuma,
       blurScore: blurScore,
-      clipsEdge: clips
+      clipsEdge: clips,
+      interiorVariance: interiorVariance,
+      quadStability: quadStability
     )
   }
 
@@ -338,4 +445,123 @@ final class DocumentDetector: NSObject,
 
     return LumaMetrics(meanLuma: meanLuma, blurScore: max(0, variance))
   }
+
+  // MARK: - Interior variance (quad-gated)
+
+  /// Variance-of-Laplacian computed *inside* the candidate quad's
+  /// axis-aligned bounding box. This is a stricter test than the
+  /// center-crop `blurScore` because Vision can rectangulate uniform regions
+  /// (sky, monitor, blank table) — those will pass the blur check (their
+  /// crop has texture elsewhere) but fail this one.
+  ///
+  /// Pure-function-ish: doesn't mutate detector state. Exposed at internal
+  /// visibility so `DocumentDetectorTests` can fixture pixel buffers.
+  func computeInteriorVariance(
+    pixelBuffer: CVPixelBuffer,
+    normalizedQuad: [CGPoint]
+  ) -> Double {
+    guard normalizedQuad.count == 4 else { return 0 }
+    CVPixelBufferLockBaseAddress(pixelBuffer, .readOnly)
+    defer { CVPixelBufferUnlockBaseAddress(pixelBuffer, .readOnly) }
+    let w = CVPixelBufferGetWidthOfPlane(pixelBuffer, 0)
+    let h = CVPixelBufferGetHeightOfPlane(pixelBuffer, 0)
+    let stride = CVPixelBufferGetBytesPerRowOfPlane(pixelBuffer, 0)
+    guard let base = CVPixelBufferGetBaseAddressOfPlane(pixelBuffer, 0) else {
+      return 0
+    }
+    let y = base.assumingMemoryBound(to: UInt8.self)
+
+    let xs = normalizedQuad.map { Int($0.x * CGFloat(w)) }
+    let ys = normalizedQuad.map { Int($0.y * CGFloat(h)) }
+    let xMin = max(0, xs.min()!)
+    let yMin = max(0, ys.min()!)
+    let xMax = min(w - 1, xs.max()!)
+    let yMax = min(h - 1, ys.max()!)
+
+    // ~96 samples on the long edge keeps the cost flat across camera
+    // resolutions — same trick as `computeLumaMetrics`.
+    let target = 96
+    let longEdge = max(xMax - xMin, yMax - yMin)
+    let step = max(1, longEdge / target)
+    // Reject bboxes too small to host the 3x3 Laplacian kernel at this
+    // step. Subsumes the old fixed `< 8` guard, which silently produced
+    // `n == 0` on large frames where `step > 1`.
+    if (xMax - xMin) < 2 * step + 1 || (yMax - yMin) < 2 * step + 1 { return 0 }
+
+    var sumLap: Double = 0
+    var sumLap2: Double = 0
+    var n: Int = 0
+    var yy = yMin + step
+    while yy < yMax - step {
+      var xx = xMin + step
+      while xx < xMax - step {
+        let c = Int(y[yy * stride + xx])
+        let l = Int(y[yy * stride + xx - step])
+        let r = Int(y[yy * stride + xx + step])
+        let u = Int(y[(yy - step) * stride + xx])
+        let d = Int(y[(yy + step) * stride + xx])
+        let lap = Double(4 * c - l - r - u - d)
+        sumLap += lap
+        sumLap2 += lap * lap
+        n += 1
+        xx += step
+      }
+      yy += step
+    }
+    guard n > 0 else { return 0 }
+    let mean = sumLap / Double(n)
+    return sumLap2 / Double(n) - mean * mean
+  }
+}
+
+// MARK: - QuadStabilityTracker
+
+/// Rolling-window quad stability gauge.
+///
+/// Holds the last `windowSize` quads and reports stability as
+/// `1 - maxCornerDrift / 0.1`, clamped to [0, 1]. A fully-static quad over the
+/// window returns 1.0; a quad whose worst corner travels 0.1 (normalized) or
+/// more returns 0.0.
+///
+/// Reset on every no-quad frame so a re-acquired document doesn't inherit
+/// stability from a stale buffer.
+final class QuadStabilityTracker {
+  private let windowSize: Int
+  private var history: [[CGPoint]] = []
+
+  init(windowSize: Int = 6) { self.windowSize = windowSize }
+
+  @discardableResult
+  func push(_ quad: [CGPoint]) -> Double {
+    guard quad.count == 4 else {
+      history.removeAll()
+      return 0.0
+    }
+    history.append(quad)
+    if history.count > windowSize { history.removeFirst() }
+    return stability()
+  }
+
+  func stability() -> Double {
+    guard history.count >= 2 else { return 0.0 }
+    var maxDrift: Double = 0
+    for corner in 0..<4 {
+      var minX = Double.infinity
+      var maxX = -Double.infinity
+      var minY = Double.infinity
+      var maxY = -Double.infinity
+      for frame in history {
+        let p = frame[corner]
+        minX = min(minX, Double(p.x))
+        maxX = max(maxX, Double(p.x))
+        minY = min(minY, Double(p.y))
+        maxY = max(maxY, Double(p.y))
+      }
+      let drift = max(maxX - minX, maxY - minY)
+      if drift > maxDrift { maxDrift = drift }
+    }
+    return max(0.0, min(1.0, 1.0 - maxDrift / 0.1))
+  }
+
+  func reset() { history.removeAll() }
 }
