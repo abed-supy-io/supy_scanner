@@ -21,6 +21,8 @@ option(SUPY_BUILD_TESTS "Build host-side GoogleTest suite" OFF)
 set(SUPY_CORE_SOURCES
   src/supy_scanner_core.cpp
   document/document_edge_detector.cpp
+  document/document_guidance_classifier.cpp
+  barcode/barcode_decoder.cpp
 )
 
 # JNI bridge is Android-only and lives in the Flutter plugin tree so iOS
@@ -54,7 +56,14 @@ endif()
 # until the Sprint 2 decode integration is wired through.
 if(SUPY_WITH_ZXING_CPP)
   include(FetchContent)
-  set(BUILD_WRITERS OFF CACHE BOOL "" FORCE)
+  # Writers are needed by the host gtest suite (synthetic-image fixtures).
+  # On the device/xcframework builds where SUPY_BUILD_TESTS is OFF, leave
+  # them off so the static lib stays as small as possible.
+  if(SUPY_BUILD_TESTS)
+    set(BUILD_WRITERS ON CACHE BOOL "" FORCE)
+  else()
+    set(BUILD_WRITERS OFF CACHE BOOL "" FORCE)
+  endif()
   set(BUILD_EXAMPLES OFF CACHE BOOL "" FORCE)
   set(BUILD_BLACKBOX_TESTS OFF CACHE BOOL "" FORCE)
   set(BUILD_UNIT_TESTS OFF CACHE BOOL "" FORCE)
@@ -85,7 +94,16 @@ if(SUPY_BUILD_TESTS)
 
   add_executable(supy_scanner_core_tests
     document/document_edge_detector_test.cpp
+    document/document_guidance_classifier_test.cpp
+    barcode/barcode_decoder_test.cpp
   )
   target_link_libraries(supy_scanner_core_tests PRIVATE supy_scanner_core gtest gtest_main)
   target_compile_options(supy_scanner_core_tests PRIVATE -Wall -Wextra -Wpedantic -Werror)
+  if(SUPY_WITH_ZXING_CPP)
+    # supy_scanner_core PRIVATE-links ZXing so the symbol is reachable, but
+    # the test TU also #includes zxing-cpp writer headers directly (for
+    # synthetic-image fixtures) — give it the same include/link surface.
+    target_link_libraries(supy_scanner_core_tests PRIVATE ZXing::ZXing)
+    target_compile_definitions(supy_scanner_core_tests PRIVATE SUPY_WITH_ZXING_CPP=1)
+  endif()
 endif()

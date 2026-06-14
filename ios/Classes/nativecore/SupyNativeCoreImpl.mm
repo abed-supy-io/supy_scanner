@@ -10,4 +10,6 @@
 
 #if !SWIFT_PACKAGE
 #include "../../../native/src/supy_scanner_core.cpp"
+#include "../../../native/barcode/barcode_decoder.cpp"
+#include "../../../native/document/document_guidance_classifier.cpp"
 #endif
