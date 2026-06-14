@@ -120,7 +120,7 @@ The shared C++ core in `native/` exposes a stable C ABI consumed by Android JNI,
 
 The decode path is gated end-to-end:
 - CMake option `SUPY_WITH_ZXING_CPP` (default OFF) — controls whether zxing-cpp is fetched and linked.
-- iOS podspec gate on `ENV['SUPY_SCANNER_ENABLE_ZXING']=='1' || File.directory?(Vendor/ZXing.xcframework)` (see `tools/build_zxing_xcframework.sh`).
+- iOS podspec gate on `ENV['SUPY_SCANNER_ENABLE_ZXING']=='1' || File.directory?('Vendor/ZXing.xcframework')` (see `tools/build_zxing_xcframework.sh`).
 - Runtime opt-in via the `useNativeCore` PlatformView arg — platforms only call `supy_core_decode` when `useNativeCore=true`; otherwise the ML Kit / Vision path stays canonical.
 
 ### `io.supy.scanner/v1/barcode/<viewId>` (per-view MethodChannel)
@@ -170,8 +170,8 @@ Backs `SupyDocumentScannerView` — the embedded streaming guidance preview
 | `pause` | — | `{}` |
 | `resume` | — | `{}` |
 | `setTorch` | `{ on: bool }` | `{}` |
-| `captureAndRectify` | — | `{ path: String, widthPx: Int, heightPx: Int, quad: List<{x, y}> }`. iOS: applies `CIPerspectiveCorrection` to the last smoothed quad and writes a JPEG to `NSTemporaryDirectory()`. Android: returns `FlutterError("UNIMPLEMENTED", …)` until Sprint 4 `warpPerspective` lands — the Dart widget falls back to `captureFullFrame` when `guidance.allowUnrectifiedFallback` is `true`. Errors: `capture_failed`, `unknown`. |
-| `captureFullFrame` | — | `{ path: String, widthPx: Int, heightPx: Int }`. iOS: triggers `AVCapturePhotoOutput`, writes JPEG to `NSTemporaryDirectory()`. Android: triggers CameraX `ImageCapture`, writes JPEG to `context.cacheDir`. Always available on both platforms. Errors: `capture_failed`, `unknown`. |
+| `captureAndRectify` | — | `{ path: String, widthPx: Int, heightPx: Int, quad: List<{x, y}> }`. iOS: applies `CIPerspectiveCorrection` to the last smoothed quad and writes a JPEG to `NSTemporaryDirectory()`. Android: returns `FlutterError("UNIMPLEMENTED", …)` until Sprint 4 `warpPerspective` lands — the Dart widget falls back to `captureFullFrame` when `guidance.allowUnrectifiedFallback` is `true`. Errors: `captureFailed`, `unknown`. |
+| `captureFullFrame` | — | `{ path: String, widthPx: Int, heightPx: Int }`. iOS: triggers `AVCapturePhotoOutput`, writes JPEG to `NSTemporaryDirectory()`. Android: triggers CameraX `ImageCapture`, writes JPEG to `context.cacheDir`. Always available on both platforms. Errors: `captureFailed`, `unknown`. |
 
 ### `io.supy.scanner/v1/document/<viewId>/events` (EventChannel)
 

@@ -68,6 +68,8 @@ Android (`BatchBarcodeScannerActivity.kt`):
 
 - Document scanner UIs (iOS VisionKit, Android GMS) — vendor-owned chrome, cannot be reskinned without losing the system flow.
 - Embedded `SupyBarcodeScannerView` — already palette-driven via Flutter overlay; parity is structural.
+- String localization — "Cancel" / "Done" remain hardcoded English on both sides. Retailer consumer does not localize these strings today; tracked as a follow-up if a non-English locale enters scope.
+- Channel surface — no wire-format changes; `BatchBarcodeScannerLauncher.kt` and the iOS presenter args are untouched.
 
 ---
 
@@ -101,8 +103,6 @@ get full rebranding without forking the library.
 The `warning` color (`#FF4D4D`) is a new token added to `SupyScannerPalette`
 (field `final Color warning`, default `const Color(0xFFFF4D4D)`). Both
 `scanbotDark` and `scanbotLight` named constructors set it to `#FF4D4D`.
-- String localization — "Cancel" / "Done" remain hardcoded English on both sides. Retailer consumer does not localize these strings today; tracked as a follow-up if a non-English locale enters scope.
-- Channel surface — no wire-format changes; `BatchBarcodeScannerLauncher.kt` and the iOS presenter args are untouched.
 
 ## Verification
 

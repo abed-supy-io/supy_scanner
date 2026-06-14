@@ -5,11 +5,7 @@ All notable changes to this project will be documented in this file.
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.html).
 
-## [Unreleased] — Document scanner smart guidance
-
-Smart-guidance + auto-snap + interior-variance false-positive gate for the
-embedded `SupyDocumentScannerView`. Channel stays `io.supy.scanner/v1`
-(additive only). Drop-in for v1.0.x / v1.1 retailer consumers.
+## [Unreleased]
 
 ### Added
 - `SupyDocumentFrameState.holdSteady` — new FSM state between failing states and `ready`. Entered when all failure checks pass but `quadStability < readyStabilityFloor`; exits to `ready` after `holdSteadyFrames` (default 6) consecutive stable frames.
