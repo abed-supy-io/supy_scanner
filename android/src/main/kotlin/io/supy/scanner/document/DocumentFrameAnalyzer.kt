@@ -38,12 +38,7 @@ data class DocumentFrameMetrics(
     )
 }
 
-/**
- * Tracks quad corner stability over a rolling window of frames.
- *
- * Reports `1 - maxCornerDrift / 0.1`, clamped to [0, 1]. Requires ≥ 2 frames
- * in the window; returns 0.0 until then. Mirror of the iOS `QuadStabilityTracker`.
- */
+// Rolling-window corner-drift tracker; mirrors iOS QuadStabilityTracker.
 internal class QuadStabilityTracker(private val windowSize: Int = 6) {
     private val history: ArrayDeque<FloatArray> = ArrayDeque()
 
@@ -178,15 +173,7 @@ class DocumentFrameAnalyzer(
         return false
     }
 
-    /**
-     * Variance-of-Laplacian inside the corner-bounded bounding box on the Y
-     * plane, sampled to ~96 px on the long edge. Mirrors `computeInteriorVariance`
-     * from the iOS `DocumentDetector.swift`.
-     *
-     * Unlike the iOS path (where the Y plane is always tightly packed),
-     * Android Y planes carry both `rowStride` and `pixelStride`. Both are used
-     * here so absolute byte indices are correct for any packing.
-     */
+    // Variance-of-Laplacian inside the quad bbox, sampled to ~96px on the long edge; uses absolute ByteBuffer.get() so rowStride padding doesn't matter.
     private fun computeInteriorVariance(
         buffer: java.nio.ByteBuffer,
         width: Int,
