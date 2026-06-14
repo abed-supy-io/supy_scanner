@@ -51,7 +51,10 @@ export 'src/widgets/supy_barcode_scanner_screen.dart'
 export 'src/widgets/supy_barcode_scanner_view.dart'
     show SupyBarcodeScannerView, kDefaultBarcodeCooldown;
 export 'src/widgets/supy_document_scanner_controller.dart'
-    show SupyDocumentScannerController, SupyDocumentCapturePhase;
+    show
+        SupyDocumentCapture,
+        SupyDocumentCapturePhase,
+        SupyDocumentScannerController;
 export 'src/widgets/supy_document_scanner_view.dart'
     show SupyDocumentScannerView;
 export 'src/widgets/supy_find_and_pick_accumulator.dart'

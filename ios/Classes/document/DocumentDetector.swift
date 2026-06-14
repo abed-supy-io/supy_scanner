@@ -76,6 +76,26 @@ final class DocumentDetector: NSObject,
   /// Fires on `sampleBufferQueue`.
   var onError: ((String) -> Void)?
 
+  /// Lock guarding `_latestQuad`. The detector itself only writes from
+  /// `sampleBufferQueue`, but `captureAndRectify` reads from the session
+  /// queue, so we need a tiny mutex.
+  private let latestQuadLock = NSLock()
+  private var _latestQuad: [CGPoint] = []
+
+  /// Returns the most recent top-left-origin normalized quad accepted by the
+  /// detector, or an empty array if there's no current detection. Thread-safe.
+  func snapshotLatestQuad() -> [CGPoint] {
+    latestQuadLock.lock()
+    defer { latestQuadLock.unlock() }
+    return _latestQuad
+  }
+
+  private func setLatestQuad(_ quad: [CGPoint]) {
+    latestQuadLock.lock()
+    _latestQuad = quad
+    latestQuadLock.unlock()
+  }
+
   /// Edge clip threshold in normalized units. A quad point within this
   /// distance of any preview edge counts as `clipsEdge`.
   private let edgeClipMargin: CGFloat = 0.02
@@ -163,6 +183,10 @@ final class DocumentDetector: NSObject,
         interiorVariance: interiorVariance,
         quadStability: stability
       )
+      // Cache the emitted (top-left-origin) quad so capture-and-rectify can
+      // pick it up without re-running detection. Cleared whenever the quad
+      // is rejected — `metrics.quad` is `[]` in that case.
+      self.setLatestQuad(metrics.quad)
       self.onMetrics?(metrics)
     }
 
@@ -172,6 +196,7 @@ final class DocumentDetector: NSObject,
       inFlight = false
       onError?("Vision request failed: \(error.localizedDescription)")
       stabilityTracker.reset()
+      setLatestQuad([])
       onMetrics?(
         DocumentFrameMetrics(
           quad: [],

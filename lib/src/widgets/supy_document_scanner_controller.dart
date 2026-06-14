@@ -5,6 +5,86 @@ import '../channel/supy_scanner_channel.dart';
 import '../models/supy_document_frame_state.dart';
 import '../models/supy_document_page.dart';
 
+/// Raw capture result returned by [SupyDocumentScannerController.captureAndRectify]
+/// and [SupyDocumentScannerController.captureFullFrame].
+///
+/// Distinct from [SupyDocumentPage] (which is the persisted, scored,
+/// review-ready page surfaced to retailers): this is the immediate output of
+/// a single still capture. `quad` is empty for full-frame captures.
+@immutable
+class SupyDocumentCapture {
+  /// Creates a capture result.
+  const SupyDocumentCapture({
+    required this.path,
+    required this.widthPx,
+    required this.heightPx,
+    this.quad = const <Offset>[],
+  });
+
+  /// Parses a capture result from a channel map. Accepts wide payloads with
+  /// extra keys (the native side may emit `uri`/`width`/`height` legacy keys
+  /// alongside the canonical `path`/`widthPx`/`heightPx` for compatibility
+  /// with the older [SupyDocumentPage.fromMap] consumer).
+  factory SupyDocumentCapture.fromMap(Map<Object?, Object?> map) {
+    final rawQuad = map['quad'];
+    final quad = <Offset>[];
+    if (rawQuad is List) {
+      for (final p in rawQuad) {
+        if (p is Map) {
+          final x = (p['x'] as num?)?.toDouble();
+          final y = (p['y'] as num?)?.toDouble();
+          if (x != null && y != null) {
+            quad.add(Offset(x, y));
+          }
+        }
+      }
+    }
+    return SupyDocumentCapture(
+      path: map['path']! as String,
+      widthPx: (map['widthPx']! as num).toInt(),
+      heightPx: (map['heightPx']! as num).toInt(),
+      quad: List<Offset>.unmodifiable(quad),
+    );
+  }
+
+  /// Filesystem path of the persisted JPEG.
+  final String path;
+
+  /// Pixel width of the persisted image.
+  final int widthPx;
+
+  /// Pixel height of the persisted image.
+  final int heightPx;
+
+  /// Normalized (top-left-origin) quad corners used to rectify the source
+  /// frame. Empty for full-frame captures.
+  final List<Offset> quad;
+
+  @override
+  bool operator ==(Object other) =>
+      identical(this, other) ||
+      other is SupyDocumentCapture &&
+          other.path == path &&
+          other.widthPx == widthPx &&
+          other.heightPx == heightPx &&
+          _quadsEqual(other.quad, quad);
+
+  @override
+  int get hashCode => Object.hash(path, widthPx, heightPx, Object.hashAll(quad));
+
+  @override
+  String toString() =>
+      'SupyDocumentCapture(path: $path, ${widthPx}x$heightPx, quad: $quad)';
+}
+
+bool _quadsEqual(List<Offset> a, List<Offset> b) {
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
 /// Capture-lifecycle phase exposed by [SupyDocumentScannerController].
 ///
 /// Driven by `controller.capture()` (V1-S6-03) and observed by the view to
@@ -131,6 +211,65 @@ class SupyDocumentScannerController extends ChangeNotifier {
       return SupyDocumentPage.fromMap(result);
     } catch (_) {
       setCapturePhase(SupyDocumentCapturePhase.idle);
+      rethrow;
+    }
+  }
+
+  /// Captures a still and runs perspective rectification against the most
+  /// recent smoothed quad from the native detector. Returns the rectified
+  /// JPEG on disk.
+  ///
+  /// Throws a `StateError` with `captureUnsupported: …` when the native side
+  /// reports `PlatformException(code: 'UNIMPLEMENTED')` — i.e. the device
+  /// can't satisfy the request (no quad available, missing platform support).
+  /// Other `PlatformException`s rethrow unchanged.
+  Future<SupyDocumentCapture> captureAndRectify() async {
+    final channel = _channel;
+    if (channel == null) {
+      throw StateError('captureUnsupported: controller not attached');
+    }
+    try {
+      final result = await channel
+          .invokeMapMethod<Object?, Object?>('captureAndRectify');
+      if (result == null) {
+        throw StateError('captureUnsupported: native returned null');
+      }
+      return SupyDocumentCapture.fromMap(result);
+    } on PlatformException catch (e) {
+      if (e.code == 'UNIMPLEMENTED' || e.code == 'captureUnsupported') {
+        throw StateError(
+          'captureUnsupported: ${e.message ?? e.code}',
+        );
+      }
+      rethrow;
+    }
+  }
+
+  /// Captures a single full-frame still without rectification. Used as the
+  /// fallback path when no quad is locked in.
+  ///
+  /// Throws a `StateError` with `captureUnsupported: …` when the native side
+  /// reports `PlatformException(code: 'UNIMPLEMENTED')` — mirrors
+  /// [captureAndRectify] so retailers can catch one error type for both.
+  /// Other `PlatformException`s rethrow unchanged.
+  Future<SupyDocumentCapture> captureFullFrame() async {
+    final channel = _channel;
+    if (channel == null) {
+      throw StateError('captureUnsupported: controller not attached');
+    }
+    try {
+      final result =
+          await channel.invokeMapMethod<Object?, Object?>('captureFullFrame');
+      if (result == null) {
+        throw StateError('captureUnsupported: native returned null');
+      }
+      return SupyDocumentCapture.fromMap(result);
+    } on PlatformException catch (e) {
+      if (e.code == 'UNIMPLEMENTED' || e.code == 'captureUnsupported') {
+        throw StateError(
+          'captureUnsupported: ${e.message ?? e.code}',
+        );
+      }
       rethrow;
     }
   }

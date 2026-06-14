@@ -1,4 +1,5 @@
 import AVFoundation
+import CoreImage
 import Flutter
 import UIKit
 
@@ -27,7 +28,15 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   private var previewLayer: AVCaptureVideoPreviewLayer?
   private var videoDevice: AVCaptureDevice?
   private let videoDataOutput: AVCaptureVideoDataOutput = AVCaptureVideoDataOutput()
+  private let photoOutput: AVCapturePhotoOutput = AVCapturePhotoOutput()
   private let detector: DocumentDetector = DocumentDetector()
+
+  /// Outstanding photo captures keyed by `AVCaptureResolvedPhotoSettings.uniqueID`.
+  /// `captureAndRectify`/`captureFullFrame` populate this before invoking
+  /// `photoOutput.capturePhoto`; the delegate drains it on completion. All
+  /// access happens on `sessionQueue`.
+  private var pendingCaptures: [Int64: PendingCapture] = [:]
+  private let ciContext: CIContext = CIContext(options: nil)
 
   private let methodChannel: FlutterMethodChannel
   private let eventChannel: FlutterEventChannel
@@ -226,6 +235,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       self?.emitError(code: "unknown", message: "Detector failed: \(message)")
     }
 
+    // Photo output for stills (captureAndRectify / captureFullFrame).
+    if session.canAddOutput(photoOutput) {
+      session.addOutput(photoOutput)
+    }
+
     session.commitConfiguration()
     sessionConfigured = true
 
@@ -309,15 +323,9 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       let on = (call.arguments as? [String: Any])?["on"] as? Bool ?? false
       setTorch(on: on, result: result)
     case "captureAndRectify":
-      // V1-S6-02 stub. Sprint 4 must land `warpPerspective` in the native
-      // core before this can return a real page.
-      result(
-        FlutterError(
-          code: "UNIMPLEMENTED",
-          message: "captureAndRectify awaits Sprint 4 warpPerspective",
-          details: nil
-        )
-      )
+      captureAndRectify(result: result)
+    case "captureFullFrame":
+      captureFullFrame(result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -340,6 +348,260 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     }
   }
 
+  // MARK: - Still capture
+
+  private func captureAndRectify(result: @escaping FlutterResult) {
+    let quad = detector.snapshotLatestQuad()
+    guard quad.count == 4 else {
+      DispatchQueue.main.async {
+        result(
+          FlutterError(
+            code: "captureUnsupported",
+            message: "No quad detected",
+            details: nil
+          )
+        )
+      }
+      return
+    }
+    sessionQueue.async { [weak self] in
+      guard let self = self else { return }
+      let settings = self.makePhotoSettings()
+      self.pendingCaptures[settings.uniqueID] = PendingCapture(
+        result: result,
+        quad: quad
+      )
+      let delegate = PhotoCaptureDelegate(owner: self)
+      // Retain the delegate until the callback fires — AVFoundation only
+      // holds a weak ref.
+      objc_setAssociatedObject(
+        settings,
+        &PhotoCaptureDelegate.assocKey,
+        delegate,
+        .OBJC_ASSOCIATION_RETAIN
+      )
+      self.photoOutput.capturePhoto(with: settings, delegate: delegate)
+    }
+  }
+
+  private func captureFullFrame(result: @escaping FlutterResult) {
+    sessionQueue.async { [weak self] in
+      guard let self = self else { return }
+      let settings = self.makePhotoSettings()
+      self.pendingCaptures[settings.uniqueID] = PendingCapture(
+        result: result,
+        quad: nil
+      )
+      let delegate = PhotoCaptureDelegate(owner: self)
+      objc_setAssociatedObject(
+        settings,
+        &PhotoCaptureDelegate.assocKey,
+        delegate,
+        .OBJC_ASSOCIATION_RETAIN
+      )
+      self.photoOutput.capturePhoto(with: settings, delegate: delegate)
+    }
+  }
+
+  private func makePhotoSettings() -> AVCapturePhotoSettings {
+    let settings: AVCapturePhotoSettings
+    if photoOutput.availablePhotoCodecTypes.contains(.jpeg) {
+      settings = AVCapturePhotoSettings(format: [
+        AVVideoCodecKey: AVVideoCodecType.jpeg
+      ])
+    } else {
+      settings = AVCapturePhotoSettings()
+    }
+    return settings
+  }
+
+  /// Called from `PhotoCaptureDelegate` on AVFoundation's internal queue.
+  /// We bounce onto `sessionQueue` immediately so all reads/removals of
+  /// `pendingCaptures` happen on the same queue as the writes — no cross-
+  /// queue dictionary mutation.
+  fileprivate func finishPhotoCapture(
+    settingsID: Int64,
+    photo: AVCapturePhoto?,
+    error: Error?
+  ) {
+    sessionQueue.async { [weak self] in
+      guard let self = self else { return }
+      guard let pending = self.pendingCaptures.removeValue(forKey: settingsID)
+      else { return }
+      if let error = error {
+        DispatchQueue.main.async {
+          pending.result(
+            FlutterError(
+              code: "captureFailed",
+              message: "Photo capture failed: \(error.localizedDescription)",
+              details: nil
+            )
+          )
+        }
+        return
+      }
+      guard let photo = photo, let data = photo.fileDataRepresentation() else {
+        DispatchQueue.main.async {
+          pending.result(
+            FlutterError(
+              code: "captureFailed",
+              message: "Photo capture returned no data",
+              details: nil
+            )
+          )
+        }
+        return
+      }
+
+      // Heavy work (CI decode + rectify + JPEG encode) stays off the session
+      // queue so we don't block subsequent camera ops.
+      DispatchQueue.global(qos: .userInitiated).async { [weak self] in
+        guard let self = self else { return }
+        if let quad = pending.quad {
+          self.processRectifyCapture(
+            data: data, quad: quad, result: pending.result)
+        } else {
+          self.processFullFrameCapture(data: data, result: pending.result)
+        }
+      }
+    }
+  }
+
+  private func processRectifyCapture(
+    data: Data,
+    quad: [CGPoint],
+    result: @escaping FlutterResult
+  ) {
+    guard let ciImage = CIImage(data: data),
+          let filter = CIFilter(name: "CIPerspectiveCorrection") else {
+      DispatchQueue.main.async {
+        result(
+          FlutterError(
+            code: "captureFailed",
+            message: "Could not initialize rectification filter",
+            details: nil
+          )
+        )
+      }
+      return
+    }
+    let imgW = ciImage.extent.width
+    let imgH = ciImage.extent.height
+    // `DocumentFrameMetrics.quad` is top-left-origin (DocumentDetector flips
+    // Vision's bottom-left output once before emitting). CIImage extent is
+    // bottom-left, so we flip Y here exactly once.
+    let tl = CGPoint(x: quad[0].x * imgW, y: (1 - quad[0].y) * imgH)
+    let tr = CGPoint(x: quad[1].x * imgW, y: (1 - quad[1].y) * imgH)
+    let br = CGPoint(x: quad[2].x * imgW, y: (1 - quad[2].y) * imgH)
+    let bl = CGPoint(x: quad[3].x * imgW, y: (1 - quad[3].y) * imgH)
+    filter.setValue(ciImage, forKey: kCIInputImageKey)
+    filter.setValue(CIVector(cgPoint: tl), forKey: "inputTopLeft")
+    filter.setValue(CIVector(cgPoint: tr), forKey: "inputTopRight")
+    filter.setValue(CIVector(cgPoint: bl), forKey: "inputBottomLeft")
+    filter.setValue(CIVector(cgPoint: br), forKey: "inputBottomRight")
+
+    guard let outCI = filter.outputImage,
+          let cg = ciContext.createCGImage(outCI, from: outCI.extent) else {
+      DispatchQueue.main.async {
+        result(
+          FlutterError(
+            code: "captureFailed",
+            message: "Could not render rectified image",
+            details: nil
+          )
+        )
+      }
+      return
+    }
+    let uiImage = UIImage(cgImage: cg)
+    guard let jpeg = uiImage.jpegData(compressionQuality: 0.92) else {
+      DispatchQueue.main.async {
+        result(
+          FlutterError(
+            code: "captureFailed",
+            message: "Could not encode rectified JPEG",
+            details: nil
+          )
+        )
+      }
+      return
+    }
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("supy-doc-\(UUID().uuidString).jpg")
+    do {
+      try jpeg.write(to: url, options: .atomic)
+    } catch {
+      DispatchQueue.main.async {
+        result(
+          FlutterError(
+            code: "captureFailed",
+            message: "Could not write JPEG: \(error.localizedDescription)",
+            details: nil
+          )
+        )
+      }
+      return
+    }
+    let payload: [String: Any] = [
+      "path": url.path,
+      "widthPx": cg.width,
+      "heightPx": cg.height,
+      "quad": quad.map { ["x": Double($0.x), "y": Double($0.y)] },
+      // Legacy keys for existing `SupyDocumentPage.fromMap` consumers
+      // (`controller.capture()`). Additive — never remove.
+      "uri": "file://\(url.path)",
+      "width": cg.width,
+      "height": cg.height,
+    ]
+    DispatchQueue.main.async { result(payload) }
+  }
+
+  private func processFullFrameCapture(
+    data: Data,
+    result: @escaping FlutterResult
+  ) {
+    guard let image = UIImage(data: data),
+          let jpeg = image.jpegData(compressionQuality: 0.92) else {
+      DispatchQueue.main.async {
+        result(
+          FlutterError(
+            code: "captureFailed",
+            message: "Could not decode/encode full-frame JPEG",
+            details: nil
+          )
+        )
+      }
+      return
+    }
+    let url = URL(fileURLWithPath: NSTemporaryDirectory())
+      .appendingPathComponent("supy-doc-\(UUID().uuidString).jpg")
+    do {
+      try jpeg.write(to: url, options: .atomic)
+    } catch {
+      DispatchQueue.main.async {
+        result(
+          FlutterError(
+            code: "captureFailed",
+            message: "Could not write JPEG: \(error.localizedDescription)",
+            details: nil
+          )
+        )
+      }
+      return
+    }
+    let widthPx = Int(image.size.width * image.scale)
+    let heightPx = Int(image.size.height * image.scale)
+    let payload: [String: Any] = [
+      "path": url.path,
+      "widthPx": widthPx,
+      "heightPx": heightPx,
+      "uri": "file://\(url.path)",
+      "width": widthPx,
+      "height": heightPx,
+    ]
+    DispatchQueue.main.async { result(payload) }
+  }
+
   // MARK: - FlutterStreamHandler
 
   func onListen(
@@ -357,6 +619,15 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   func onCancel(withArguments arguments: Any?) -> FlutterError? {
     self.eventSink = nil
     return nil
+  }
+
+  // MARK: - Teardown helpers
+
+  fileprivate struct PendingCapture {
+    let result: FlutterResult
+    /// `nil` for full-frame captures; populated with a normalized
+    /// top-left-origin quad for rectify captures.
+    let quad: [CGPoint]?
   }
 
   // MARK: - Teardown
@@ -386,5 +657,29 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
         session.stopRunning()
       }
     }
+  }
+}
+
+/// AVFoundation only retains photo-capture delegates weakly. We pin one
+/// instance per outstanding capture via `objc_setAssociatedObject` on the
+/// `AVCapturePhotoSettings` object — that retains the delegate for the
+/// lifetime of the request and lets ARC tear it down once the settings go
+/// out of scope after the callback fires.
+private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
+  static var assocKey: UInt8 = 0
+  private weak var owner: SupyDocumentScannerView?
+
+  init(owner: SupyDocumentScannerView) {
+    self.owner = owner
+    super.init()
+  }
+
+  func photoOutput(
+    _ output: AVCapturePhotoOutput,
+    didFinishProcessingPhoto photo: AVCapturePhoto,
+    error: Error?
+  ) {
+    let id = photo.resolvedSettings.uniqueID
+    owner?.finishPhotoCapture(settingsID: id, photo: photo, error: error)
   }
 }
