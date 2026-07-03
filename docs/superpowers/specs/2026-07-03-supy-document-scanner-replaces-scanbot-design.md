@@ -21,7 +21,7 @@ Meanwhile v1.1/v1.2 built all the hard parts in the shared C++ core (`native/`):
 
 ## Decisions (product owner, 2026-07-03)
 
-1. **Supy scanner is the default** document backend. GMS/VisionKit modals remain behind `preferredBackend: system` as a kill-switch. `resolvedBackend` reports what ran.
+1. **Supy scanner is the default** document backend. GMS/VisionKit modals remain reachable by explicitly passing the existing `preferredBackend` values (`gms`/`cameraX`) as the kill-switch; a new additive `supy` backend value is introduced. `resolvedBackend` reports what ran.
 2. **Minimal review UI**: thumbnail strip, per-page retake/delete, quality badge, Done. Manual crop-handle editor, rotate, reorder → deferred phase.
 3. **Proof stack**: side-by-side bench vs Scanbot + `docs/QA.md` walkthrough + retailer-app pilot, all before deleting Scanbot from the retailer app.
 4. **iOS first**, Android parity next.
@@ -44,7 +44,7 @@ Scanbot-side numbers are collected in a retailer A/B build while its license is 
 
 ```
 SupyDocumentScanner.launch(options)                       [Dart, signature unchanged]
-  ├─ preferredBackend == system → GMS / VisionKit modal   [kill-switch, unchanged]
+  ├─ preferredBackend gms/cameraX → GMS / VisionKit modal  [kill-switch, unchanged]
   └─ default (supy) → Navigator push SupyDocumentScannerScreen (Flutter route)
        ├─ Dart chrome: hint chip (13 states, en/ar), nudge arrows, countdown ring,
        │  thumbnail strip, shutter (manual fallback), torch, done/cancel
@@ -72,12 +72,12 @@ Warping the full-res still with a preview-resolution quad limits crop sharpness.
 
 - JPEG quality 95 (LOW tier clamp 88) — already in-flight.
 - Enhancement default decided by the bench in Sprint 4: iOS `DocumentEnhancer .color` vs C++ `balanced` (whichever wins CER/readability on the corpus becomes the per-platform default; the other remains selectable via `enhanceMode`).
-- New additive `filter` option on `SupyDocumentScanOptions` (`color | grayscale | blackAndWhite | original`) so Scanbot compat filter args map to real output. iOS chains exist in `DocumentEnhancer.swift`; Android gets grayscale + Sauvola binarize output stages in `native/enhance/` (Sauvola already exists in the barcode path). Channel arg documented in `docs/ARCHITECTURE.md` table.
+- Additive `filter` option on `SupyDocumentScanOptions` (`color | grayscale | blackAndWhite | original`) — already in-flight on the Dart and iOS sides — so Scanbot compat filter args map to real output. iOS chains exist in `DocumentEnhancer.swift`; Android gets grayscale + Sauvola binarize output stages in `native/enhance/` (Sauvola already exists in the barcode path). Channel arg documented in `docs/ARCHITECTURE.md` table.
 
 ## Compat surface impact (flagged per CLAUDE.md)
 
 - **No existing prop renamed, no new required argument, no return-type change.** `SupyDocumentData`/`SupyDocumentPage` unchanged (Sprint 7 additive fields ride along).
-- **One additive integration step:** the retailer app installs `SupyScanner.navigatorKey` in its `MaterialApp` (one line) so `launch()` can push the route. If the key is absent → log a warning and fall back to the system backend (never crash, never change the call-site contract). Documented in `docs/MIGRATION.md`; decision logged in `TODO.md` decisions section.
+- **Zero retailer integration steps** (amended 2026-07-03 after code inspection): `SupyDocumentScanner.startMultiPage()` already receives a `BuildContext`, so the supy path pushes its route via `Navigator.maybeOf(context)`. If no `Navigator` is reachable from the caller's context → log a warning and fall back to the system backend (never crash, never change the call-site contract). No `navigatorKey` needed. Default-backend change + kill-switch documented in `docs/MIGRATION.md`; decision logged in `TODO.md` decisions section.
 - In the supy path, the CQG-G2 low-quality modal alert is replaced by an inline thumbnail badge + retake affordance. The VisionKit/GMS kill-switch path keeps the alert. (Logged as a decision.)
 
 ## Workstreams
@@ -93,7 +93,7 @@ Warping the full-res still with a preview-resolution quad limits crop sharpness.
 
 - `SupyDocumentScannerScreen` (new, `lib/src/document/ui/`): full-bleed PlatformView + chrome; reuses in-flight hint copy, nudge arrows, `SupyScannerPalette` tokens; RTL/Arabic supported.
 - Minimal review: thumbnail strip during capture, page-count badge, tap → preview sheet with retake/delete, quality badge from per-page score, Done → `SupyDocumentData`.
-- `launch()` routing + `SupyScanner.navigatorKey` + graceful system fallback.
+- `startMultiPage()` routing via the caller's `BuildContext` (`Navigator.maybeOf`) + graceful system-backend fallback; new additive `supy` value on `SupyDocumentScannerBackend` (existing wire values `gms`/`cameraX` remain the kill-switch).
 - Cancel returns `[]` (pins existing QA D4 contract); backgrounding pauses/resumes the session; capture errors keep the session alive with a retry hint (precedent: `captureFullFrame` hardening commit 5a652f0).
 
 ### WS3 — Android parity (Sprint 3)
@@ -115,7 +115,7 @@ Warping the full-res still with a preview-resolution quad limits crop sharpness.
 |---|---|
 | Camera permission denied | Same error codes as current launcher paths (unchanged contract) |
 | Cancel mid-scan | Return `[]`, not an error (QA D4) |
-| `navigatorKey` not installed | Warn once, fall back to system backend |
+| No `Navigator` reachable from caller's context | Warn once, fall back to system backend |
 | Capture/decode failure | Stay in session, show retry hint (no silent drop, no crash) |
 | Refinement quad implausible | Fall back to mapped preview quad |
 | Manual shutter with no quad | `captureFullFrame` (unwarped page) |
@@ -137,4 +137,4 @@ Warping the full-res still with a preview-resolution quad limits crop sharpness.
 
 ## Docs to update in-phase
 
-`docs/PLAN.md` (phase entry), `TODO.md` (CSU sprint checklist + two logged decisions), `docs/ARCHITECTURE.md` (filter arg row, backend routing diagram), `docs/MIGRATION.md` (navigatorKey step), `docs/QA.md` (new scenarios + bench results), `CHANGELOG.md`.
+`docs/PLAN.md` (phase entry), `TODO.md` (CSU sprint checklist + two logged decisions), `docs/ARCHITECTURE.md` (filter arg row, backend routing diagram), `docs/MIGRATION.md` (default-backend change + kill-switch), `docs/QA.md` (new scenarios + bench results), `CHANGELOG.md`.
