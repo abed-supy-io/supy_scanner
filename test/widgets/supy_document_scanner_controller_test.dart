@@ -116,4 +116,49 @@ void main() {
       expect(opts.toWire()['autoCaptureDelayMs'], 0);
     });
   });
+
+  group('SupyDocumentCapture.quadSource', () {
+    test('parses quadSource when present', () {
+      final capture = SupyDocumentCapture.fromMap(const <Object?, Object?>{
+        'path': '/tmp/a.jpg',
+        'widthPx': 100,
+        'heightPx': 200,
+        'quadSource': 'refined',
+      });
+      expect(capture.quadSource, 'refined');
+    });
+
+    test('quadSource is null when absent (Android / full-frame)', () {
+      final capture = SupyDocumentCapture.fromMap(const <Object?, Object?>{
+        'path': '/tmp/a.jpg',
+        'widthPx': 100,
+        'heightPx': 200,
+      });
+      expect(capture.quadSource, isNull);
+    });
+
+    test('quadSource participates in equality', () {
+      const a = SupyDocumentCapture(
+        path: '/tmp/a.jpg',
+        widthPx: 1,
+        heightPx: 1,
+        quadSource: 'refined',
+      );
+      const b = SupyDocumentCapture(
+        path: '/tmp/a.jpg',
+        widthPx: 1,
+        heightPx: 1,
+        quadSource: 'preview',
+      );
+      const c = SupyDocumentCapture(
+        path: '/tmp/a.jpg',
+        widthPx: 1,
+        heightPx: 1,
+        quadSource: 'refined',
+      );
+      expect(a, isNot(equals(b)));
+      expect(a, equals(c));
+      expect(a.hashCode, c.hashCode);
+    });
+  });
 }

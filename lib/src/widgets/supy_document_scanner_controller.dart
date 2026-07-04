@@ -19,6 +19,7 @@ class SupyDocumentCapture {
     required this.widthPx,
     required this.heightPx,
     this.quad = const <Offset>[],
+    this.quadSource,
   });
 
   /// Parses a capture result from a channel map. Accepts wide payloads with
@@ -44,6 +45,7 @@ class SupyDocumentCapture {
       widthPx: (map['widthPx']! as num).toInt(),
       heightPx: (map['heightPx']! as num).toInt(),
       quad: List<Offset>.unmodifiable(quad),
+      quadSource: map['quadSource'] as String?,
     );
   }
 
@@ -60,6 +62,11 @@ class SupyDocumentCapture {
   /// frame. Empty for full-frame captures.
   final List<Offset> quad;
 
+  /// How the rectification quad was obtained on iOS: `'refined'` when the
+  /// on-still re-detection was accepted, `'preview'` when the mapped preview
+  /// quad was used. `null` on platforms/paths that don't report it.
+  final String? quadSource;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -67,14 +74,17 @@ class SupyDocumentCapture {
           other.path == path &&
           other.widthPx == widthPx &&
           other.heightPx == heightPx &&
+          other.quadSource == quadSource &&
           _quadsEqual(other.quad, quad);
 
   @override
-  int get hashCode => Object.hash(path, widthPx, heightPx, Object.hashAll(quad));
+  int get hashCode =>
+      Object.hash(path, widthPx, heightPx, quadSource, Object.hashAll(quad));
 
   @override
   String toString() =>
-      'SupyDocumentCapture(path: $path, ${widthPx}x$heightPx, quad: $quad)';
+      'SupyDocumentCapture(path: $path, ${widthPx}x$heightPx, quad: $quad, '
+      'quadSource: $quadSource)';
 }
 
 bool _quadsEqual(List<Offset> a, List<Offset> b) {
