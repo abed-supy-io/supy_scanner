@@ -313,3 +313,42 @@ See `docs/PLAN.md` § "Phase DIE" and `docs/ENHANCEMENT.md`. Shared native C++ p
 - **2026-06-26** — **Sprint 4 Phase A landed: hand-rolled perspective warp (OpenCV-free), both platforms.** New native module `native/document/perspective_warp.{h,cpp,_test.cpp}`: 8-DOF homography from 4 quad correspondences (Gaussian elimination on the 8×8 system) + inverse-map bilinear sampling, no OpenCV, no deps. Exposed via the C ABI (`native/include/supy_scanner_core.h` + `native/src/supy_scanner_core.cpp`; `SUPY_CORE_ABI_VERSION` bumped to 5) and JNI (`nativeWarpPerspective` → packed RGBA `byte[]` + `[w,h]` out-param). Android `captureAndRectify` stub replaced (see V1-S6-02): full-res still + last smoothed quad → native warp → `PageReencoder.reencodeBitmap`. iOS stays on `CIPerspectiveCorrection` for now (geometry-equivalent; shared-warp adoption on iOS is optional and deferred — divergence flagged in `docs/ARCHITECTURE.md`). Confirmed decisions (per the approved plan): build-only (no paid SDK), hand-roll CV, defer HED int8 model, target the custom embedded `SupyDocumentScannerView` (not VisionKit/GMS). **Channel stays additive — no `v1` bump.** Native suite: 8/8 `PerspectiveWarp` tests green. **Two pre-existing native test reds (NOT warp regressions) deferred** out of Phase A scope: (1) `EnhancePipeline.UnsharpBoostsStepEdge` — unsharp is a no-op on a synthetic step edge; resolve in **Phase B** (enhance overhaul) when `MAX` becomes a real mode. (2) `GuidanceClassifier.HigherPriorityPreemptsImmediately` — EMA smoothing (`smoothingAlpha`) prevents a single dark frame from crossing the luma floor in one frame, so immediate preemption can't fire; resolve in **Phase C** (guidance port) and cross-check against the Dart FSM parity tests before changing the smoothing/preemption contract. The `FrameScorer.BlurScoreOrdersByContent` red was a test-fixture aliasing bug (1px stripes decimated to flat under stride-2 subsampling) and is **fixed** (8px stripes); suite now 63/65, the 2 remaining reds are the deferred ones above.
 
 - **2026-06-26** — **Sprint 4 Phase B landed: advanced enhancement stages, `MAX` is now a real mode.** `SUPY_ENHANCE_MAX` no longer aliases `BALANCED`; it runs gate → illumination → **specular clamp** → **top-hat flatten** → tone → **CLAHE** → unsharp. Three new hand-rolled, OpenCV-free stages: (1) specular/glare clamp `suppressSpecular` (`native/enhance/illumination.cpp`) — morphological-opening diffuse estimate, caps near-white hotspots toward `diffuse + 24`; (2) morphological top-hat `applyTopHatFlatten` (`native/enhance/tophat.{h,cpp}`) — closing with an SE larger than the largest glyph (~5% short side, `[12,96]`), lifts the local paper deficit; (3) tile-based CLAHE `applyClahe` (`native/enhance/clahe.{h,cpp}`) — 8×8 clipped-histogram grid with bilinear inter-tile interpolation. A shared separable-morphology helper (`native/enhance/morphology.{h,cpp}`, monotonic-deque O(n) min/max, reflect-clamp borders) backs them and is reused by illumination. New stage bits `SUPY_ENHANCE_STAGE_SPECULAR/TOPHAT/CLAHE` = `0x10/0x20/0x40` (`native/include/supy_scanner_enhance.h`), surfaced on `SupyDocumentPage.enhancedStages`. **Pragmatic-CV decision (per the approved plan):** the pure-papers Finlayson-Drew-Lu shadow removal and Yang dichromatic specular models stay deferred — the cheap clamp + top-hat + CLAHE combo is OpenCV-free and ML-Kit-friendly; revisit only if measured CER doesn't move. **OCR input policy holds:** OCR still gets denoised/deskewed grayscale, never binarized. **No Dart/channel change** — `enhanceMode: 'max'` already flowed end-to-end; no `v1` bump. **Resolved the deferred Phase-A red** `EnhancePipeline.UnsharpBoostsStepEdge`: root cause was that `BALANCED`/`MAX` run illumination's morphological closing first, which flattens a lone synthetic step edge toward the page mean and leaves unsharp nothing to overshoot — the test asserted a false contract. Replaced with an isolated `EnhanceStage.UnsharpWidensStepEdge` calling `applyUnsharpMask` directly (the true contract holds) plus `MaxAppliesAdvancedStages` for orchestration-level coverage. (Testable internals are exported past `-fvisibility=hidden` via a new `SUPY_ENHANCE_STAGE_EXPORT` macro in `buffer.h`, matching the existing `SUPY_WARP_EXPORT` pattern.) Full native suite green except the one remaining deferred red `GuidanceClassifier.HigherPriorityPreemptsImmediately` (Phase C scope). Docs updated same-PR: `docs/ENHANCEMENT.md`, `docs/ARCHITECTURE.md`, `docs/V1.1_PLAN.md`, `CHANGELOG.md`, `docs/QA.md`. Phase C (post-capture quality grade) follows.
+
+## Decisions
+
+- **2026-07-03 — Supy scanner becomes the default document backend (Phase CSU).**
+  Spec: `docs/superpowers/specs/2026-07-03-supy-document-scanner-replaces-scanbot-design.md`.
+  System modals (GMS/VisionKit) stay reachable via the existing
+  `preferredBackend` values `gms`/`cameraX` as the kill-switch; a new additive
+  `supy` backend value lands in Sprint 2. Scanbot-compat call sites are
+  unchanged (additive-only surface).
+- **2026-07-03 — No `navigatorKey`; route via the caller's `BuildContext`.**
+  `SupyDocumentScanner.startMultiPage()` already receives a `BuildContext`, so
+  the supy screen is pushed with `Navigator.maybeOf(context)`; if no navigator
+  is reachable we warn once and fall back to the system backend. Zero retailer
+  integration steps.
+- **2026-07-03 — `captureAndRectify` quad semantics.** The `quad` payload key
+  now carries the final still-space quad actually warped (previously the raw
+  analyzer-space quad); additive `quadSource` reports `refined`/`preview`.
+  Same normalized top-left-origin convention; consumers unaffected.
+
+## Phase CSU — Supy scanner replaces Scanbot
+
+Spec: `docs/superpowers/specs/2026-07-03-supy-document-scanner-replaces-scanbot-design.md`
+
+### Sprint 1 — iOS capture completion (plan: `docs/superpowers/plans/2026-07-03-csu-sprint1-ios-capture-completion.md`)
+- [x] CSU-S1-01 `QuadGeometry` convex-quad IoU + tests
+- [x] CSU-S1-02 `PreviewPhotoQuadMapper` analyzer→still aspect mapping + tests
+- [x] CSU-S1-03 `DocumentStillRefiner` on-still re-detection (IoU ≥ 0.8 gate, preview fallback) + tests
+- [x] CSU-S1-04 `DocumentRectifyPipeline` wired into `captureAndRectify`; additive `quadSource` payload key
+- [x] CSU-S1-05 `SupyDocumentCapture.quadSource` Dart passthrough + tests
+- [x] CSU-S1-06 Docs: ARCHITECTURE channel row, CHANGELOG, decisions log, QA scenario
+
+### Sprint 2 — Dart scanner screen (plan at sprint boundary)
+- [ ] CSU-S2 `SupyDocumentScannerScreen`, `startMultiPage` BuildContext routing, minimal review UI, additive `supy` backend value, system fallback, `docs/MIGRATION.md` + `docs/PLAN.md` phase docs
+
+### Sprint 3 — Android parity (plan at sprint boundary)
+- [ ] CSU-S3 C++ guidance on embedded view, seeded still refinement, `filter` native mapping, GMS kill-switch
+
+### Sprint 4 — Proof & Scanbot removal (plan at sprint boundary)
+- [ ] CSU-S4 Side-by-side bench vs Scanbot, QA walkthrough, retailer pilot, Scanbot removal

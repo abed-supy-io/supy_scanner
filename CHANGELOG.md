@@ -7,7 +7,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Added
+- iOS: on-still quad refinement for `captureAndRectify` — the preview quad is
+  aspect-mapped into the captured still and re-detected on it; the re-detection
+  is accepted at IoU ≥ 0.8, otherwise the mapped preview quad is used. The
+  result payload gains an additive `quadSource` key (`refined` | `preview`),
+  surfaced on `SupyDocumentCapture.quadSource`.
+
 ### Fixed
+- iOS: `captureAndRectify` applied the analyzer-stream quad to the still with
+  no aspect mapping, mis-cropping whenever the analyzer and photo aspect
+  ratios differ (e.g. 16:9 stream vs 4:3 still).
 - Document scan output sharpness on iOS (`DocumentScannerPresenter`) regressed visibly vs. the legacy Scanbot SDK on the same camera. VisionKit already returns the deskewed, enhanced page at native resolution — the only quality loss in our pipeline was the JPEG re-encode at the v1.0 default of 85, which produced softness and mosquito-noise around small text. Raised the default `SupyDocumentScanOptions.jpegQuality` from `85` to `95` (matches Scanbot's perceived output quality) and lifted the LOW device-tier cap from `75` to `88` on both platforms (`SupyDeviceTier.jpegQuality` / `DeviceTier.jpegQuality`) so low-end hardware no longer torches text legibility. The native fallback default in `DocumentScannerPresenter.swift` was bumped in lockstep so calls that omit the key get the new default too. On Android this also auto-unlocks the existing GMS JPEG passthrough fast-path in `PageReencoder` (no re-encode when `jpegQuality >= 95` and `enhanceMode == off`) — smaller temp files, fewer Bitmap decodes, no code change required there. Callers that explicitly set a lower quality (e.g. the `jpegQuality: 70` scenario in `docs/QA.md`) are unaffected.
 
 ### Added

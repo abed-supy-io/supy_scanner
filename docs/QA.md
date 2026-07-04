@@ -203,6 +203,23 @@ Runs on the same non-GMS surface as D12; uses the C++ guidance state machine por
 7. Tier check: on a low-tier device (RAM ≤ 3 GB / API ≤ 28) the ready-dwell takes visibly longer (≈18 frames vs 9 on high) — auto-snap still fires once steady. No spurious snaps during repositioning.
 8. Backgrounding the activity mid-dwell (recent apps → return) does not crash and resumes detection cleanly; no auto-snap fires during the resume frame burst.
 
+### D14 — Embedded capture: on-still quad refinement (iOS)
+
+Covers Phase CSU Sprint 1: `captureAndRectify` aspect mapping + on-still refinement.
+
+1. Open the example app → "Smart Document" on an iPhone (not simulator).
+2. Frame an A4/receipt on a contrasting background; wait for the ready state.
+3. Trigger capture. Verify the rectified output's edges hug the document —
+   no sliver of background band on the left/right (the pre-fix symptom of the
+   16:9→4:3 mis-crop) and no clipped document edge.
+4. Repeat with the document deliberately ~15° tilted and slightly off-center:
+   the output must still be a clean top-down crop.
+5. Repeat with the document half out of frame at capture time: capture must
+   still succeed (never error because refinement failed) and return a usable
+   crop of the visible region.
+6. Debug-verify `SupyDocumentCapture.quadSource`: mostly `refined` in
+   scenarios 3–4; `preview` is acceptable in scenario 5.
+
 ### Document Scanner Smart Guidance (2026-06-14)
 
 Run on Pixel 6a + iPhone 13:
