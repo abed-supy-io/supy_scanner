@@ -31,12 +31,19 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   private let photoOutput: AVCapturePhotoOutput = AVCapturePhotoOutput()
   private let detector: DocumentDetector = DocumentDetector()
 
+  /// On-device guidance classifier (shared C++ core). Classifies each frame's
+  /// metrics into a `GuidanceFrameState`; the resolved ordinal rides on the
+  /// `frame_metrics` payload so Dart skips its fallback FSM. Accessed only from
+  /// the detector callback (analyzer queue) and reset on `resume`.
+  private let guidanceClassifier: GuidanceClassifier = GuidanceClassifier()
+  /// Thresholds handed down via creationParams; defaults match the Dart config.
+  private var guidanceConfig: GuidanceConfig = GuidanceConfig()
+
   /// Outstanding photo captures keyed by `AVCaptureResolvedPhotoSettings.uniqueID`.
   /// `captureAndRectify`/`captureFullFrame` populate this before invoking
   /// `photoOutput.capturePhoto`; the delegate drains it on completion. All
   /// access happens on `sessionQueue`.
   private var pendingCaptures: [Int64: PendingCapture] = [:]
-  private let ciContext: CIContext = CIContext(options: nil)
 
   private let methodChannel: FlutterMethodChannel
   private let eventChannel: FlutterEventChannel
@@ -67,6 +74,12 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       name: "\(prefix)/\(viewId)/events",
       binaryMessenger: messenger
     )
+
+    if let raw = creationParams?["guidanceConfig"] as? [NSNumber],
+      let parsed = GuidanceConfig(wireArray: raw)
+    {
+      self.guidanceConfig = parsed
+    }
 
     super.init()
 
@@ -113,7 +126,20 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   }
 
   @objc private func handleSessionRuntimeError(_ note: Notification) {
+    // Mid-session camera-permission revocation surfaces here as
+    // `AVError.applicationIsNotAuthorizedToUseDevice` — distinguish it from
+    // hardware errors so retailer code can route to the settings-deep-link.
     let error = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+    if let error = error,
+      error.domain == AVFoundationErrorDomain,
+      error.code == AVError.Code.applicationIsNotAuthorizedToUseDevice.rawValue
+    {
+      emitError(
+        code: "permission_denied",
+        message: "Camera permission revoked mid-session."
+      )
+      return
+    }
     emitError(
       code: "camera_unavailable",
       message: "AVCaptureSession runtime error: \(error?.localizedDescription ?? "unknown")"
@@ -202,6 +228,15 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       return
     }
 
+    // Throttle live detection to a tier-aware cadence. The camera keeps its
+    // native frame rate (preview stays smooth); the detector simply skips
+    // analyzing frames that arrive sooner than this spacing, which roughly
+    // halves Neural-Engine load and `frame_metrics` overlay repaints vs. the
+    // previous run-flat-out behaviour. Set before the session starts
+    // delivering buffers, so there's no concurrent access to the property.
+    let fpsCap = SupyDeviceTier.detect().documentDetectorFpsCap
+    detector.minFrameInterval = CMTime(value: 1, timescale: CMTimeScale(fpsCap))
+
     videoDataOutput.alwaysDiscardsLateVideoFrames = true
     videoDataOutput.videoSettings = [
       kCVPixelBufferPixelFormatTypeKey as String:
@@ -282,7 +317,44 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       payload[key] = value
     }
     payload["type"] = "frame_metrics"
+
+    // Classify on-device with the shared C++ core and ship the resolved state
+    // so Dart trusts it instead of re-running its fallback FSM. Stays on the
+    // detector's analyzer queue — `GuidanceClassifier` is single-threaded.
+    let result = guidanceClassifier.classify(
+      guidanceMetrics(from: metrics),
+      config: guidanceConfig
+    )
+    payload["state"] = Int(result.state.rawValue)
+    payload["liveQualityScore"] = Double(result.liveQualityScore)
+
     sendEvent(payload)
+  }
+
+  /// Bridges the detector's `DocumentFrameMetrics` (Double-valued, with a quad)
+  /// to the classifier's `GuidanceFrameMetrics` (Float-valued, document-as-flag).
+  /// `hasDocument` is true only for a complete 4-corner quad.
+  private func guidanceMetrics(from m: DocumentFrameMetrics)
+    -> GuidanceFrameMetrics
+  {
+    // Signed quad-centroid offset from preview center, in half-extent
+    // fractions. Shares `DocumentFrameMetrics.centerOffset` with the wire map.
+    let offset = m.centerOffset
+    return GuidanceFrameMetrics(
+      hasDocument: m.quad.count == 4,
+      clipsEdge: m.clipsEdge,
+      coverageRatio: Float(m.coverageRatio),
+      tiltDegrees: Float(m.tiltDegrees),
+      meanLuma: Float(m.meanLuma),
+      blurScore: Float(m.blurScore),
+      quadStability: Float(m.quadStability),
+      interiorVariance: Float(m.interiorVariance),
+      glareRatio: Float(m.glareRatio),
+      cornerVelocity: Float(m.cornerVelocity),
+      centerOffsetX: Float(offset.x),
+      centerOffsetY: Float(offset.y),
+      perCornerStability: m.perCornerStability.map { Float($0) }
+    )
   }
 
   private func emitError(code: String, message: String) {
@@ -308,6 +380,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   // MARK: - MethodChannel
 
   private func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    dispatchPrecondition(condition: .onQueue(.main))
     switch call.method {
     case "pause":
       sessionQueue.async { [weak self] in
@@ -316,6 +389,9 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       }
     case "resume":
       sessionQueue.async { [weak self] in
+        // Drop stale guidance hysteresis so a paused→resumed view starts from
+        // NoDocument rather than a latched ready/glare state.
+        self?.guidanceClassifier.reset()
         self?.safeStartRunning()
         DispatchQueue.main.async { result(nil) }
       }
@@ -323,9 +399,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       let on = (call.arguments as? [String: Any])?["on"] as? Bool ?? false
       setTorch(on: on, result: result)
     case "captureAndRectify":
-      captureAndRectify(result: result)
+      let quality = Self.parseJpegQuality(call.arguments)
+      captureAndRectify(jpegQuality: quality, result: result)
     case "captureFullFrame":
-      captureFullFrame(result: result)
+      let quality = Self.parseJpegQuality(call.arguments)
+      captureFullFrame(jpegQuality: quality, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -350,7 +428,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
 
   // MARK: - Still capture
 
-  private func captureAndRectify(result: @escaping FlutterResult) {
+  private func captureAndRectify(jpegQuality: CGFloat, result: @escaping FlutterResult) {
     let quad = detector.snapshotLatestQuad()
     guard quad.count == 4 else {
       DispatchQueue.main.async {
@@ -369,7 +447,8 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       let settings = self.makePhotoSettings()
       self.pendingCaptures[settings.uniqueID] = PendingCapture(
         result: result,
-        quad: quad
+        quad: quad,
+        jpegQuality: jpegQuality
       )
       let delegate = PhotoCaptureDelegate(owner: self)
       // Retain the delegate until the callback fires — AVFoundation only
@@ -384,13 +463,14 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     }
   }
 
-  private func captureFullFrame(result: @escaping FlutterResult) {
+  private func captureFullFrame(jpegQuality: CGFloat, result: @escaping FlutterResult) {
     sessionQueue.async { [weak self] in
       guard let self = self else { return }
       let settings = self.makePhotoSettings()
       self.pendingCaptures[settings.uniqueID] = PendingCapture(
         result: result,
-        quad: nil
+        quad: nil,
+        jpegQuality: jpegQuality
       )
       let delegate = PhotoCaptureDelegate(owner: self)
       objc_setAssociatedObject(
@@ -459,9 +539,10 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
         guard let self = self else { return }
         if let quad = pending.quad {
           self.processRectifyCapture(
-            data: data, quad: quad, result: pending.result)
+            data: data, quad: quad, jpegQuality: pending.jpegQuality, result: pending.result)
         } else {
-          self.processFullFrameCapture(data: data, result: pending.result)
+          self.processFullFrameCapture(
+            data: data, jpegQuality: pending.jpegQuality, result: pending.result)
         }
       }
     }
@@ -470,6 +551,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   private func processRectifyCapture(
     data: Data,
     quad: [CGPoint],
+    jpegQuality: CGFloat,
     result: @escaping FlutterResult
   ) {
     guard let ciImage = CIImage(data: data),
@@ -501,7 +583,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     filter.setValue(CIVector(cgPoint: br), forKey: "inputBottomRight")
 
     guard let outCI = filter.outputImage,
-          let cg = ciContext.createCGImage(outCI, from: outCI.extent) else {
+          let cg = DocumentEnhancer.sharedContext.createCGImage(outCI, from: outCI.extent) else {
       DispatchQueue.main.async {
         result(
           FlutterError(
@@ -514,7 +596,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       return
     }
     let uiImage = UIImage(cgImage: cg)
-    guard let jpeg = uiImage.jpegData(compressionQuality: 0.92) else {
+    guard let jpeg = uiImage.jpegData(compressionQuality: jpegQuality) else {
       DispatchQueue.main.async {
         result(
           FlutterError(
@@ -558,10 +640,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
 
   private func processFullFrameCapture(
     data: Data,
+    jpegQuality: CGFloat,
     result: @escaping FlutterResult
   ) {
     guard let image = UIImage(data: data),
-          let jpeg = image.jpegData(compressionQuality: 0.92) else {
+          let jpeg = image.jpegData(compressionQuality: jpegQuality) else {
       DispatchQueue.main.async {
         result(
           FlutterError(
@@ -628,6 +711,19 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     /// `nil` for full-frame captures; populated with a normalized
     /// top-left-origin quad for rectify captures.
     let quad: [CGPoint]?
+    /// JPEG compression quality (0.0–1.0). Matches the presenter's
+    /// `jpegQuality` arg so both capture paths produce identical fidelity.
+    let jpegQuality: CGFloat
+  }
+
+  /// Parses the `jpegQuality` arg (0–100 int, like the presenter) from a
+  /// method-call argument map into a Core-Graphics-friendly 0.0–1.0 ratio.
+  /// Defaults to 0.95 (`SupyDocumentScanOptions.jpegQuality` default) when
+  /// missing or out of range.
+  fileprivate static func parseJpegQuality(_ args: Any?) -> CGFloat {
+    let raw = (args as? [String: Any])?["jpegQuality"] as? Int ?? 95
+    let clamped = max(0, min(100, raw))
+    return CGFloat(clamped) / 100.0
   }
 
   // MARK: - Teardown

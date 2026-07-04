@@ -148,6 +148,21 @@ Scenarios mirror the current Scanbot UX as it exists in the retailer app. Pass c
 1. Set `jpegQuality: 70`.
 2. Scanned files are < 500KB per page on a typical 8.5x11" receipt at iPhone-camera resolution.
 
+### D8b — Default JPEG sharpness (Scanbot parity)
+1. Leave `jpegQuality` at its default (95) on both Android (GMS) and iOS (VisionKit).
+2. Scan a printed A4 page with small (8–10 pt) body text — e.g. a lab report or contract.
+3. Pull `pages[0].uri` off-device and inspect at 100 %: letterforms must be sharp, with no visible "mosquito noise" around glyphs or hairlines around table rules.
+4. iOS: file size for a single A4 page should be in the ~400–900 KB range. A materially smaller file (~150–250 KB) means the native fallback default in `DocumentScannerPresenter.swift` was not picked up.
+5. Android: with GMS the file should be passed through untouched (no re-encode); `enhancedStages` is `0` and `enhanceMs` is `0` when `enhanceMode == off`.
+
+### D8c — Paper-preserving color filter (iOS, v1.2)
+Tests the new `SupyDocumentFilter.color` default that re-processes VisionKit's bleached output. Run on iOS only.
+1. **Warm-light lab report** — Scan a printed lab report under warm (~3000K) indoor light with `filter` left at default. The page must read as cream / off-white, not pure paper-white; body text must be visibly darker and crisper than VisionKit's raw output (compare against `filter: SupyDocumentFilter.original` on the same page).
+2. **Shadow gradient** — Place an A4 sheet so one half is in shadow. Scan with default filter. The output must show roughly uniform paper tone across both halves (illumination flattening); text on the shadowed side must be legible without the bright side blowing out.
+3. **Thin text on cream paper** — Scan a thermal receipt or beige-paper memo with 6–8 pt body text. Letterforms remain crisp without halos, ringing, or visible over-sharpening around glyph edges.
+4. **B&W filter** — Repeat scenario 1 with `filter: SupyDocumentFilter.blackAndWhite`. Output is pure black-on-white with no visible color cast; text edges are clean (no isolated speckles).
+5. **Original (bypass)** — Repeat scenario 1 with `filter: SupyDocumentFilter.original`. Output should match the pre-v1.2 VisionKit-raw look (bleached toward white). Confirms the bypass path works.
+
 ### D9 — Palette parity
 1. Verify the document scanner UI on Android uses `#6448C3` for primary buttons and `#FFFFFF` for on-primary text (matches the Scanbot palette).
 2. iOS uses system UI (palette not configurable) — documented.
@@ -175,6 +190,19 @@ Scenarios mirror the current Scanbot UX as it exists in the retailer app. Pass c
 9. Force a CameraX bind failure (e.g. emulator with no camera) → `camera_unavailable`.
 10. Retailer app integrated against v1.2: no code change, no new error branch needed.
 
+### D13 — CameraX fallback auto-snap (v1.2.x)
+
+Runs on the same non-GMS surface as D12; uses the C++ guidance state machine ported in commit `c4e4650`. Auto-snap is Android-only — iOS continues to use VisionKit's native cue.
+
+1. Force the CameraX path (`preferredBackend: SupyDocumentScannerBackend.cameraX`) on a GMS-available emulator, OR run on a non-GMS device. Call `SupyDocumentScanner.startMultiPage(maxPages: 2, autoCaptureDelayMs: 800)`.
+2. Frame a printed invoice flat on a contrasty surface. Hold steady — within ~1.5 s the activity auto-captures one page (no FAB tap). The on-screen hint reads "Ready" (or "جاهز" when `locale=ar`).
+3. Tilt the device > 8° while still framing the same document. No auto-snap fires. The hint switches to "Reduce tilt" / "قلّل الميل".
+4. Drop one corner off-frame. The hint switches to "Move closer" / "Center the document" depending on what failed; no auto-snap.
+5. Cover the lens / point at a blank wall. Hint reads "Searching for document" / "ابحث عن مستند"; no auto-snap.
+6. Call `startMultiPage(..., autoCaptureDelayMs: 0)`. Auto-snap is disabled; manual FAB still captures. Hint label is hidden.
+7. Tier check: on a low-tier device (RAM ≤ 3 GB / API ≤ 28) the ready-dwell takes visibly longer (≈18 frames vs 9 on high) — auto-snap still fires once steady. No spurious snaps during repositioning.
+8. Backgrounding the activity mid-dwell (recent apps → return) does not crash and resumes detection cleanly; no auto-snap fires during the resume frame burst.
+
 ### Document Scanner Smart Guidance (2026-06-14)
 
 Run on Pixel 6a + iPhone 13:
@@ -186,9 +214,49 @@ Run on Pixel 6a + iPhone 13:
 - [ ] Low-light desk → `tooDark`.
 - [ ] Tilted 30° → `tooSkewed`.
 - [ ] Auto-snap: ring countdown visible, cancellable by tilting, fires capture; manual button still works while countdown not active.
-- [ ] Capture JPEG: open the file from the example app's surfaced path; verify rectification on iOS, full-frame on Android.
+- [ ] Capture JPEG: open the file from the example app's surfaced path; verify the page is rectified (dewarped) on **both** iOS and Android (Android via the Sprint 4 native warp — see Phase A scenarios below).
 
 > **Note:** All boxes above are intentionally unchecked. This QA pass is human-only and must be run on real Pixel 6a + iPhone 13 hardware post-merge against the published example app.
+
+### Sprint 4 Phase A — Perspective warp + Android `captureAndRectify` (2026-06-26)
+
+Verifies the hand-rolled OpenCV-free native warp (`native/document/perspective_warp.cpp` → `supy_core_warp`) and the now-implemented Android `captureAndRectify`. Run on **one low-end Android (Moto G Power class) + one iPhone (SE2/12)**:
+
+- [ ] Invoice shot at ~30° tilt on the low-end Android → captured page is **flat and rectangular** (not a skewed phone-photo), geometry visually matching the iOS output for the same shot.
+- [ ] Page edges in the rectified output align with the detected quad — no black wedges, no doubled/torn edges from a degenerate homography.
+- [ ] `captureAndRectify` with **no document in frame** → falls back to `captureFullFrame` (full-frame still saved), no crash, no dead button.
+- [ ] Rapid double-tap capture → second call returns `captureFailed` ("capture already in progress"), first capture still completes.
+- [ ] Output long side is bounded (no multi-thousand-px memory blowup) and the temp still is cleaned up (cache dir doesn't accumulate `supy-doc-*.jpg`).
+- [ ] iOS unchanged: `captureAndRectify` still rectifies via `CIPerspectiveCorrection` (divergence is intentional and geometry-equivalent — see `docs/ARCHITECTURE.md`).
+
+> **Note:** Unchecked — human-only QA on real hardware. Native warp correctness is pinned by the host gtest `PerspectiveWarp` suite (8 cases, green); these scenarios verify the on-device capture→warp→encode path the unit tests can't reach.
+
+### Sprint 4 Phase B — `MAX` enhancement mode (2026-06-26)
+
+Verifies the now-real `SUPY_ENHANCE_MAX` stack (specular clamp + top-hat flatten + CLAHE on top of `balanced`). For each scenario, scan the same page twice — once with `enhanceMode: SupyDocumentEnhanceMode.balanced`, once with `.max` — and compare the two output JPEGs side by side. Run on **one low-end Android + one iPhone**:
+
+- [ ] **Dim kitchen light (~50 lux), small line items** — A printed restaurant invoice with 6–8 pt line items under dim warm light. `max` output: faint line items are visibly more legible than `balanced` (CLAHE local-contrast lift), without crushing midtones to mud or introducing tile-boundary banding.
+- [ ] **Glare hotspot** — A glossy/laminated menu or receipt angled so a ceiling light leaves a blown-out specular hotspot. `max` output: the hotspot is pulled back toward paper tone (text under/near it recoverable) while genuinely bright paper elsewhere is **not** dimmed; no dark halo ringing the former hotspot.
+- [ ] **Uneven / gradient background** — A page lit brighter on one side. `max` output: background flattens to a more uniform bright paper than `balanced` (top-hat), text contrast preserved on both sides; no posterization of the gradient.
+- [ ] **Clean, evenly-lit A4 (regression guard)** — A clean head-on A4 page. `max` output is at worst neutral vs `balanced` — no over-sharpening halos, no blown highlights, no visible CLAHE blocking. Confirms the heavy stack doesn't degrade already-good captures.
+- [ ] **Stage bitmask** — On any `max` scan, `pages[0].enhancedStages` has the SPECULAR (`0x10`), TOPHAT (`0x20`), and CLAHE (`0x40`) bits set in addition to the balanced bits; `enhanceMs` is non-zero and (qualitatively) the heaviest of the modes.
+- [ ] **OCR parity** — `ocrText` on a `max` scan is at least as complete as the `balanced` scan for the same page (OCR receives grayscale, never binarized — `max` must not regress recognition).
+
+> **Note:** Unchecked — human-only QA on real hardware. Stage wiring + per-stage behavior are pinned by the host gtest `EnhanceStage.*` / `EnhancePipeline.MaxAppliesAdvancedStages` cases (green); these scenarios verify perceptual legibility and OCR impact the unit tests can't judge. Device timing comes from the `enhance-bench` perfgate job, not fabricated here.
+
+### Phase FQS — Frame Quality Score (2026-06-17)
+
+Verifies the Swift Laplacian → C++ scorer port (`native/quality/frame_scorer.cpp`). Behavior must match the pre-FQS build — these scenarios pin the guidance classifier transitions, not the raw numbers (which are now identical to Android by construction).
+
+Run on iPhone 13 (iOS half is what landed; Android FQS4 is a follow-up):
+
+- [ ] Invoice on bright desk, head-on, still → reaches `ready`, auto-snap fires (sharp + bright path).
+- [ ] Invoice held with deliberate motion blur → never reaches `ready`; `holdSteady` / `tooBlurry` cycles correctly.
+- [ ] Invoice in low light → `tooDark` shown; raising brightness recovers within a frame or two.
+- [ ] Letterboxed preview (pillarbox black bars) → mean luma not biased by the bars (center-60% crop excludes them); auto-snap still fires on a clean page.
+- [ ] Cold-start cycle: open → scan → close → reopen 10× → no leaks, no crash, classifier still transitions cleanly (pure-C++ scorer has no heap state of its own).
+
+> **Note:** Unchecked — human-only QA on real iPhone 13 hardware. Android JNI parity (FQS4) has its own QA pass once it lands.
 
 ## Batch barcode
 
