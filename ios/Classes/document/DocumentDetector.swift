@@ -105,23 +105,40 @@ final class DocumentDetector: NSObject,
   /// Fires on `sampleBufferQueue`.
   var onError: ((String) -> Void)?
 
-  /// Lock guarding `_latestQuad`. The detector itself only writes from
-  /// `sampleBufferQueue`, but `captureAndRectify` reads from the session
-  /// queue, so we need a tiny mutex.
+  /// Lock guarding `_latestQuad`/`_latestAnalyzerSize`. The detector itself
+  /// only writes from `sampleBufferQueue`, but `captureAndRectify` reads from
+  /// the session queue, so we need a tiny mutex.
   private let latestQuadLock = NSLock()
   private var _latestQuad: [CGPoint] = []
+  private var _latestAnalyzerSize: CGSize = .zero
+
+  /// A quad snapshot paired with the oriented (portrait) pixel size of the
+  /// analyzer buffer it was detected in — required to map the quad into the
+  /// differently-aspected still-photo space.
+  struct Detection {
+    let quad: [CGPoint]
+    let analyzerSize: CGSize
+  }
 
   /// Returns the most recent top-left-origin normalized quad accepted by the
   /// detector, or an empty array if there's no current detection. Thread-safe.
   func snapshotLatestQuad() -> [CGPoint] {
-    latestQuadLock.lock()
-    defer { latestQuadLock.unlock() }
-    return _latestQuad
+    snapshotLatestDetection()?.quad ?? []
   }
 
-  private func setLatestQuad(_ quad: [CGPoint]) {
+  /// Like `snapshotLatestQuad()` but paired with the analyzer's oriented
+  /// buffer size. `nil` when there's no current detection. Thread-safe.
+  func snapshotLatestDetection() -> Detection? {
+    latestQuadLock.lock()
+    defer { latestQuadLock.unlock() }
+    guard _latestQuad.count == 4 else { return nil }
+    return Detection(quad: _latestQuad, analyzerSize: _latestAnalyzerSize)
+  }
+
+  private func setLatestQuad(_ quad: [CGPoint], analyzerSize: CGSize) {
     latestQuadLock.lock()
     _latestQuad = quad
+    _latestAnalyzerSize = analyzerSize
     latestQuadLock.unlock()
   }
 
@@ -293,7 +310,11 @@ final class DocumentDetector: NSObject,
       // Cache the emitted (top-left-origin) quad so capture-and-rectify can
       // pick it up without re-running detection. Cleared whenever the quad
       // is rejected — `metrics.quad` is `[]` in that case.
-      self.setLatestQuad(metrics.quad)
+      let orientedSize = CGSize(
+        width: CGFloat(CVPixelBufferGetHeight(pixelBuffer)),
+        height: CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+      )
+      self.setLatestQuad(metrics.quad, analyzerSize: orientedSize)
       self.onMetrics?(metrics)
     }
 
@@ -305,7 +326,7 @@ final class DocumentDetector: NSObject,
       onError?("Vision request failed: \(error.localizedDescription)")
       stabilityTracker.reset()
       previousQuadForVelocity = []
-      setLatestQuad([])
+      setLatestQuad([], analyzerSize: .zero)
       onMetrics?(
         DocumentFrameMetrics(
           quad: [],

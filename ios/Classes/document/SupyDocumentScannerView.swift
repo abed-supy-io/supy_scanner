@@ -429,8 +429,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   // MARK: - Still capture
 
   private func captureAndRectify(jpegQuality: CGFloat, result: @escaping FlutterResult) {
-    let quad = detector.snapshotLatestQuad()
-    guard quad.count == 4 else {
+    guard let detection = detector.snapshotLatestDetection() else {
       DispatchQueue.main.async {
         result(
           FlutterError(
@@ -447,7 +446,8 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       let settings = self.makePhotoSettings()
       self.pendingCaptures[settings.uniqueID] = PendingCapture(
         result: result,
-        quad: quad,
+        quad: detection.quad,
+        analyzerSize: detection.analyzerSize,
         jpegQuality: jpegQuality
       )
       let delegate = PhotoCaptureDelegate(owner: self)
@@ -470,6 +470,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       self.pendingCaptures[settings.uniqueID] = PendingCapture(
         result: result,
         quad: nil,
+        analyzerSize: nil,
         jpegQuality: jpegQuality
       )
       let delegate = PhotoCaptureDelegate(owner: self)
@@ -539,7 +540,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
         guard let self = self else { return }
         if let quad = pending.quad {
           self.processRectifyCapture(
-            data: data, quad: quad, jpegQuality: pending.jpegQuality, result: pending.result)
+            data: data,
+            quad: quad,
+            analyzerSize: pending.analyzerSize ?? .zero,
+            jpegQuality: pending.jpegQuality,
+            result: pending.result)
         } else {
           self.processFullFrameCapture(
             data: data, jpegQuality: pending.jpegQuality, result: pending.result)
@@ -551,39 +556,30 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   private func processRectifyCapture(
     data: Data,
     quad: [CGPoint],
+    analyzerSize: CGSize,
     jpegQuality: CGFloat,
     result: @escaping FlutterResult
   ) {
-    guard let ciImage = CIImage(data: data),
-          let filter = CIFilter(name: "CIPerspectiveCorrection") else {
+    guard let ciImage = CIImage(data: data) else {
       DispatchQueue.main.async {
         result(
           FlutterError(
             code: "captureFailed",
-            message: "Could not initialize rectification filter",
+            message: "Could not decode captured still",
             details: nil
           )
         )
       }
       return
     }
-    let imgW = ciImage.extent.width
-    let imgH = ciImage.extent.height
-    // `DocumentFrameMetrics.quad` is top-left-origin (DocumentDetector flips
-    // Vision's bottom-left output once before emitting). CIImage extent is
-    // bottom-left, so we flip Y here exactly once.
-    let tl = CGPoint(x: quad[0].x * imgW, y: (1 - quad[0].y) * imgH)
-    let tr = CGPoint(x: quad[1].x * imgW, y: (1 - quad[1].y) * imgH)
-    let br = CGPoint(x: quad[2].x * imgW, y: (1 - quad[2].y) * imgH)
-    let bl = CGPoint(x: quad[3].x * imgW, y: (1 - quad[3].y) * imgH)
-    filter.setValue(ciImage, forKey: kCIInputImageKey)
-    filter.setValue(CIVector(cgPoint: tl), forKey: "inputTopLeft")
-    filter.setValue(CIVector(cgPoint: tr), forKey: "inputTopRight")
-    filter.setValue(CIVector(cgPoint: bl), forKey: "inputBottomLeft")
-    filter.setValue(CIVector(cgPoint: br), forKey: "inputBottomRight")
-
-    guard let outCI = filter.outputImage,
-          let cg = DocumentEnhancer.sharedContext.createCGImage(outCI, from: outCI.extent) else {
+    // Maps the analyzer-space quad into still space, refines it against an
+    // on-still re-detection (IoU ≥ 0.8, preview fallback), and warps.
+    guard let output = DocumentRectifyPipeline.rectify(
+      still: ciImage,
+      analyzerQuad: quad,
+      analyzerSize: analyzerSize,
+      context: DocumentEnhancer.sharedContext
+    ) else {
       DispatchQueue.main.async {
         result(
           FlutterError(
@@ -595,7 +591,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       }
       return
     }
-    let uiImage = UIImage(cgImage: cg)
+    let uiImage = UIImage(cgImage: output.image)
     guard let jpeg = uiImage.jpegData(compressionQuality: jpegQuality) else {
       DispatchQueue.main.async {
         result(
@@ -626,14 +622,18 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     }
     let payload: [String: Any] = [
       "path": url.path,
-      "widthPx": cg.width,
-      "heightPx": cg.height,
-      "quad": quad.map { ["x": Double($0.x), "y": Double($0.y)] },
+      "widthPx": output.image.width,
+      "heightPx": output.image.height,
+      // Final still-space quad actually used for the warp (was: raw
+      // analyzer-space quad). Same convention — normalized, top-left origin.
+      "quad": output.quad.map { ["x": Double($0.x), "y": Double($0.y)] },
+      // Additive: "refined" (on-still re-detection accepted) | "preview".
+      "quadSource": output.quadSource,
       // Legacy keys for existing `SupyDocumentPage.fromMap` consumers
       // (`controller.capture()`). Additive — never remove.
       "uri": "file://\(url.path)",
-      "width": cg.width,
-      "height": cg.height,
+      "width": output.image.width,
+      "height": output.image.height,
     ]
     DispatchQueue.main.async { result(payload) }
   }
@@ -711,6 +711,8 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     /// `nil` for full-frame captures; populated with a normalized
     /// top-left-origin quad for rectify captures.
     let quad: [CGPoint]?
+    /// Oriented analyzer size paired with `quad`; `nil` for full-frame captures.
+    let analyzerSize: CGSize?
     /// JPEG compression quality (0.0–1.0). Matches the presenter's
     /// `jpegQuality` arg so both capture paths produce identical fidelity.
     let jpegQuality: CGFloat
