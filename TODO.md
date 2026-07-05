@@ -331,6 +331,21 @@ See `docs/PLAN.md` § "Phase DIE" and `docs/ENHANCEMENT.md`. Shared native C++ p
   now carries the final still-space quad actually warped (previously the raw
   analyzer-space quad); additive `quadSource` reports `refined`/`preview`.
   Same normalized top-left-origin convention; consumers unaffected.
+- **2026-07-05 — Sprint 1 final review: two-pass still re-detection accepted
+  (plan deviation, B3).** Task 3's plan sketched a single-pass detection
+  fixture; the implementation runs two passes —
+  `VNDetectDocumentSegmentationRequest` followed by a geometric
+  `VNDetectRectanglesRequest`. Ruled **accept**: `VNDetectDocumentSegmentationRequest`
+  returns no results on synthetic flat-color simulator images, so the
+  geometric pass is required for the real-Vision `DocumentStillRefiner` test
+  to pass on the simulator. Public interfaces are unchanged and the code is
+  committed and green (`DocumentStillRefinerTests` 7/7). Surfaced by the
+  inline whole-branch review (`.superpowers/sdd/final-review-report.md`),
+  which found no Critical or Important code defects; the review's B2 (pipeline
+  returns nil on a non-4-point refiner quad vs. the L48-49 comment's stronger
+  promise) stands as a Minor, non-blocking item with an optional one-line
+  defensive fix, and B1 (the segmentation-cast "always nil" claim) was refuted
+  (`VNDetectDocumentSegmentationRequest.results` is `[VNRectangleObservation]`).
 
 ## Phase CSU — Supy scanner replaces Scanbot
 
