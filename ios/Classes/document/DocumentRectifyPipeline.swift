@@ -46,10 +46,12 @@ enum DocumentRectifyPipeline {
     ).map { CGPoint(x: min(max($0.x, 0), 1), y: min(max($0.y, 0), 1)) }
 
     // 2. On-still refinement. Falls back to `mapped` internally — a capture
-    //    never fails because refinement failed.
+    //    never fails because refinement failed. Re-assert that here: if a
+    //    refiner ever yields a non-4-point quad, use the mapped preview quad
+    //    (always 4 points) instead of failing the capture.
     let refinement = refiner(oriented, mapped)
-    let quad = refinement.quad
-    guard quad.count == 4 else { return nil }
+    let refinedAccepted = refinement.quad.count == 4
+    let quad = refinedAccepted ? refinement.quad : mapped
 
     // 3. Warp. Quad is top-left-origin; CIImage is bottom-left — flip Y once.
     guard let filter = CIFilter(name: "CIPerspectiveCorrection") else {
@@ -73,7 +75,7 @@ enum DocumentRectifyPipeline {
     return DocumentRectifyOutput(
       image: cg,
       quad: quad,
-      quadSource: refinement.refined ? "refined" : "preview"
+      quadSource: refinedAccepted && refinement.refined ? "refined" : "preview"
     )
   }
 }

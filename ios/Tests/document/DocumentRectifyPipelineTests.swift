@@ -40,6 +40,28 @@ final class DocumentRectifyPipelineTests: XCTestCase {
     }
   }
 
+  func testNonFourPointRefinerQuadFallsBackToPreview() throws {
+    let still = Self.makeStill(size: stillSize)
+    // Defensive path: a refiner that reports refined but hands back a
+    // degenerate (non-4-point) quad must NOT fail the capture — the pipeline
+    // falls back to the mapped preview quad and reports "preview".
+    let output = DocumentRectifyPipeline.rectify(
+      still: still,
+      analyzerQuad: analyzerQuad,
+      analyzerSize: analyzerSize,
+      context: CIContext(),
+      refiner: { _, _ in DocumentStillRefinement(quad: [], refined: true) }
+    )
+    let result = try XCTUnwrap(output)
+    XCTAssertEqual(result.quadSource, "preview")
+    XCTAssertEqual(CGFloat(result.image.width), 540, accuracy: 2)
+    XCTAssertEqual(CGFloat(result.image.height), 480, accuracy: 2)
+    for (got, want) in zip(result.quad, expectedStillQuad) {
+      XCTAssertEqual(got.x, want.x, accuracy: 1e-6)
+      XCTAssertEqual(got.y, want.y, accuracy: 1e-6)
+    }
+  }
+
   func testRefinedQuadWinsAndIsReported() throws {
     let still = Self.makeStill(size: stillSize)
     let refinedQuad = expectedStillQuad.map {
