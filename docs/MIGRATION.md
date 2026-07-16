@@ -119,19 +119,22 @@ The `IInvoiceScannerService` interface is **unchanged** — every consumer (`fea
 
 ### 4. Localized strings (`ScanbotStrings`)
 
-The retailer's `ScanbotStrings` class can be kept verbatim. `supy_scanner` accepts a `locale` parameter and the host app passes through its own translated guidance strings via `SupyDocumentScanOptions.userGuidance`:
+The retailer's `ScanbotStrings` class can be kept verbatim, but the **full-screen
+launcher does not take per-string guidance overrides** in v1. Both platforms own
+their own localized in-scanner guidance copy (iOS VisionKit, Android GMS), and you
+select the language with the `locale` parameter:
 
 ```dart
-SupyDocumentScanOptions(
-  userGuidance: SupyUserGuidance(
-    tooDark: ScanbotStrings.get('tooDark'),
-    tooSmall: ScanbotStrings.get('tooSmall'),
-    noDocumentFound: ScanbotStrings.get('noDocumentFound'),
-  ),
+SupyDocumentScanner.startMultiPage(
+  context,
+  locale: Localizations.localeOf(context).languageCode == 'ar' ? 'ar' : 'en',
 );
 ```
 
-On iOS, VisionKit owns the guidance strings (system-localized); the `userGuidance` overrides apply on Android only — but the iOS VisionKit strings are already correctly localized for `en` and `ar`, so behavior is parity.
+The system strings are already correctly localized for `en` and `ar`, so the
+in-scanner guidance is at parity with Scanbot without any string injection. (Custom
+per-string guidance copy is only available on the **embedded** `SupyDocumentScannerView`
+via `SupyDocumentGuidanceConfiguration.hints` — not on the launcher flow above.)
 
 ### 5. License check
 
@@ -258,9 +261,13 @@ Sprint 7 (v1.1) widens the document result surface. The table below maps Scanbot
 | `DocumentQuality.GOOD` (4) | `SupyDocumentPageQuality.good` | — |
 | `DocumentQuality.EXCELLENT` (5) | `SupyDocumentPageQuality.excellent` | — |
 | `DocumentQuality` raw float (where exposed) | `SupyDocumentPage.qualityScore` (0..1) | Supy normalizes to `[0..1]`; the enum is derived from this score via fixed bucket thresholds (`<0.2`, `<0.4`, `<0.6`, `<0.8`, `≥0.8`). |
-| `DocumentFileFormat.JPG` | `SupyDocumentOutputFormat.jpg` | Default — preserves v1.0 behaviour. `SupyDocumentScanOptions.jpegQuality` still applies. |
+| `DocumentFileFormat.JPG` | `SupyDocumentOutputFormat.jpg` | Default. `SupyDocumentScanOptions.jpegQuality` still applies (default `95` — matches the perceived sharpness of the Scanbot output on the same camera). |
 | `DocumentFileFormat.PNG` | `SupyDocumentOutputFormat.png` | Lossless. `jpegQuality` is ignored. |
 | `DocumentFileFormat.PDF` | `SupyDocumentOutputFormat.pdf` | Pages still persist individually (as JPG); the assembled multi-page PDF URI is surfaced on `SupyDocumentData.pdfUri`. |
+| `ImageFilterType.COLOR_DOCUMENT` | `SupyDocumentFilter.color` | **New default** as of v1.2. iOS: VisionKit's raw output is bleached toward pure white; the `color` filter re-processes the page to preserve paper tone (tone-curve endpoint anchored at 0.96, not 1.0) and lifts text contrast, matching Scanbot's output style. Android: ignored — the native-core enhance pipeline already produces the comparable output. To opt out, pass `filter: SupyDocumentFilter.original`. |
+| `ImageFilterType.PURE_GRAY` | `SupyDocumentFilter.grayscale` | Color chain followed by desaturation. iOS only. |
+| `ImageFilterType.BLACK_AND_WHITE` | `SupyDocumentFilter.blackAndWhite` | Adaptive-threshold binarization. iOS only. |
+| `ImageFilterType.NONE` | `SupyDocumentFilter.original` | Bypass — raw platform output. iOS only. |
 | `Document.pdfUrl` | `SupyDocumentData.pdfUri` | `null` when `outputFormat` is not `pdf`. File URI (`file:///...`), not HTTP. |
 | Scanbot `acceptedAngleScore` / `acceptedSizeScore` gates | Not exposed (yet) | The native scorer drives a single `qualityScore`; per-axis gating is on the v1.2 backlog. |
 
@@ -281,3 +288,32 @@ This is **not** scope for the supy_scanner package itself — it's the consumer-
 - [ ] Remove `scanbot_sdk` from `pubspec.yaml`.
 - [ ] Run QA matrix from `docs/QA.md`.
 - [ ] Ship behind a feature flag for first 1–2 releases; remove flag once metrics confirm parity.
+
+---
+
+## Retailer call-site inventory (compat-shim pin)
+
+Snapshot of the **exact retailer files** that import `scanbot_sdk` today, the compat-shim symbol each one binds to, and the test in `compat/supy_scanner_scanbot_compat/test/retailer_call_sites_test.dart` that pins it. Drives `dx-compat-shim-retailer-pin` (H2-06).
+
+Retailer repo: `supy-mobile/apps/retailer/` (read-only from this repo).
+
+| Retailer file | Compat-shim symbol | Pin test |
+|---|---|---|
+| `lib/core/services/scanbot/scanbot_index.dart` | re-export barrel — `BarcodeScannerController`, `BarcodeScanbotView`, `BarcodeItem` | `retailer: scanbot_index.dart (re-export barrel)` |
+| `lib/core/services/scanbot/barcode_scanbot_view.dart` | `BarcodeScannerController.bind({pause, resume, pausedNotifier})`, full `BarcodeScanbotView` arg set | `retailer: barcode_scanbot_view.dart` |
+| `lib/features/inventory/.../scan_barcode_counting_page.dart` | `BarcodeScanbotView(findBarcodeAtCenter: false, footer:, onBarcodeDetected:)` + `BarcodeItem.text` | `retailer: scan_barcode_counting_page.dart` |
+| `lib/features/invoice/services/invoice_scanner_service.dart` | `IInvoiceScannerService`, `InvoiceScannerService()` const, `scanWithCamera(BuildContext) → Future<List<File>>` | `retailer: invoice_scanner_service.dart` |
+| `lib/core/services/services_index.dart` | re-export only — no compat symbol | (covered transitively by scanbot_index test) |
+
+### Out-of-shim retailer references
+
+Two retailer files reach into Scanbot's v2 document-UI surface, which is **not** mirrored by the compat shim. These remain consumer-side migration work and are intentionally not pinned:
+
+| Retailer file | Scanbot v2 surfaces it touches | Migration plan |
+|---|---|---|
+| `lib/core/services/scanbot/scanbot_sdk_manager.dart` | `ScanbotSdkConfig`, `ScanbotSdk.initScanbotSdk`, `ScanbotSdk.getLicenseStatus()`, `ImageFormat.JPG` | Delete on cutover — `supy_scanner` has no license init. Tracked in the Cutover checklist above. |
+| `lib/features/invoice/services/scanning_bot.dart` | `ScanbotSdkUiV2.startDocumentScanner`, `DocumentScanningFlow`, `ScanbotColor`, `OperationStatus.OK`, `ResultWrapper<DocumentData>`, `CapturePhotoQualityPrioritization.QUALITY` | Replace body with `SupyScanner.scanDocument(SupyDocumentScanOptions(...))` per §"3. Document scanner" above. |
+
+### Snapshot drift detection
+
+`test/api_signature_snapshot_test.dart` parses `lib/src/*.dart` and diffs against `test/api_snapshot.txt`. PRs that intentionally change the shim API must regenerate via `dart tool/regen_api_snapshot.dart` and include the regenerated snapshot alongside a justification in the PR description.

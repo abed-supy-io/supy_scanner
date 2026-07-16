@@ -86,7 +86,7 @@ The compat shim `supy_scanner_scanbot_compat` preserves these exact signatures s
 - [`docs/SYMBOLOGIES.md`](docs/SYMBOLOGIES.md) — iOS Vision ↔ Android ML Kit symbology matrix
 - [`docs/LOCALIZATION.md`](docs/LOCALIZATION.md) — string ownership + en/ar coverage
 - [`docs/QA.md`](docs/QA.md) — acceptance scenarios + performance targets
-- [`docs/SPRINTS.md`](docs/SPRINTS.md) — sprint breakdown
+- [`docs/HISTORY.md`](docs/HISTORY.md) — archived sprint plans and shipped design docs
 - [`TODO.md`](TODO.md) — live tracker
 - [`CHANGELOG.md`](CHANGELOG.md) — release notes
 
