@@ -20,6 +20,14 @@ SupyDocumentFrameMetrics _goodFrame({
   // exercise the failure classification they were written for.
   double quadStability = 1.0,
   double interiorVariance = 50.0,
+  // CQG additions. Defaults sit comfortably below the failure thresholds so
+  // pre-CQG tests continue to exercise the failure they were written for.
+  double glareRatio = 0.0,
+  double cornerVelocity = 0.0,
+  double centerOffsetX = 0.0,
+  double centerOffsetY = 0.0,
+  List<double> perCornerStability = const <double>[0.95, 0.95, 0.95, 0.95],
+  double? liveQualityScore,
 }) {
   return SupyDocumentFrameMetrics(
     quad: quad,
@@ -30,6 +38,12 @@ SupyDocumentFrameMetrics _goodFrame({
     clipsEdge: clipsEdge,
     quadStability: quadStability,
     interiorVariance: interiorVariance,
+    glareRatio: glareRatio,
+    cornerVelocity: cornerVelocity,
+    centerOffsetX: centerOffsetX,
+    centerOffsetY: centerOffsetY,
+    perCornerStability: perCornerStability,
+    liveQualityScore: liveQualityScore,
   );
 }
 
@@ -167,6 +181,173 @@ void main() {
       expect(second.state, SupyDocumentFrameState.ready);
     });
 
+    // ---- CQG: new states ----
+
+    test('glareRatio above threshold -> glare', () {
+      // smoothingAlpha=1.0 keeps the EMA from blunting the spike — we want to
+      // assert the classifier reacts to the raw value, not to a 3-frame ramp.
+      final sm = SupyDocumentStateMachine(
+        configuration: const SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+        ),
+      );
+      final frame = sm.tick(_goodFrame(glareRatio: 0.20));
+      expect(frame.state, SupyDocumentFrameState.glare);
+    });
+
+    test('any perCornerStability below floor -> occluded', () {
+      final sm = SupyDocumentStateMachine(
+        configuration: const SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+        ),
+      );
+      final frame = sm.tick(
+        _goodFrame(perCornerStability: const [0.95, 0.95, 0.10, 0.95]),
+      );
+      expect(frame.state, SupyDocumentFrameState.occluded);
+    });
+
+    test('cornerVelocity above threshold -> handShake', () {
+      final sm = SupyDocumentStateMachine(
+        configuration: const SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+        ),
+      );
+      final frame = sm.tick(_goodFrame(cornerVelocity: 0.10));
+      expect(frame.state, SupyDocumentFrameState.handShake);
+    });
+
+    test('clipsEdge with edgeClipBlocking=true -> edgeClipped', () {
+      final sm = SupyDocumentStateMachine(
+        configuration: const SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+          edgeClipBlocking: true,
+        ),
+      );
+      final frame = sm.tick(_goodFrame(clipsEdge: true));
+      expect(frame.state, SupyDocumentFrameState.edgeClipped);
+    });
+
+    test('clipsEdge with edgeClipBlocking=false falls through to tooClose',
+        () {
+      final sm = SupyDocumentStateMachine();
+      final frame = sm.tick(_goodFrame(clipsEdge: true));
+      expect(frame.state, SupyDocumentFrameState.tooClose);
+    });
+
+    // ---- CQG: priority preemption among the new states ----
+
+    test('occluded preempts tooDark', () {
+      // Even a finger-occluded frame in a very dark scene reports occluded,
+      // because occlusion invalidates every other measurement.
+      final sm = SupyDocumentStateMachine(
+        configuration: const SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+        ),
+      );
+      final frame = sm.tick(
+        _goodFrame(
+          meanLuma: 10,
+          perCornerStability: const [0.10, 0.95, 0.95, 0.95],
+        ),
+      );
+      expect(frame.state, SupyDocumentFrameState.occluded);
+    });
+
+    test('glare preempts edgeClipped', () {
+      final sm = SupyDocumentStateMachine(
+        configuration: const SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+          edgeClipBlocking: true,
+        ),
+      );
+      final frame = sm.tick(_goodFrame(glareRatio: 0.20, clipsEdge: true));
+      expect(frame.state, SupyDocumentFrameState.glare);
+    });
+
+    test('edgeClipped preempts tooClose', () {
+      final sm = SupyDocumentStateMachine(
+        configuration: const SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+          edgeClipBlocking: true,
+        ),
+      );
+      final frame = sm.tick(
+        _goodFrame(clipsEdge: true, coverageRatio: 0.95),
+      );
+      expect(frame.state, SupyDocumentFrameState.edgeClipped);
+    });
+
+    test('blurry preempts handShake when both fire', () {
+      final sm = SupyDocumentStateMachine(
+        configuration: const SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+        ),
+      );
+      final frame =
+          sm.tick(_goodFrame(blurScore: 10, cornerVelocity: 0.10));
+      expect(frame.state, SupyDocumentFrameState.blurry);
+    });
+
+    // ---- CQG: exit-margin hysteresis on the new fields ----
+    //
+    // Exit-margin un-latching (widening the threshold while in-state so a
+    // marginal frame clears the hint) lives on the native/iOS path and the C++
+    // classifier — see `native/document/document_guidance_classifier_test.cpp`.
+    // The Dart FSM does NOT un-latch via exit margin: `_holdingState()` re-applies
+    // the prior failure label until `_goodStreak` reaches `readyStableFrames`.
+    // This is one of the three documented Dart-FSM hysteresis quirks (ARCHITECTURE.md,
+    // TODO.md CXD-IG2); the Android Dart-FSM fix is deferred to CXD-IG3. These
+    // tests pin the current documented behaviour: a marginal frame that still
+    // trips the entry threshold keeps the hint latched.
+
+    test('glare holds at a ratio that still exceeds the entry threshold', () {
+      // entry: 0.04. A ratio of 0.05 still trips entry, so the Dart FSM keeps
+      // glare latched (no exit-margin un-latch on this path — CXD-IG3).
+      const config = SupyDocumentGuidanceConfiguration(
+        smoothingAlpha: 1.0,
+        minDwellFrames: 0,
+      );
+      final sm = SupyDocumentStateMachine(configuration: config);
+      sm.tick(_goodFrame(glareRatio: 0.20));
+      expect(sm.state, SupyDocumentFrameState.glare);
+      final held = sm.tick(_goodFrame(glareRatio: 0.05));
+      expect(held.state, SupyDocumentFrameState.glare);
+    });
+
+    test('occluded holds at a stability that still trips the entry floor', () {
+      // entry floor: 0.55. A corner at 0.52 still trips entry, so the Dart FSM
+      // keeps occluded latched (no exit-margin un-latch on this path — CXD-IG3).
+      const config = SupyDocumentGuidanceConfiguration(
+        smoothingAlpha: 1.0,
+        minDwellFrames: 0,
+      );
+      final sm = SupyDocumentStateMachine(configuration: config);
+      sm.tick(
+        _goodFrame(perCornerStability: const [0.95, 0.95, 0.10, 0.95]),
+      );
+      expect(sm.state, SupyDocumentFrameState.occluded);
+      final held = sm.tick(
+        _goodFrame(perCornerStability: const [0.95, 0.95, 0.52, 0.95]),
+      );
+      expect(held.state, SupyDocumentFrameState.occluded);
+    });
+
+    test('handShake holds at a velocity that still trips the entry ceiling',
+        () {
+      // entry: 0.020. Velocity 0.021 still trips entry, so the Dart FSM keeps
+      // handShake latched (no exit-margin un-latch on this path — CXD-IG3).
+      const config = SupyDocumentGuidanceConfiguration(
+        smoothingAlpha: 1.0,
+        minDwellFrames: 0,
+      );
+      final sm = SupyDocumentStateMachine(configuration: config);
+      sm.tick(_goodFrame(cornerVelocity: 0.10));
+      expect(sm.state, SupyDocumentFrameState.handShake);
+      final held = sm.tick(_goodFrame(cornerVelocity: 0.021));
+      expect(held.state, SupyDocumentFrameState.handShake);
+    });
+
     test('framesAtState counts consecutive ticks at the same state', () {
       final sm = SupyDocumentStateMachine();
       final a = sm.tick(_goodFrame(coverageRatio: 0.1));
@@ -176,6 +357,61 @@ void main() {
       expect(a.framesAtState, 1);
       expect(b.framesAtState, 2);
       expect(c.framesAtState, 3);
+    });
+
+    test('off-center framing holds offCenter before ready (horizontal)', () {
+      // Framing otherwise passes but the quad sits well right of center
+      // (0.5 >> the 0.12 default maxCenterOffset). Mirrors the C++ classifier.
+      const config = SupyDocumentGuidanceConfiguration(smoothingAlpha: 1.0);
+      final sm = SupyDocumentStateMachine(configuration: config);
+      final frame = sm.tick(_goodFrame(centerOffsetX: 0.5));
+      expect(frame.state, SupyDocumentFrameState.offCenter);
+    });
+
+    test('off-center framing holds offCenter before ready (vertical)', () {
+      const config = SupyDocumentGuidanceConfiguration(smoothingAlpha: 1.0);
+      final sm = SupyDocumentStateMachine(configuration: config);
+      final frame = sm.tick(_goodFrame(centerOffsetY: -0.5));
+      expect(frame.state, SupyDocumentFrameState.offCenter);
+    });
+
+    test('small centroid offset inside maxCenterOffset reaches ready', () {
+      const config = SupyDocumentGuidanceConfiguration(
+        smoothingAlpha: 1.0,
+        readyStableFrames: 1,
+      );
+      final sm = SupyDocumentStateMachine(configuration: config);
+      final frame = sm.tick(
+        _goodFrame(centerOffsetX: 0.05, centerOffsetY: 0.05),
+      );
+      expect(frame.state, SupyDocumentFrameState.ready);
+    });
+
+    test('off-center detection disabled when centerGuidanceEnabled is false',
+        () {
+      const config = SupyDocumentGuidanceConfiguration(
+        smoothingAlpha: 1.0,
+        readyStableFrames: 1,
+        centerGuidanceEnabled: false,
+      );
+      final sm = SupyDocumentStateMachine(configuration: config);
+      final frame = sm.tick(_goodFrame(centerOffsetX: 0.5));
+      expect(frame.state, SupyDocumentFrameState.ready);
+    });
+
+    test('offCenter uses relaxed exit ceiling (quick-clear family)', () {
+      // Mirrors the C++ OffCenterUsesRelaxedExitCeiling gtest: once in
+      // offCenter the ceiling is raised to maxCenterOffset * (1 + exitMargin),
+      // so an offset comfortably above it keeps the prompt up.
+      const config = SupyDocumentGuidanceConfiguration(
+        smoothingAlpha: 1.0,
+        minDwellFrames: 0,
+      );
+      final sm = SupyDocumentStateMachine(configuration: config);
+      sm.tick(_goodFrame(centerOffsetX: 0.5));
+      expect(sm.state, SupyDocumentFrameState.offCenter);
+      final still = sm.tick(_goodFrame(centerOffsetX: 0.20));
+      expect(still.state, SupyDocumentFrameState.offCenter);
     });
   });
 

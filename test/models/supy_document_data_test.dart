@@ -100,6 +100,29 @@ void main() {
       expect(a, isNot(equals(c)));
     });
 
+    test('resolvedBackend defaults to unknown when payload omits it', () {
+      final data = SupyDocumentData.fromMap(const <Object?, Object?>{
+        'pages': <Object?>[],
+        'ocrText': '',
+      });
+      expect(data.resolvedBackend, SupyDocumentScannerBackend.unknown);
+    });
+
+    test('resolvedBackend round-trips gms and cameraX (v1.2 payload)', () {
+      final gms = SupyDocumentData.fromMap(const <Object?, Object?>{
+        'pages': <Object?>[],
+        'ocrText': '',
+        'resolvedBackend': 'gms',
+      });
+      final cameraX = SupyDocumentData.fromMap(const <Object?, Object?>{
+        'pages': <Object?>[],
+        'ocrText': '',
+        'resolvedBackend': 'cameraX',
+      });
+      expect(gms.resolvedBackend, SupyDocumentScannerBackend.gms);
+      expect(cameraX.resolvedBackend, SupyDocumentScannerBackend.cameraX);
+    });
+
     test('equality across page lists', () {
       const page = SupyDocumentPage(
         uri: 'file:///p.jpg',

@@ -171,6 +171,66 @@ void main() {
     });
   });
 
+  group('SupyDocumentGuidanceConfiguration.toConfigFloatArray', () {
+    test('packs 19 thresholds in the native wire order', () {
+      // Order MUST match GuidanceConfig.toFloatArray() (Kotlin) /
+      // toNumberArray() (Swift) / the C++ JNI+Obj-C++ unpack. Non-default
+      // values catch any field that gets transposed.
+      const cfg = SupyDocumentGuidanceConfiguration(
+        minCoverageRatio: 0.31,
+        maxCoverageRatio: 0.92,
+        maxTiltDegrees: 21.0,
+        minMeanLuma: 61.0,
+        minBlurScore: 81.0,
+        readyStabilityFloor: 0.76,
+        interiorVarianceFloor: 5.5,
+        exitMargin: 0.11,
+        smoothingAlpha: 0.36,
+        readyStableFrames: 6,
+        holdSteadyFrames: 7,
+        lostDocumentGraceFrames: 2,
+        minDwellFrames: 3,
+        maxGlareRatio: 0.05,
+        glareExitMargin: 0.51,
+        maxCornerVelocity: 0.021,
+        minPerCornerStability: 0.56,
+        edgeClipBlocking: true,
+      );
+
+      expect(cfg.toConfigFloatArray(), <double>[
+        0.31, 0.92, 21.0, 61.0, 81.0, 0.76, 5.5, 0.11, 0.36, //
+        6.0, 7.0, 2.0, 3.0, //
+        0.05, 0.51, 0.021, 0.56, 1.0, //
+        0.12, // centerGuidanceEnabled ? maxCenterOffset : -1.0
+      ]);
+    });
+
+    test('edgeClipBlocking=false packs the edge-clip flag (index 17) as 0', () {
+      expect(
+        const SupyDocumentGuidanceConfiguration()
+            .toConfigFloatArray()
+            .elementAt(17),
+        0.0,
+      );
+    });
+
+    test('centerGuidanceEnabled=false packs the trailing sentinel as -1', () {
+      expect(
+        const SupyDocumentGuidanceConfiguration(centerGuidanceEnabled: false)
+            .toConfigFloatArray()
+            .last,
+        -1.0,
+      );
+    });
+
+    test('always emits exactly 19 entries', () {
+      expect(
+        const SupyDocumentGuidanceConfiguration().toConfigFloatArray(),
+        hasLength(19),
+      );
+    });
+  });
+
   group('SupyDocumentGuidanceHints equality', () {
     test('default hints are equal', () {
       expect(

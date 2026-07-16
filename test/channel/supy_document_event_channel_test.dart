@@ -95,6 +95,45 @@ void main() {
       expect(m.coverageRatio, 1.0);
     });
 
+    test('frame_metrics carries no nativeState when state key is absent', () {
+      final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
+        'type': 'frame_metrics',
+      });
+
+      expect((event as SupyDocumentFrameMetricsEvent).nativeState, isNull);
+    });
+
+    test('frame_metrics maps native state ordinal via the wire index', () {
+      // Wire index 7 = ready, 8 = glare — distinct from the Dart enum
+      // declaration order, which is exactly what the wire-index guards.
+      final ready = SupyDocumentEvent.fromMap(const <Object?, Object?>{
+        'type': 'frame_metrics',
+        'state': 7,
+      });
+      final glare = SupyDocumentEvent.fromMap(const <Object?, Object?>{
+        'type': 'frame_metrics',
+        'state': 8,
+      });
+
+      expect(
+        (ready as SupyDocumentFrameMetricsEvent).nativeState,
+        SupyDocumentFrameState.ready,
+      );
+      expect(
+        (glare as SupyDocumentFrameMetricsEvent).nativeState,
+        SupyDocumentFrameState.glare,
+      );
+    });
+
+    test('frame_metrics ignores an out-of-range native state ordinal', () {
+      final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
+        'type': 'frame_metrics',
+        'state': 99,
+      });
+
+      expect((event as SupyDocumentFrameMetricsEvent).nativeState, isNull);
+    });
+
     test('decodes preview_started with flashAvailable=true', () {
       final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
         'type': 'preview_started',
