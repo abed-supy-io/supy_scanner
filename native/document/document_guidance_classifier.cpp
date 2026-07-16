@@ -8,19 +8,35 @@
 
 #include "document_guidance_classifier.h"
 
+#include <algorithm>
+#include <cmath>
+
 namespace supy::scanner::document {
 
 namespace {
 
+// Detection-priority table. Indexed by the enum's wire value (NOT by the
+// urgency rank). Must stay byte-identical to `_priority` in the Dart state
+// machine — a drift here means the launcher path and the PlatformView path
+// surface different hints on the same frame. New entries append by wire
+// value, not by rank.
 constexpr int kPriority[] = {
-    /* kNoDocument */ 0,
-    /* kTooDark    */ 1,
-    /* kTooClose   */ 2,
-    /* kTooFar     */ 3,
-    /* kTooSkewed  */ 4,
-    /* kBlurry     */ 5,
-    /* kHoldSteady */ 6,
-    /* kReady      */ 7,
+    /* kNoDocument  = 0 */ 0,
+    /* kTooDark     = 1 */ 2,
+    /* kTooClose    = 2 */ 5,
+    /* kTooFar      = 3 */ 6,
+    /* kTooSkewed   = 4 */ 7,
+    /* kBlurry      = 5 */ 8,
+    /* kHoldSteady  = 6 */ 11,
+    /* kReady       = 7 */ 12,
+    /* kGlare       = 8 */ 3,
+    /* kOccluded    = 9 */ 1,
+    /* kHandShake   = 10*/ 9,
+    /* kEdgeClipped = 11*/ 4,
+    // Sits between handShake (9) and holdSteady (11): off-center is only
+    // reached once every hard failure clears, but must still preempt the
+    // settle-toward-ready holdSteady so the recenter prompt wins.
+    /* kOffCenter   = 12*/ 10,
 };
 
 inline int priority(FrameState s) {
@@ -45,6 +61,13 @@ void smooth(const FrameMetrics& raw,
     state.lastClipsEdge = false;
     state.coverage = state.tilt = state.luma = state.blur =
         state.stability = state.interior = 0.0f;
+    state.glare = 0.0f;
+    state.cornerVelocity = 0.0f;
+    state.hasPerCornerStability = false;
+    state.perCornerStability = {};
+    state.centerOffsetX = 0.0f;
+    state.centerOffsetY = 0.0f;
+    state.liveQualityScore = 0.0f;
     out.hasDocument = false;
     out.clipsEdge = false;
     out.coverageRatio = 0.0f;
@@ -53,6 +76,13 @@ void smooth(const FrameMetrics& raw,
     out.blurScore = 0.0f;
     out.quadStability = 0.0f;
     out.interiorVariance = 0.0f;
+    out.glareRatio = 0.0f;
+    out.cornerVelocity = 0.0f;
+    out.perCornerStability = {};
+    out.hasPerCornerStability = false;
+    out.centerOffsetX = 0.0f;
+    out.centerOffsetY = 0.0f;
+    out.liveQualityScore = 0.0f;
     out.quad = {};
     return;
   }
@@ -65,6 +95,28 @@ void smooth(const FrameMetrics& raw,
       ema(state.hasSamples, state.stability, raw.quadStability, a);
   state.interior =
       ema(state.hasSamples, state.interior, raw.interiorVariance, a);
+  state.glare = ema(state.hasSamples, state.glare, raw.glareRatio, a);
+  state.cornerVelocity =
+      ema(state.hasSamples, state.cornerVelocity, raw.cornerVelocity, a);
+  state.centerOffsetX =
+      ema(state.hasSamples, state.centerOffsetX, raw.centerOffsetX, a);
+  state.centerOffsetY =
+      ema(state.hasSamples, state.centerOffsetY, raw.centerOffsetY, a);
+  // Per-corner EMA. Mirror of the Dart smoother: when the incoming frame
+  // doesn't carry 4 corner values, hold the previous vector so one dropped
+  // detection doesn't reset the occlusion judgement.
+  if (raw.hasPerCornerStability) {
+    if (!state.hasPerCornerStability) {
+      state.perCornerStability = raw.perCornerStability;
+    } else {
+      for (int i = 0; i < 4; ++i) {
+        state.perCornerStability[i] =
+            state.perCornerStability[i] +
+            a * (raw.perCornerStability[i] - state.perCornerStability[i]);
+      }
+    }
+    state.hasPerCornerStability = true;
+  }
   state.lastClipsEdge = raw.clipsEdge;
   state.hasSamples = true;
   state.hasQuad = true;
@@ -77,7 +129,48 @@ void smooth(const FrameMetrics& raw,
   out.blurScore = state.blur;
   out.quadStability = state.stability;
   out.interiorVariance = state.interior;
+  out.glareRatio = state.glare;
+  out.cornerVelocity = state.cornerVelocity;
+  out.perCornerStability = state.perCornerStability;
+  out.hasPerCornerStability = state.hasPerCornerStability;
+  out.centerOffsetX = state.centerOffsetX;
+  out.centerOffsetY = state.centerOffsetY;
   out.quad = {};
+}
+
+// Composite live-quality estimate in [0,1] surfaced to consumers via
+// `frame_metrics.liveQualityScore`. Combines the four signals that matter
+// most for capture-readiness:
+//   - sharpness  (blurScore / minBlur, clipped to 1)
+//   - exposure   (1 - normalised distance from a midtone luma)
+//   - cleanliness (1 - glareRatio / maxGlareRatio, clipped to [0,1])
+//   - steadiness  (1 - cornerVelocity / maxCornerVelocity, clipped to [0,1])
+// Geometric mean rather than arithmetic so any single collapsing signal
+// drags the score down (sharp-but-glaring shouldn't read as ~0.85).
+float computeLiveQualityScore(const SmoothedMetrics& m,
+                              const GuidanceConfig& c) {
+  const float sharpness =
+      c.minBlurScore > 0.0f ? std::min(m.blurScore / c.minBlurScore, 1.0f) : 0.0f;
+  // Midtone target 140 — chosen to land between the dark floor (~60) and the
+  // glare-prone ceiling (~220) so well-lit paper sits near 1.0.
+  const float lumaSpan = 140.0f;
+  const float lumaDist = std::abs(m.meanLuma - 140.0f) / lumaSpan;
+  const float exposure = std::max(0.0f, 1.0f - lumaDist);
+  const float cleanliness =
+      c.maxGlareRatio > 0.0f
+          ? std::max(0.0f, 1.0f - m.glareRatio / c.maxGlareRatio)
+          : 1.0f;
+  const float steadiness =
+      c.maxCornerVelocity > 0.0f
+          ? std::max(0.0f, 1.0f - m.cornerVelocity / c.maxCornerVelocity)
+          : 1.0f;
+  // Geometric mean — clamp factors so a single zero collapses smoothly rather
+  // than producing NaN under sqrt chains.
+  const float p = std::max(0.001f, sharpness) * std::max(0.001f, exposure) *
+                  std::max(0.001f, cleanliness) *
+                  std::max(0.001f, steadiness);
+  // 4th-root via two sqrts.
+  return std::sqrt(std::sqrt(p));
 }
 
 // Returns kHoldSteady when no hard failure applies but stability is below the
@@ -95,12 +188,39 @@ FrameState firstFailure(const SmoothedMetrics& m,
   const float loose = 1.0f + c.exitMargin;
   const float tight = 1.0f - c.exitMargin;
 
+  // Occlusion is first — a finger on the quad corrupts every other metric.
+  if (m.hasPerCornerStability) {
+    const float occlusionFloor =
+        (current == FrameState::kOccluded)
+            ? c.minPerCornerStability * (1.0f - c.exitMargin)
+            : c.minPerCornerStability;
+    for (int i = 0; i < 4; ++i) {
+      if (m.perCornerStability[i] < occlusionFloor) {
+        return FrameState::kOccluded;
+      }
+    }
+  }
+
   const float minLuma = (current == FrameState::kTooDark)
                             ? c.minMeanLuma * loose
                             : c.minMeanLuma;
   if (m.meanLuma < minLuma) return FrameState::kTooDark;
 
-  if (m.clipsEdge) return FrameState::kTooClose;
+  // Glare uses a dedicated, wider exit margin — glare is bursty and clears
+  // with a 1° camera shift, so keep the state from sticking when it stops.
+  const float maxGlare =
+      (current == FrameState::kGlare)
+          ? c.maxGlareRatio * (1.0f + c.glareExitMargin)
+          : c.maxGlareRatio;
+  if (m.glareRatio > maxGlare) return FrameState::kGlare;
+
+  if (m.clipsEdge) {
+    // `edgeClipBlocking` only controls whether a clipping quad gets its own
+    // hint state. When false, fall through to tooClose so v1.0 behaviour is
+    // preserved on a drop-in upgrade.
+    if (c.edgeClipBlocking) return FrameState::kEdgeClipped;
+    return FrameState::kTooClose;
+  }
   const float maxCov = (current == FrameState::kTooClose)
                            ? c.maxCoverageRatio * tight
                            : c.maxCoverageRatio;
@@ -120,6 +240,11 @@ FrameState firstFailure(const SmoothedMetrics& m,
                             ? c.minBlurScore * loose
                             : c.minBlurScore;
   if (m.blurScore < minBlur) return FrameState::kBlurry;
+
+  const float maxVel = (current == FrameState::kHandShake)
+                           ? c.maxCornerVelocity * (1.0f + c.exitMargin)
+                           : c.maxCornerVelocity;
+  if (m.cornerVelocity > maxVel) return FrameState::kHandShake;
 
   outAllPassed = true;
   return FrameState::kNoDocument;  // sentinel — caller must check outAllPassed
@@ -159,6 +284,14 @@ FrameState classify(const FrameMetrics& raw,
                     SmoothedMetrics* out_smoothed) {
   SmoothedMetrics local{};
   smooth(raw, config, state, local);
+  // Compute the opaque live-quality score on smoothed inputs and stash it on
+  // the smoother state so a future no-document frame doesn't drop the last
+  // good value to zero (handled inside `smooth`). The Dart side passes this
+  // through verbatim — see `SupyDocumentMetricsSmoother._liveQualityScore`.
+  if (local.hasDocument) {
+    state.liveQualityScore = computeLiveQualityScore(local, config);
+  }
+  local.liveQualityScore = state.liveQualityScore;
   if (out_smoothed) *out_smoothed = local;
 
   // Mirror the Dart classifier's hasUsableDoc gate: a quad with too-low
@@ -186,6 +319,24 @@ FrameState classify(const FrameMetrics& raw,
     state.goodStreak = 0;
     commit(failing, config, state);
     return state.current;
+  }
+
+  // All hard failures pass — but if the document sits too far off-center,
+  // prompt a recenter before letting it settle toward ready. Disabled when
+  // maxCenterOffset is non-positive (Dart's centerGuidanceEnabled == false
+  // sentinel). While already in kOffCenter, relax the threshold by exitMargin
+  // so the prompt doesn't flicker as the user nudges it back across the band.
+  if (config.maxCenterOffset > 0.0f) {
+    const float centerCeiling =
+        (state.current == FrameState::kOffCenter)
+            ? config.maxCenterOffset * (1.0f + config.exitMargin)
+            : config.maxCenterOffset;
+    if (std::abs(local.centerOffsetX) > centerCeiling ||
+        std::abs(local.centerOffsetY) > centerCeiling) {
+      state.goodStreak = 0;
+      commit(FrameState::kOffCenter, config, state);
+      return state.current;
+    }
   }
 
   // All hard failures pass — require quad stability before promoting to
