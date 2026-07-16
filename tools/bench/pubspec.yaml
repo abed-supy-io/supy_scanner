@@ -1,0 +1,14 @@
+name: supy_bench
+description: >-
+  DSQ document-quality bench harness (host CLI). Design:
+  docs/superpowers/specs/2026-07-16-doc-scan-quality-design.md.
+publish_to: none
+
+environment:
+  sdk: '>=3.4.0 <4.0.0'
+
+dependencies:
+  image: ^4.2.0
+
+dev_dependencies:
+  test: ^1.25.0
