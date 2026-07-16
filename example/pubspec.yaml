@@ -10,6 +10,7 @@ environment:
 dependencies:
   flutter:
     sdk: flutter
+  image: ^4.9.1
   supy_scanner:
     path: ../
 

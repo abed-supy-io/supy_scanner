@@ -20,6 +20,26 @@ void main() {
     expect(find.byType(SupyDemoDocumentPage), findsOneWidget);
   });
 
+  testWidgets('filter picker exposes all four SupyDocumentFilter segments', (
+    tester,
+  ) async {
+    await tester.pumpWidget(const SupyScannerExampleApp());
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Capture Document'));
+    await tester.pumpAndSettle();
+
+    expect(find.text('Color'), findsOneWidget);
+    expect(find.text('Gray'), findsOneWidget);
+    expect(find.text('B&W'), findsOneWidget);
+    expect(find.text('Original'), findsOneWidget);
+
+    // Tapping a segment must not throw — the picker is interactive while idle.
+    await tester.tap(find.text('B&W'));
+    await tester.pumpAndSettle();
+    await tester.tap(find.text('Original'));
+    await tester.pumpAndSettle();
+  });
+
   testWidgets(
     'device-only: capture 2 pages, OCR latin+arabic, surface page rects',
     (tester) async {

@@ -4,7 +4,9 @@ import '../branding/supy_brand.dart';
 import 'supy_demo_batch_barcode.dart';
 import 'supy_demo_document.dart';
 import 'supy_demo_embedded_barcode.dart';
+import 'supy_demo_invoice_capture.dart';
 import 'supy_demo_single_barcode.dart';
+import 'supy_demo_smart_document.dart';
 
 /// Supy-branded landing inside the example app — single tab showcasing
 /// barcode + document flows in a product-shaped UI.
@@ -73,6 +75,20 @@ class SupyDemoHome extends StatelessWidget {
                 title: 'Capture Document',
                 subtitle: 'Multi-page + OCR',
                 onTap: () => _push(context, const SupyDemoDocumentPage()),
+              ),
+              _ActionTile(
+                icon: Icons.auto_awesome,
+                title: 'Smart Document',
+                subtitle: 'Live guidance + auto-snap',
+                onTap: () =>
+                    _push(context, const SupyDemoSmartDocumentPage()),
+              ),
+              _ActionTile(
+                icon: Icons.receipt_long,
+                title: 'Invoice Capture',
+                subtitle: 'Capture → confirm → upload',
+                onTap: () =>
+                    _push(context, const SupyDemoInvoiceCapture()),
               ),
             ],
           ),
