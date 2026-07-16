@@ -19,12 +19,13 @@ class SupyFinderPainter extends CustomPainter {
     if (style is! SupyFinderCorneredStyle) return;
 
     final rect = _fitRect(size, config.aspectRatio.value);
-    final paint = Paint()
-      ..color = style.strokeColor
-      ..strokeWidth = style.strokeWidth
-      ..style = PaintingStyle.stroke
-      ..strokeCap = StrokeCap.round
-      ..strokeJoin = StrokeJoin.round;
+    final paint =
+        Paint()
+          ..color = style.strokeColor
+          ..strokeWidth = style.strokeWidth
+          ..style = PaintingStyle.stroke
+          ..strokeCap = StrokeCap.round
+          ..strokeJoin = StrokeJoin.round;
 
     final arm = style.cornerLength;
     final r = style.cornerRadius.clamp(0.0, arm / 2);
@@ -64,28 +65,40 @@ class SupyFinderPainter extends CustomPainter {
         path.moveTo(corner.dx, corner.dy + arm);
         path.lineTo(corner.dx, corner.dy + radius);
         path.quadraticBezierTo(
-          corner.dx, corner.dy, corner.dx + radius, corner.dy,
+          corner.dx,
+          corner.dy,
+          corner.dx + radius,
+          corner.dy,
         );
         path.lineTo(corner.dx + arm, corner.dy);
       case _Corner.topRight:
         path.moveTo(corner.dx - arm, corner.dy);
         path.lineTo(corner.dx - radius, corner.dy);
         path.quadraticBezierTo(
-          corner.dx, corner.dy, corner.dx, corner.dy + radius,
+          corner.dx,
+          corner.dy,
+          corner.dx,
+          corner.dy + radius,
         );
         path.lineTo(corner.dx, corner.dy + arm);
       case _Corner.bottomLeft:
         path.moveTo(corner.dx, corner.dy - arm);
         path.lineTo(corner.dx, corner.dy - radius);
         path.quadraticBezierTo(
-          corner.dx, corner.dy, corner.dx + radius, corner.dy,
+          corner.dx,
+          corner.dy,
+          corner.dx + radius,
+          corner.dy,
         );
         path.lineTo(corner.dx + arm, corner.dy);
       case _Corner.bottomRight:
         path.moveTo(corner.dx - arm, corner.dy);
         path.lineTo(corner.dx - radius, corner.dy);
         path.quadraticBezierTo(
-          corner.dx, corner.dy, corner.dx, corner.dy - radius,
+          corner.dx,
+          corner.dy,
+          corner.dx,
+          corner.dy - radius,
         );
         path.lineTo(corner.dx, corner.dy - arm);
     }
@@ -93,8 +106,7 @@ class SupyFinderPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant SupyFinderPainter old) =>
-      old.config != config;
+  bool shouldRepaint(covariant SupyFinderPainter old) => old.config != config;
 }
 
 enum _Corner { topLeft, topRight, bottomLeft, bottomRight }

@@ -132,24 +132,25 @@ class SupyFindAndPickUseCaseConfiguration {
 
   @override
   int get hashCode => Object.hash(
-        Object.hashAll(expected),
-        sheetTitle,
-        initiallyCollapsed,
-        submitButtonText,
-        clearButtonText,
-        allowUnexpected,
-        sheetBackgroundColor,
-        titleColor,
-        bodyColor,
-        matchedRowColor,
-        pendingRowColor,
-        submitButtonBackgroundColor,
-        submitButtonForegroundColor,
-        clearButtonForegroundColor,
-      );
+    Object.hashAll(expected),
+    sheetTitle,
+    initiallyCollapsed,
+    submitButtonText,
+    clearButtonText,
+    allowUnexpected,
+    sheetBackgroundColor,
+    titleColor,
+    bodyColor,
+    matchedRowColor,
+    pendingRowColor,
+    submitButtonBackgroundColor,
+    submitButtonForegroundColor,
+    clearButtonForegroundColor,
+  );
 
   @override
-  String toString() => 'SupyFindAndPickUseCaseConfiguration('
+  String toString() =>
+      'SupyFindAndPickUseCaseConfiguration('
       'expected: ${expected.length} rows, '
       'allowUnexpected: $allowUnexpected)';
 }

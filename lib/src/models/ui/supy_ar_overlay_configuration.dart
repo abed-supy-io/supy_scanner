@@ -16,9 +16,9 @@ class SupyArOverlayConfiguration {
     this.labelBackgroundColor = const Color(0xCC000000),
     this.labelTextColor = const Color(0xFFFFFFFF),
     this.labelTextSize = 12.0,
-  })  : assert(strokeWidth >= 0, 'strokeWidth must be non-negative'),
-        assert(cornerRadius >= 0, 'cornerRadius must be non-negative'),
-        assert(labelTextSize > 0, 'labelTextSize must be > 0');
+  }) : assert(strokeWidth >= 0, 'strokeWidth must be non-negative'),
+       assert(cornerRadius >= 0, 'cornerRadius must be non-negative'),
+       assert(labelTextSize > 0, 'labelTextSize must be > 0');
 
   /// Master switch. When false the overlay paints nothing.
   final bool enabled;
@@ -63,18 +63,19 @@ class SupyArOverlayConfiguration {
 
   @override
   int get hashCode => Object.hash(
-        enabled,
-        strokeColor,
-        fillColor,
-        strokeWidth,
-        cornerRadius,
-        showLabel,
-        labelBackgroundColor,
-        labelTextColor,
-        labelTextSize,
-      );
+    enabled,
+    strokeColor,
+    fillColor,
+    strokeWidth,
+    cornerRadius,
+    showLabel,
+    labelBackgroundColor,
+    labelTextColor,
+    labelTextSize,
+  );
 
   @override
-  String toString() => 'SupyArOverlayConfiguration('
+  String toString() =>
+      'SupyArOverlayConfiguration('
       'enabled: $enabled, strokeWidth: $strokeWidth, showLabel: $showLabel)';
 }

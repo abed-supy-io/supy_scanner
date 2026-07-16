@@ -142,8 +142,7 @@ void main() {
       expect(r3.state, SupyDocumentFrameState.ready);
     });
 
-    test('lostDocumentGraceFrames holds last state across detector misses',
-        () {
+    test('lostDocumentGraceFrames holds last state across detector misses', () {
       const config = SupyDocumentGuidanceConfiguration(
         readyStableFrames: 1,
         lostDocumentGraceFrames: 2,
@@ -228,8 +227,7 @@ void main() {
       expect(frame.state, SupyDocumentFrameState.edgeClipped);
     });
 
-    test('clipsEdge with edgeClipBlocking=false falls through to tooClose',
-        () {
+    test('clipsEdge with edgeClipBlocking=false falls through to tooClose', () {
       final sm = SupyDocumentStateMachine();
       final frame = sm.tick(_goodFrame(clipsEdge: true));
       expect(frame.state, SupyDocumentFrameState.tooClose);
@@ -272,9 +270,7 @@ void main() {
           edgeClipBlocking: true,
         ),
       );
-      final frame = sm.tick(
-        _goodFrame(clipsEdge: true, coverageRatio: 0.95),
-      );
+      final frame = sm.tick(_goodFrame(clipsEdge: true, coverageRatio: 0.95));
       expect(frame.state, SupyDocumentFrameState.edgeClipped);
     });
 
@@ -284,8 +280,7 @@ void main() {
           smoothingAlpha: 1.0,
         ),
       );
-      final frame =
-          sm.tick(_goodFrame(blurScore: 10, cornerVelocity: 0.10));
+      final frame = sm.tick(_goodFrame(blurScore: 10, cornerVelocity: 0.10));
       expect(frame.state, SupyDocumentFrameState.blurry);
     });
 
@@ -323,9 +318,7 @@ void main() {
         minDwellFrames: 0,
       );
       final sm = SupyDocumentStateMachine(configuration: config);
-      sm.tick(
-        _goodFrame(perCornerStability: const [0.95, 0.95, 0.10, 0.95]),
-      );
+      sm.tick(_goodFrame(perCornerStability: const [0.95, 0.95, 0.10, 0.95]));
       expect(sm.state, SupyDocumentFrameState.occluded);
       final held = sm.tick(
         _goodFrame(perCornerStability: const [0.95, 0.95, 0.52, 0.95]),
@@ -333,20 +326,22 @@ void main() {
       expect(held.state, SupyDocumentFrameState.occluded);
     });
 
-    test('handShake holds at a velocity that still trips the entry ceiling',
-        () {
-      // entry: 0.020. Velocity 0.021 still trips entry, so the Dart FSM keeps
-      // handShake latched (no exit-margin un-latch on this path — CXD-IG3).
-      const config = SupyDocumentGuidanceConfiguration(
-        smoothingAlpha: 1.0,
-        minDwellFrames: 0,
-      );
-      final sm = SupyDocumentStateMachine(configuration: config);
-      sm.tick(_goodFrame(cornerVelocity: 0.10));
-      expect(sm.state, SupyDocumentFrameState.handShake);
-      final held = sm.tick(_goodFrame(cornerVelocity: 0.021));
-      expect(held.state, SupyDocumentFrameState.handShake);
-    });
+    test(
+      'handShake holds at a velocity that still trips the entry ceiling',
+      () {
+        // entry: 0.020. Velocity 0.021 still trips entry, so the Dart FSM keeps
+        // handShake latched (no exit-margin un-latch on this path — CXD-IG3).
+        const config = SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+          minDwellFrames: 0,
+        );
+        final sm = SupyDocumentStateMachine(configuration: config);
+        sm.tick(_goodFrame(cornerVelocity: 0.10));
+        expect(sm.state, SupyDocumentFrameState.handShake);
+        final held = sm.tick(_goodFrame(cornerVelocity: 0.021));
+        expect(held.state, SupyDocumentFrameState.handShake);
+      },
+    );
 
     test('framesAtState counts consecutive ticks at the same state', () {
       final sm = SupyDocumentStateMachine();
@@ -387,17 +382,19 @@ void main() {
       expect(frame.state, SupyDocumentFrameState.ready);
     });
 
-    test('off-center detection disabled when centerGuidanceEnabled is false',
-        () {
-      const config = SupyDocumentGuidanceConfiguration(
-        smoothingAlpha: 1.0,
-        readyStableFrames: 1,
-        centerGuidanceEnabled: false,
-      );
-      final sm = SupyDocumentStateMachine(configuration: config);
-      final frame = sm.tick(_goodFrame(centerOffsetX: 0.5));
-      expect(frame.state, SupyDocumentFrameState.ready);
-    });
+    test(
+      'off-center detection disabled when centerGuidanceEnabled is false',
+      () {
+        const config = SupyDocumentGuidanceConfiguration(
+          smoothingAlpha: 1.0,
+          readyStableFrames: 1,
+          centerGuidanceEnabled: false,
+        );
+        final sm = SupyDocumentStateMachine(configuration: config);
+        final frame = sm.tick(_goodFrame(centerOffsetX: 0.5));
+        expect(frame.state, SupyDocumentFrameState.ready);
+      },
+    );
 
     test('offCenter uses relaxed exit ceiling (quick-clear family)', () {
       // Mirrors the C++ OffCenterUsesRelaxedExitCeiling gtest: once in
@@ -429,10 +426,7 @@ void main() {
 
     test('colorFor flips palette on ready', () {
       const config = SupyDocumentGuidanceConfiguration();
-      expect(
-        config.colorFor(SupyDocumentFrameState.ready),
-        config.readyColor,
-      );
+      expect(config.colorFor(SupyDocumentFrameState.ready), config.readyColor);
       expect(
         config.colorFor(SupyDocumentFrameState.tooFar),
         config.notReadyColor,

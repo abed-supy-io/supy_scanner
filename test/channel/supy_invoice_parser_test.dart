@@ -38,10 +38,7 @@ void main() {
             'amount': 3.5,
             'quantity': 1,
           },
-          <Object?, Object?>{
-            'description': 'Croissant',
-            'amount': 2.75,
-          },
+          <Object?, Object?>{'description': 'Croissant', 'amount': 2.75},
         ],
         'rawText': 'ACME COFFEE\nTotal 12.50',
       };
@@ -77,26 +74,28 @@ void main() {
     expect(result.rawText, 'just some text');
   });
 
-  test('unimplemented PlatformException becomes typed unsupported error',
-      () async {
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      throw PlatformException(
-        code: 'unimplemented',
-        message: 'parseInvoice is iOS-only in v1.2 (Phase IXP)',
-      );
-    });
+  test(
+    'unimplemented PlatformException becomes typed unsupported error',
+    () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        throw PlatformException(
+          code: 'unimplemented',
+          message: 'parseInvoice is iOS-only in v1.2 (Phase IXP)',
+        );
+      });
 
-    await expectLater(
-      parser.parse('/tmp/page.jpg'),
-      throwsA(
-        isA<SupyInvoiceParserUnsupportedError>().having(
-          (e) => e.message,
-          'message',
-          contains('iOS-only'),
+      await expectLater(
+        parser.parse('/tmp/page.jpg'),
+        throwsA(
+          isA<SupyInvoiceParserUnsupportedError>().having(
+            (e) => e.message,
+            'message',
+            contains('iOS-only'),
+          ),
         ),
-      ),
-    );
-  });
+      );
+    },
+  );
 
   test('other PlatformExceptions propagate', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {

@@ -35,42 +35,42 @@ class SupyScannerPalette {
   /// Dark-themed default — matches Scanbot RTU UI's out-of-the-box look:
   /// dark scrim over the camera preview, bright accent for actionable controls.
   const SupyScannerPalette.scanbotDark()
-      : primary = const Color(0xFF1AC0E5),
-        primaryDisabled = const Color(0xFF1AC0E5),
-        onPrimary = const Color(0xFFFFFFFF),
-        secondary = const Color(0xFFFFCE5C),
-        secondaryDisabled = const Color(0xFFFFCE5C),
-        onSecondary = const Color(0xFF000000),
-        surface = const Color(0xFF1C1B1F),
-        surfaceLow = const Color(0xCC000000),
-        surfaceHigh = const Color(0xFF2A2A2D),
-        onSurface = const Color(0xFFFFFFFF),
-        onSurfaceVariant = const Color(0xB3FFFFFF),
-        outline = const Color(0x66FFFFFF),
-        negative = const Color(0xFFFF3B30),
-        positive = const Color(0xFF34C759),
-        warning = const Color(0xFFFF4D4D),
-        modalOverlay = const Color(0x99000000);
+    : primary = const Color(0xFF1AC0E5),
+      primaryDisabled = const Color(0xFF1AC0E5),
+      onPrimary = const Color(0xFFFFFFFF),
+      secondary = const Color(0xFFFFCE5C),
+      secondaryDisabled = const Color(0xFFFFCE5C),
+      onSecondary = const Color(0xFF000000),
+      surface = const Color(0xFF1C1B1F),
+      surfaceLow = const Color(0xCC000000),
+      surfaceHigh = const Color(0xFF2A2A2D),
+      onSurface = const Color(0xFFFFFFFF),
+      onSurfaceVariant = const Color(0xB3FFFFFF),
+      outline = const Color(0x66FFFFFF),
+      negative = const Color(0xFFFF3B30),
+      positive = const Color(0xFF34C759),
+      warning = const Color(0xFFFF4D4D),
+      modalOverlay = const Color(0x99000000);
 
   /// Light-themed default — for hosts that want a brighter chrome over the
   /// camera preview (still uses a translucent scrim for legibility).
   const SupyScannerPalette.scanbotLight()
-      : primary = const Color(0xFF0073E6),
-        primaryDisabled = const Color(0x800073E6),
-        onPrimary = const Color(0xFFFFFFFF),
-        secondary = const Color(0xFFFFB000),
-        secondaryDisabled = const Color(0x80FFB000),
-        onSecondary = const Color(0xFF000000),
-        surface = const Color(0xFFFFFFFF),
-        surfaceLow = const Color(0xCCFFFFFF),
-        surfaceHigh = const Color(0xFFF2F2F7),
-        onSurface = const Color(0xFF1C1B1F),
-        onSurfaceVariant = const Color(0xB31C1B1F),
-        outline = const Color(0x661C1B1F),
-        negative = const Color(0xFFD32F2F),
-        positive = const Color(0xFF2E7D32),
-        warning = const Color(0xFFED6C02),
-        modalOverlay = const Color(0x66000000);
+    : primary = const Color(0xFF0073E6),
+      primaryDisabled = const Color(0x800073E6),
+      onPrimary = const Color(0xFFFFFFFF),
+      secondary = const Color(0xFFFFB000),
+      secondaryDisabled = const Color(0x80FFB000),
+      onSecondary = const Color(0xFF000000),
+      surface = const Color(0xFFFFFFFF),
+      surfaceLow = const Color(0xCCFFFFFF),
+      surfaceHigh = const Color(0xFFF2F2F7),
+      onSurface = const Color(0xFF1C1B1F),
+      onSurfaceVariant = const Color(0xB31C1B1F),
+      outline = const Color(0x661C1B1F),
+      negative = const Color(0xFFD32F2F),
+      positive = const Color(0xFF2E7D32),
+      warning = const Color(0xFFED6C02),
+      modalOverlay = const Color(0x66000000);
 
   /// Accent for primary actions (top-bar cancel, submit, AR-overlay highlight).
   final Color primary;
@@ -141,25 +141,24 @@ class SupyScannerPalette {
     Color? positive,
     Color? warning,
     Color? modalOverlay,
-  }) =>
-      SupyScannerPalette(
-        primary: primary ?? this.primary,
-        primaryDisabled: primaryDisabled ?? this.primaryDisabled,
-        onPrimary: onPrimary ?? this.onPrimary,
-        secondary: secondary ?? this.secondary,
-        secondaryDisabled: secondaryDisabled ?? this.secondaryDisabled,
-        onSecondary: onSecondary ?? this.onSecondary,
-        surface: surface ?? this.surface,
-        surfaceLow: surfaceLow ?? this.surfaceLow,
-        surfaceHigh: surfaceHigh ?? this.surfaceHigh,
-        onSurface: onSurface ?? this.onSurface,
-        onSurfaceVariant: onSurfaceVariant ?? this.onSurfaceVariant,
-        outline: outline ?? this.outline,
-        negative: negative ?? this.negative,
-        positive: positive ?? this.positive,
-        warning: warning ?? this.warning,
-        modalOverlay: modalOverlay ?? this.modalOverlay,
-      );
+  }) => SupyScannerPalette(
+    primary: primary ?? this.primary,
+    primaryDisabled: primaryDisabled ?? this.primaryDisabled,
+    onPrimary: onPrimary ?? this.onPrimary,
+    secondary: secondary ?? this.secondary,
+    secondaryDisabled: secondaryDisabled ?? this.secondaryDisabled,
+    onSecondary: onSecondary ?? this.onSecondary,
+    surface: surface ?? this.surface,
+    surfaceLow: surfaceLow ?? this.surfaceLow,
+    surfaceHigh: surfaceHigh ?? this.surfaceHigh,
+    onSurface: onSurface ?? this.onSurface,
+    onSurfaceVariant: onSurfaceVariant ?? this.onSurfaceVariant,
+    outline: outline ?? this.outline,
+    negative: negative ?? this.negative,
+    positive: positive ?? this.positive,
+    warning: warning ?? this.warning,
+    modalOverlay: modalOverlay ?? this.modalOverlay,
+  );
 
   @override
   bool operator ==(Object other) =>
@@ -184,24 +183,25 @@ class SupyScannerPalette {
 
   @override
   int get hashCode => Object.hashAll(<Object>[
-        primary,
-        primaryDisabled,
-        onPrimary,
-        secondary,
-        secondaryDisabled,
-        onSecondary,
-        surface,
-        surfaceLow,
-        surfaceHigh,
-        onSurface,
-        onSurfaceVariant,
-        outline,
-        negative,
-        positive,
-        warning,
-        modalOverlay,
-      ]);
+    primary,
+    primaryDisabled,
+    onPrimary,
+    secondary,
+    secondaryDisabled,
+    onSecondary,
+    surface,
+    surfaceLow,
+    surfaceHigh,
+    onSurface,
+    onSurfaceVariant,
+    outline,
+    negative,
+    positive,
+    warning,
+    modalOverlay,
+  ]);
 
   @override
-  String toString() => 'SupyScannerPalette(primary: $primary, surface: $surface)';
+  String toString() =>
+      'SupyScannerPalette(primary: $primary, surface: $surface)';
 }

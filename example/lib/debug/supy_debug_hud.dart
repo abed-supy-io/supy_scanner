@@ -54,10 +54,7 @@ class _SupyDebugHudState extends State<SupyDebugHud>
   void initState() {
     super.initState();
     _visible = widget.initialVisible;
-    _sink = _HudSink(
-      delegate: SupyLog.sink,
-      maxRecords: widget.maxRecords,
-    );
+    _sink = _HudSink(delegate: SupyLog.sink, maxRecords: widget.maxRecords);
     _previousSink = SupyLog.installSink(_sink);
   }
 
@@ -159,14 +156,20 @@ class _HudPanel extends StatelessWidget {
                   const _TierOverridePicker(),
                   IconButton(
                     tooltip: 'Clear',
-                    icon: const Icon(Icons.cleaning_services,
-                        color: Colors.white70, size: 18),
+                    icon: const Icon(
+                      Icons.cleaning_services,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
                     onPressed: onClear,
                   ),
                   IconButton(
                     tooltip: 'Close',
-                    icon: const Icon(Icons.close,
-                        color: Colors.white70, size: 18),
+                    icon: const Icon(
+                      Icons.close,
+                      color: Colors.white70,
+                      size: 18,
+                    ),
                     onPressed: onClose,
                   ),
                 ],
@@ -285,12 +288,16 @@ class _TierOverridePickerState extends State<_TierOverridePicker> {
         if (!mounted) return;
         setState(() => _selected = tier);
       },
-      itemBuilder: (_) => const <PopupMenuEntry<SupyDeviceTier?>>[
-        PopupMenuItem(value: null, child: Text('Auto (clear override)')),
-        PopupMenuItem(value: SupyDeviceTier.high, child: Text('Force HIGH')),
-        PopupMenuItem(value: SupyDeviceTier.mid, child: Text('Force MID')),
-        PopupMenuItem(value: SupyDeviceTier.low, child: Text('Force LOW')),
-      ],
+      itemBuilder:
+          (_) => const <PopupMenuEntry<SupyDeviceTier?>>[
+            PopupMenuItem(value: null, child: Text('Auto (clear override)')),
+            PopupMenuItem(
+              value: SupyDeviceTier.high,
+              child: Text('Force HIGH'),
+            ),
+            PopupMenuItem(value: SupyDeviceTier.mid, child: Text('Force MID')),
+            PopupMenuItem(value: SupyDeviceTier.low, child: Text('Force LOW')),
+          ],
       child: Padding(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
         child: Text(

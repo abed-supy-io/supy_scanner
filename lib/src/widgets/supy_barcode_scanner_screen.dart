@@ -228,10 +228,7 @@ class _SupyBarcodeScannerScreenState extends State<SupyBarcodeScannerScreen> {
           ),
           Positioned.fill(
             child: IgnorePointer(
-              child: SupyArOverlay(
-                barcodes: _latest,
-                config: widget.arOverlay,
-              ),
+              child: SupyArOverlay(barcodes: _latest, config: widget.arOverlay),
             ),
           ),
           Positioned(

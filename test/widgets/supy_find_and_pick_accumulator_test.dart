@@ -2,14 +2,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supy_scanner/supy_scanner.dart';
 
 void main() {
-  const cola = SupyBarcode(
-    rawValue: '111',
-    format: SupyBarcodeFormat.ean13,
-  );
-  const chips = SupyBarcode(
-    rawValue: '222',
-    format: SupyBarcodeFormat.ean13,
-  );
+  const cola = SupyBarcode(rawValue: '111', format: SupyBarcodeFormat.ean13);
+  const chips = SupyBarcode(rawValue: '222', format: SupyBarcodeFormat.ean13);
   const stranger = SupyBarcode(
     rawValue: '999',
     format: SupyBarcodeFormat.ean13,

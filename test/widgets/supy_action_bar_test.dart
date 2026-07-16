@@ -34,10 +34,7 @@ void main() {
   testWidgets('default config renders all four buttons', (tester) async {
     final controller = SupyBarcodeScannerController();
     await tester.pumpWidget(
-      host(
-        config: const SupyActionBarConfiguration(),
-        controller: controller,
-      ),
+      host(config: const SupyActionBarConfiguration(), controller: controller),
     );
     expect(find.byIcon(Icons.flash_off), findsOneWidget);
     expect(find.byIcon(Icons.zoom_in), findsOneWidget);
@@ -45,8 +42,9 @@ void main() {
     expect(find.byIcon(Icons.center_focus_strong), findsOneWidget);
   });
 
-  testWidgets('hidden per-button specs omit individual buttons',
-      (tester) async {
+  testWidgets('hidden per-button specs omit individual buttons', (
+    tester,
+  ) async {
     final controller = SupyBarcodeScannerController();
     await tester.pumpWidget(
       host(
@@ -64,8 +62,9 @@ void main() {
     expect(find.byIcon(Icons.center_focus_strong), findsOneWidget);
   });
 
-  testWidgets('renders nothing when every button is individually hidden',
-      (tester) async {
+  testWidgets('renders nothing when every button is individually hidden', (
+    tester,
+  ) async {
     final controller = SupyBarcodeScannerController();
     await tester.pumpWidget(
       host(
@@ -81,8 +80,9 @@ void main() {
     expect(find.byType(Row), findsNothing);
   });
 
-  testWidgets('inactive flash button uses the inactive background color',
-      (tester) async {
+  testWidgets('inactive flash button uses the inactive background color', (
+    tester,
+  ) async {
     final controller = SupyBarcodeScannerController();
     await tester.pumpWidget(
       host(
@@ -113,16 +113,17 @@ void main() {
     expect(icon.color, const Color(0xFF222222));
   });
 
-  testWidgets('flash tap invokes setTorch on the controller channel',
-      (tester) async {
+  testWidgets('flash tap invokes setTorch on the controller channel', (
+    tester,
+  ) async {
     final controller = SupyBarcodeScannerController();
     const channel = MethodChannel('test/action_bar_flash');
     final calls = <MethodCall>[];
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      calls.add(call);
-      return null;
-    });
+          calls.add(call);
+          return null;
+        });
     controller.attach(channel);
     addTearDown(() {
       controller.detach();
@@ -147,17 +148,18 @@ void main() {
     expect(calls.single.arguments, <String, Object?>{'on': true});
   });
 
-  testWidgets('zoom button rerenders icon after controller notifies',
-      (tester) async {
+  testWidgets('zoom button rerenders icon after controller notifies', (
+    tester,
+  ) async {
     final controller = SupyBarcodeScannerController();
     const channel = MethodChannel('test/action_bar_zoom');
     TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
         .setMockMethodCallHandler(channel, (call) async {
-      if (call.method == 'setZoom') {
-        return <String, Object?>{'zoom': 2.0};
-      }
-      return null;
-    });
+          if (call.method == 'setZoom') {
+            return <String, Object?>{'zoom': 2.0};
+          }
+          return null;
+        });
     controller.attach(channel);
     addTearDown(() {
       controller.detach();

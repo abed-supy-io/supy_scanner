@@ -11,13 +11,15 @@ void main() {
   // supy_document_scanner_view.dart so it's testable without a platform view.
   testWidgets('countdown ring sweeps over autoCaptureDelay', (tester) async {
     final completer = Completer<void>();
-    await tester.pumpWidget(MaterialApp(
-      home: SupyDocumentCountdownRing(
-        duration: const Duration(milliseconds: 300),
-        color: const Color(0xFF1AC0E5),
-        onComplete: completer.complete,
+    await tester.pumpWidget(
+      MaterialApp(
+        home: SupyDocumentCountdownRing(
+          duration: const Duration(milliseconds: 300),
+          color: const Color(0xFF1AC0E5),
+          onComplete: completer.complete,
+        ),
       ),
-    ),);
+    );
     await tester.pump(const Duration(milliseconds: 150));
     // Mid-sweep — visible.
     expect(find.byType(SupyDocumentCountdownRing), findsOneWidget);

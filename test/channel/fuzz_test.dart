@@ -51,7 +51,8 @@ void main() {
         final pageCount = rand.nextInt(5); // 0..4
         final pages = List.generate(pageCount, (_) => _PageSpec.random(rand));
         final ocrText = _randomString(rand, rand.nextInt(64));
-        final pdfUri = rand.nextBool() ? 'file:///${_randomString(rand, 8)}.pdf' : null;
+        final pdfUri =
+            rand.nextBool() ? 'file:///${_randomString(rand, 8)}.pdf' : null;
         final map = <Object?, Object?>{
           'pages': pages.map((p) => p.toMap()).toList(),
           'ocrText': ocrText,
@@ -87,7 +88,10 @@ void main() {
       final rand = Random(_kSeed ^ 0x3);
       for (var i = 0; i < _kHappyBatchIterations; i++) {
         final itemCount = rand.nextInt(10); // 0..9
-        final specs = List.generate(itemCount, (_) => _BarcodeSpec.random(rand));
+        final specs = List.generate(
+          itemCount,
+          (_) => _BarcodeSpec.random(rand),
+        );
         final duplicates = rand.nextInt(1000);
         final map = <Object?, Object?>{
           'items': specs.map((s) => s.toMap()).toList(),
@@ -162,10 +166,17 @@ void main() {
         'format_unsupported',
       };
       for (var i = 0; i < _kErrorCodeIterations; i++) {
-        final wire = rand.nextInt(10) == 0 ? null : _randomString(rand, rand.nextInt(24));
+        final wire =
+            rand.nextInt(10) == 0
+                ? null
+                : _randomString(rand, rand.nextInt(24));
         final code = SupyScanErrorCode.fromWire(wire);
         if (wire != null && known.contains(wire)) {
-          expect(code, isNot(SupyScanErrorCode.unknown), reason: 'iter $i wire=$wire');
+          expect(
+            code,
+            isNot(SupyScanErrorCode.unknown),
+            reason: 'iter $i wire=$wire',
+          );
         } else {
           expect(code, SupyScanErrorCode.unknown, reason: 'iter $i wire=$wire');
         }
@@ -175,8 +186,8 @@ void main() {
 
   group('fuzz — channel round-trip', () {
     const channel = MethodChannel('io.supy.scanner/v1');
-    final messenger = TestDefaultBinaryMessengerBinding
-        .instance.defaultBinaryMessenger;
+    final messenger =
+        TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
     final channelUnderTest = SupyScannerChannel.test(channel);
 
     tearDown(() {
@@ -193,28 +204,31 @@ void main() {
           'ocrText': _randomString(rand, rand.nextInt(20)),
         };
         messenger.setMockMethodCallHandler(channel, (_) async => payload);
-        final result =
-            await channelUnderTest.scanDocument(const SupyDocumentScanOptions());
+        final result = await channelUnderTest.scanDocument(
+          const SupyDocumentScanOptions(),
+        );
         expect(result, isNotNull, reason: 'iter $i');
         expect(result!.pages, hasLength(pageCount), reason: 'iter $i');
       }
     });
 
-    test('PlatformException with random codes always becomes SupyScanError',
-        () async {
-      final rand = Random(_kSeed ^ 0x31);
-      for (var i = 0; i < 100; i++) {
-        final code = _randomString(rand, rand.nextInt(16));
-        messenger.setMockMethodCallHandler(channel, (_) async {
-          throw PlatformException(code: code, message: 'fuzz');
-        });
-        await expectLater(
-          channelUnderTest.scanDocument(const SupyDocumentScanOptions()),
-          throwsA(isA<SupyScanError>()),
-          reason: 'iter $i code=$code',
-        );
-      }
-    });
+    test(
+      'PlatformException with random codes always becomes SupyScanError',
+      () async {
+        final rand = Random(_kSeed ^ 0x31);
+        for (var i = 0; i < 100; i++) {
+          final code = _randomString(rand, rand.nextInt(16));
+          messenger.setMockMethodCallHandler(channel, (_) async {
+            throw PlatformException(code: code, message: 'fuzz');
+          });
+          await expectLater(
+            channelUnderTest.scanDocument(const SupyDocumentScanOptions()),
+            throwsA(isA<SupyScanError>()),
+            reason: 'iter $i code=$code',
+          );
+        }
+      },
+    );
   });
 }
 
@@ -232,10 +246,13 @@ class _PageSpec {
   });
 
   factory _PageSpec.random(Random rand) {
-    final qualityIndex = rand.nextInt(SupyDocumentPageQuality.values.length + 1);
-    final quality = qualityIndex == SupyDocumentPageQuality.values.length
-        ? null
-        : SupyDocumentPageQuality.values[qualityIndex];
+    final qualityIndex = rand.nextInt(
+      SupyDocumentPageQuality.values.length + 1,
+    );
+    final quality =
+        qualityIndex == SupyDocumentPageQuality.values.length
+            ? null
+            : SupyDocumentPageQuality.values[qualityIndex];
     return _PageSpec(
       uri: 'file:///${_randomString(rand, 1 + rand.nextInt(12))}.jpg',
       width: 1 + rand.nextInt(8192),
@@ -252,12 +269,12 @@ class _PageSpec {
   final double? qualityScore;
 
   Map<Object?, Object?> toMap() => <Object?, Object?>{
-        'uri': uri,
-        'width': width,
-        'height': height,
-        if (quality != null) 'quality': quality!.name,
-        if (qualityScore != null) 'qualityScore': qualityScore,
-      };
+    'uri': uri,
+    'width': width,
+    'height': height,
+    if (quality != null) 'quality': quality!.name,
+    if (qualityScore != null) 'qualityScore': qualityScore,
+  };
 }
 
 class _BarcodeSpec {
@@ -272,7 +289,8 @@ class _BarcodeSpec {
   });
 
   factory _BarcodeSpec.random(Random rand) {
-    final format = SupyBarcodeFormat.values[rand.nextInt(SupyBarcodeFormat.values.length)];
+    final format =
+        SupyBarcodeFormat.values[rand.nextInt(SupyBarcodeFormat.values.length)];
     final hasBox = rand.nextBool();
     return _BarcodeSpec(
       rawValue: _randomString(rand, 1 + rand.nextInt(40)),
@@ -294,16 +312,16 @@ class _BarcodeSpec {
   final double boxHeight;
 
   Map<Object?, Object?> toMap() => <Object?, Object?>{
-        'rawValue': rawValue,
-        'format': format.wireName,
-        if (hasBox)
-          'boundingBox': <Object?, Object?>{
-            'left': boxLeft,
-            'top': boxTop,
-            'width': boxWidth,
-            'height': boxHeight,
-          },
-      };
+    'rawValue': rawValue,
+    'format': format.wireName,
+    if (hasBox)
+      'boundingBox': <Object?, Object?>{
+        'left': boxLeft,
+        'top': boxTop,
+        'width': boxWidth,
+        'height': boxHeight,
+      },
+  };
 }
 
 // -----------------------------------------------------------------------------

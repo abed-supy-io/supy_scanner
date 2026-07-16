@@ -1,5 +1,3 @@
-import 'dart:ui' show Offset;
-
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supy_scanner/src/document/supy_document_metrics_smoother.dart';
 import 'package:supy_scanner/supy_scanner.dart';
@@ -13,7 +11,8 @@ SupyDocumentFrameMetrics _doc({
   List<Offset>? quad,
 }) {
   return SupyDocumentFrameMetrics(
-    quad: quad ??
+    quad:
+        quad ??
         const [
           Offset(0.1, 0.1),
           Offset(0.9, 0.1),
@@ -28,14 +27,7 @@ SupyDocumentFrameMetrics _doc({
   );
 }
 
-const _empty = SupyDocumentFrameMetrics(
-  quad: <Offset>[],
-  coverageRatio: 0.0,
-  tiltDegrees: 0.0,
-  meanLuma: 0.0,
-  blurScore: 0.0,
-  clipsEdge: false,
-);
+const _empty = SupyDocumentFrameMetrics();
 
 void main() {
   group('SupyDocumentMetricsSmoother — construction', () {
@@ -63,7 +55,7 @@ void main() {
 
   group('SupyDocumentMetricsSmoother — first frame', () {
     test('first frame passes through unchanged', () {
-      final s = SupyDocumentMetricsSmoother(alpha: 0.35);
+      final s = SupyDocumentMetricsSmoother();
       final raw = _doc(coverage: 0.7, tilt: 8.0, luma: 140.0, blur: 250.0);
       final out = s.add(raw);
 
@@ -79,7 +71,7 @@ void main() {
 
   group('SupyDocumentMetricsSmoother — EMA behavior', () {
     test('converges toward a constant input', () {
-      final s = SupyDocumentMetricsSmoother(alpha: 0.35);
+      final s = SupyDocumentMetricsSmoother();
       // Seed with one frame, then push 50 frames at a different value.
       s.add(_doc(coverage: 0.2));
       for (var i = 0; i < 50; i++) {
@@ -135,10 +127,7 @@ void main() {
     test('smoothed quad is immutable', () {
       final s = SupyDocumentMetricsSmoother();
       final out = s.add(_doc());
-      expect(
-        () => out.quad.add(const Offset(0, 0)),
-        throwsUnsupportedError,
-      );
+      expect(() => out.quad.add(const Offset(0, 0)), throwsUnsupportedError);
     });
   });
 
@@ -159,7 +148,7 @@ void main() {
 
     test('clipsEdge reflects the latest present sample (not smoothed)', () {
       final s = SupyDocumentMetricsSmoother();
-      s.add(_doc(clipsEdge: false));
+      s.add(_doc());
       expect(s.current.clipsEdge, isFalse);
       s.add(_doc(clipsEdge: true));
       expect(s.current.clipsEdge, isTrue);

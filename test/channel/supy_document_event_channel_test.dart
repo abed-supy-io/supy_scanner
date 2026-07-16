@@ -46,21 +46,23 @@ void main() {
       expect(m.clipsEdge, isFalse);
     });
 
-    test('frame_metrics with malformed quad (wrong length) yields empty quad',
-        () {
-      final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
-        'type': 'frame_metrics',
-        'quad': <Map<Object?, Object?>>[
-          <Object?, Object?>{'x': 0.1, 'y': 0.1},
-          <Object?, Object?>{'x': 0.9, 'y': 0.1},
-          <Object?, Object?>{'x': 0.9, 'y': 0.9},
-        ],
-      });
+    test(
+      'frame_metrics with malformed quad (wrong length) yields empty quad',
+      () {
+        final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
+          'type': 'frame_metrics',
+          'quad': <Map<Object?, Object?>>[
+            <Object?, Object?>{'x': 0.1, 'y': 0.1},
+            <Object?, Object?>{'x': 0.9, 'y': 0.1},
+            <Object?, Object?>{'x': 0.9, 'y': 0.9},
+          ],
+        });
 
-      final m = (event as SupyDocumentFrameMetricsEvent).metrics;
-      expect(m.quad, isEmpty);
-      expect(m.hasDocument, isFalse);
-    });
+        final m = (event as SupyDocumentFrameMetricsEvent).metrics;
+        expect(m.quad, isEmpty);
+        expect(m.hasDocument, isFalse);
+      },
+    );
 
     test('frame_metrics drops quad points with missing x or y', () {
       final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
@@ -141,10 +143,7 @@ void main() {
       });
 
       expect(event, isA<SupyDocumentPreviewStartedEvent>());
-      expect(
-        (event as SupyDocumentPreviewStartedEvent).flashAvailable,
-        isTrue,
-      );
+      expect((event as SupyDocumentPreviewStartedEvent).flashAvailable, isTrue);
     });
 
     test('preview_started with missing flashAvailable defaults to false', () {
@@ -152,7 +151,10 @@ void main() {
         'type': 'preview_started',
       });
 
-      expect((event as SupyDocumentPreviewStartedEvent).flashAvailable, isFalse);
+      expect(
+        (event as SupyDocumentPreviewStartedEvent).flashAvailable,
+        isFalse,
+      );
     });
 
     test('decodes error with mapped code', () {
@@ -203,8 +205,9 @@ void main() {
     });
 
     test('missing type entirely yields error event', () {
-      final event =
-          SupyDocumentEvent.fromMap(const <Object?, Object?>{'foo': 'bar'});
+      final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
+        'foo': 'bar',
+      });
       expect(event, isA<SupyDocumentErrorEvent>());
       expect(
         (event as SupyDocumentErrorEvent).error.code,

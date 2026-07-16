@@ -6,8 +6,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const channel = MethodChannel('io.supy.scanner/v1');
-  final messenger = TestDefaultBinaryMessengerBinding
-      .instance.defaultBinaryMessenger;
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
   final channelUnderTest = SupyScannerChannel.test(channel);
 
   tearDown(() {
@@ -30,8 +30,9 @@ void main() {
       };
     });
 
-    final result =
-        await channelUnderTest.scanDocument(const SupyDocumentScanOptions());
+    final result = await channelUnderTest.scanDocument(
+      const SupyDocumentScanOptions(),
+    );
     expect(result, isNotNull);
     expect(result!.pages, hasLength(1));
     expect(result.ocrText, 'invoice total 42');
@@ -39,8 +40,9 @@ void main() {
 
   test('scanDocument returns null when native returns null', () async {
     messenger.setMockMethodCallHandler(channel, (call) async => null);
-    final result =
-        await channelUnderTest.scanDocument(const SupyDocumentScanOptions());
+    final result = await channelUnderTest.scanDocument(
+      const SupyDocumentScanOptions(),
+    );
     expect(result, isNull);
   });
 
@@ -73,10 +75,7 @@ void main() {
   test('nativeCoreProbe decodes version + abiVersion', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {
       expect(call.method, 'nativeCoreProbe');
-      return <String, Object?>{
-        'version': '1.1.0-dev.1',
-        'abiVersion': 1,
-      };
+      return <String, Object?>{'version': '1.1.0-dev.1', 'abiVersion': 1};
     });
     final probe = await channelUnderTest.nativeCoreProbe();
     expect(probe.version, '1.1.0-dev.1');
@@ -96,45 +95,48 @@ void main() {
     expect(probe.gmsDocumentScannerAvailable, isTrue);
   });
 
-  test('scanDocument forwards preferredBackend and decodes resolvedBackend',
-      () async {
-    messenger.setMockMethodCallHandler(channel, (call) async {
-      expect(call.method, 'scanDocument');
-      final args = call.arguments as Map<Object?, Object?>;
-      expect(args['preferredBackend'], 'cameraX');
-      return <Object?, Object?>{
-        'pages': <Object?>[],
-        'ocrText': '',
-        'resolvedBackend': 'cameraX',
-      };
-    });
+  test(
+    'scanDocument forwards preferredBackend and decodes resolvedBackend',
+    () async {
+      messenger.setMockMethodCallHandler(channel, (call) async {
+        expect(call.method, 'scanDocument');
+        final args = call.arguments as Map<Object?, Object?>;
+        expect(args['preferredBackend'], 'cameraX');
+        return <Object?, Object?>{
+          'pages': <Object?>[],
+          'ocrText': '',
+          'resolvedBackend': 'cameraX',
+        };
+      });
 
-    final result = await channelUnderTest.scanDocument(
-      const SupyDocumentScanOptions(
-        preferredBackend: SupyDocumentScannerBackend.cameraX,
-      ),
-    );
-    expect(result, isNotNull);
-    expect(result!.resolvedBackend, SupyDocumentScannerBackend.cameraX);
-  });
+      final result = await channelUnderTest.scanDocument(
+        const SupyDocumentScanOptions(
+          preferredBackend: SupyDocumentScannerBackend.cameraX,
+        ),
+      );
+      expect(result, isNotNull);
+      expect(result!.resolvedBackend, SupyDocumentScannerBackend.cameraX);
+    },
+  );
 
   test('nativeCoreProbe surfaces PlatformException as SupyScanError', () async {
     messenger.setMockMethodCallHandler(channel, (call) async {
-      throw PlatformException(code: 'native_core_unavailable', message: 'no .so');
+      throw PlatformException(
+        code: 'native_core_unavailable',
+        message: 'no .so',
+      );
     });
-    expect(
-      channelUnderTest.nativeCoreProbe(),
-      throwsA(isA<SupyScanError>()),
-    );
+    expect(channelUnderTest.nativeCoreProbe(), throwsA(isA<SupyScanError>()));
   });
 
   test('getDeviceTier decodes high/mid/low/unknown', () async {
-    for (final entry in <String, SupyDeviceTier>{
-      'high': SupyDeviceTier.high,
-      'mid': SupyDeviceTier.mid,
-      'low': SupyDeviceTier.low,
-      'bogus': SupyDeviceTier.unknown,
-    }.entries) {
+    for (final entry
+        in <String, SupyDeviceTier>{
+          'high': SupyDeviceTier.high,
+          'mid': SupyDeviceTier.mid,
+          'low': SupyDeviceTier.low,
+          'bogus': SupyDeviceTier.unknown,
+        }.entries) {
       messenger.setMockMethodCallHandler(channel, (call) async {
         expect(call.method, 'getDeviceTier');
         return <String, Object?>{'tier': entry.key};
@@ -152,21 +154,19 @@ void main() {
     messenger.setMockMethodCallHandler(channel, (call) async {
       throw PlatformException(code: 'unknown', message: 'boom');
     });
-    expect(
-      channelUnderTest.getDeviceTier(),
-      throwsA(isA<SupyScanError>()),
-    );
+    expect(channelUnderTest.getDeviceTier(), throwsA(isA<SupyScanError>()));
   });
 
   test('debugForceTier sends the wire tier in debug mode', () async {
     // The Dart wrapper is gated on `kDebugMode`, which is true under
     // `flutter test`. Each enum value should map to the documented wire form.
-    for (final entry in <SupyDeviceTier, String?>{
-      SupyDeviceTier.high: 'high',
-      SupyDeviceTier.mid: 'mid',
-      SupyDeviceTier.low: 'low',
-      SupyDeviceTier.unknown: null,
-    }.entries) {
+    for (final entry
+        in <SupyDeviceTier, String?>{
+          SupyDeviceTier.high: 'high',
+          SupyDeviceTier.mid: 'mid',
+          SupyDeviceTier.low: 'low',
+          SupyDeviceTier.unknown: null,
+        }.entries) {
       MethodCall? captured;
       messenger.setMockMethodCallHandler(channel, (call) async {
         captured = call;

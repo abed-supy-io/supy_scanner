@@ -6,11 +6,7 @@ import '../models/ui/supy_top_bar_configuration.dart';
 /// from [SupyTopBarConfiguration]. Not exported.
 class SupyTopBar extends StatelessWidget {
   /// Creates a top bar.
-  const SupyTopBar({
-    required this.config,
-    required this.onCancel,
-    super.key,
-  });
+  const SupyTopBar({required this.config, required this.onCancel, super.key});
 
   /// Visual configuration.
   final SupyTopBarConfiguration config;
@@ -23,15 +19,12 @@ class SupyTopBar extends StatelessWidget {
     final decoration = switch (config.mode) {
       SupyTopBarMode.solid => BoxDecoration(color: config.backgroundColor),
       SupyTopBarMode.gradient => BoxDecoration(
-          gradient: LinearGradient(
-            begin: Alignment.topCenter,
-            end: Alignment.bottomCenter,
-            colors: [
-              config.backgroundColor,
-              config.backgroundColor.withAlpha(0),
-            ],
-          ),
+        gradient: LinearGradient(
+          begin: Alignment.topCenter,
+          end: Alignment.bottomCenter,
+          colors: [config.backgroundColor, config.backgroundColor.withAlpha(0)],
         ),
+      ),
     };
     final cancel = config.cancelButton;
     return Container(

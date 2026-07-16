@@ -39,8 +39,7 @@ class SupyActionBar extends StatelessWidget {
               spec: config.flashButton,
               active: controller.torchOn,
               icon: controller.torchOn ? Icons.flash_on : Icons.flash_off,
-              onTap: () =>
-                  controller.setTorch(on: !controller.torchOn),
+              onTap: () => controller.setTorch(on: !controller.torchOn),
             ),
           if (config.zoomButton.visible)
             _ActionButton(
@@ -62,9 +61,10 @@ class SupyActionBar extends StatelessWidget {
               spec: config.closeFocusButton,
               active: controller.minFocusDistanceLock,
               icon: Icons.center_focus_strong,
-              onTap: () => controller.setMinFocusDistanceLock(
-                on: !controller.minFocusDistanceLock,
-              ),
+              onTap:
+                  () => controller.setMinFocusDistanceLock(
+                    on: !controller.minFocusDistanceLock,
+                  ),
             ),
         ];
 
@@ -121,21 +121,19 @@ class _ActionButton extends StatelessWidget {
       child: Container(
         width: 56,
         height: 56,
-        decoration: BoxDecoration(
-          color: bg,
-          shape: BoxShape.circle,
-        ),
+        decoration: BoxDecoration(color: bg, shape: BoxShape.circle),
         alignment: Alignment.center,
-        child: label != null
-            ? Text(
-                label!,
-                style: TextStyle(
-                  color: fg,
-                  fontSize: 14,
-                  fontWeight: FontWeight.w600,
-                ),
-              )
-            : Icon(icon, color: fg, size: 26),
+        child:
+            label != null
+                ? Text(
+                  label!,
+                  style: TextStyle(
+                    color: fg,
+                    fontSize: 14,
+                    fontWeight: FontWeight.w600,
+                  ),
+                )
+                : Icon(icon, color: fg, size: 26),
       ),
     );
   }

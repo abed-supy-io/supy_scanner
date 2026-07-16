@@ -33,18 +33,16 @@ void main() {
     );
   }
 
-  testWidgets('header shows unique count and expands to reveal rows',
-      (tester) async {
+  testWidgets('header shows unique count and expands to reveal rows', (
+    tester,
+  ) async {
     final acc = SupyMultipleScanAccumulator(
       config: const SupyMultipleScanUseCaseConfiguration(),
     );
     acc.offer(ean, now: DateTime.utc(2026));
     acc.offer(qr, now: DateTime.utc(2026));
     await tester.pumpWidget(
-      host(
-        acc: acc,
-        cfg: const SupyMultipleScanUseCaseConfiguration(),
-      ),
+      host(acc: acc, cfg: const SupyMultipleScanUseCaseConfiguration()),
     );
     expect(find.text('Items scanned'), findsOneWidget);
     expect(find.text('2 unique'), findsOneWidget);
@@ -57,8 +55,9 @@ void main() {
     expect(find.text('https://supy.io'), findsOneWidget);
   });
 
-  testWidgets('counting mode header shows scans + unique + xN badges',
-      (tester) async {
+  testWidgets('counting mode header shows scans + unique + xN badges', (
+    tester,
+  ) async {
     final acc = SupyMultipleScanAccumulator(
       config: const SupyMultipleScanUseCaseConfiguration(
         mode: SupyMultipleScanMode.counting,
@@ -82,8 +81,9 @@ void main() {
     expect(find.text('x2'), findsOneWidget);
   });
 
-  testWidgets('submit/clear disabled when empty, enabled when items present',
-      (tester) async {
+  testWidgets('submit/clear disabled when empty, enabled when items present', (
+    tester,
+  ) async {
     final acc = SupyMultipleScanAccumulator(
       config: const SupyMultipleScanUseCaseConfiguration(
         initiallyCollapsed: false,

@@ -25,8 +25,9 @@ void main() {
     );
   }
 
-  testWidgets('renders title, raw value, and format chip by default',
-      (tester) async {
+  testWidgets('renders title, raw value, and format chip by default', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       host(
         config: const SupySingleScanUseCaseConfiguration(),
@@ -67,7 +68,9 @@ void main() {
     expect(retried, 1);
   });
 
-  testWidgets('hides format chip and raw value when configured', (tester) async {
+  testWidgets('hides format chip and raw value when configured', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       host(
         config: const SupySingleScanUseCaseConfiguration(

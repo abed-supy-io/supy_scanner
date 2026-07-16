@@ -15,10 +15,7 @@ void main() {
   // `debugDefaultTargetPlatformOverride` is a foundation debug var — the
   // framework asserts it's unset at the end of each test body, so it must
   // be reset inside the body (before pumpWidget settles), not in tearDown.
-  Future<T> withPlatform<T>(
-    TargetPlatform p,
-    Future<T> Function() body,
-  ) async {
+  Future<T> withPlatform<T>(TargetPlatform p, Future<T> Function() body) async {
     final prior = debugDefaultTargetPlatformOverride;
     debugDefaultTargetPlatformOverride = p;
     try {
@@ -35,15 +32,18 @@ void main() {
     return tester.widget<Stack>(find.byType(Stack).first).children.length;
   }
 
-  testWidgets('default config: stack contains preview + finder', (tester) async {
+  testWidgets('default config: stack contains preview + finder', (
+    tester,
+  ) async {
     await withPlatform(TargetPlatform.linux, () async {
       await tester.pumpWidget(host(const SupyBarcodeScannerView()));
       expect(scannerStackChildren(tester), 2);
     });
   });
 
-  testWidgets('showFinder=false: stack contains only the preview',
-      (tester) async {
+  testWidgets('showFinder=false: stack contains only the preview', (
+    tester,
+  ) async {
     await withPlatform(TargetPlatform.linux, () async {
       await tester.pumpWidget(
         host(const SupyBarcodeScannerView(showFinder: false)),
@@ -73,8 +73,9 @@ void main() {
     });
   });
 
-  testWidgets('footer is positioned at the bottom of the stack',
-      (tester) async {
+  testWidgets('footer is positioned at the bottom of the stack', (
+    tester,
+  ) async {
     await withPlatform(TargetPlatform.linux, () async {
       await tester.pumpWidget(
         host(
@@ -95,27 +96,30 @@ void main() {
     });
   });
 
-  testWidgets('extreme config: header + footer + no finder all stack together',
-      (tester) async {
-    await withPlatform(TargetPlatform.linux, () async {
-      await tester.pumpWidget(
-        host(
-          const SupyBarcodeScannerView(
-            showFinder: false,
-            header: SizedBox(height: 32, child: Text('H')),
-            footer: SizedBox(height: 32, child: Text('F')),
+  testWidgets(
+    'extreme config: header + footer + no finder all stack together',
+    (tester) async {
+      await withPlatform(TargetPlatform.linux, () async {
+        await tester.pumpWidget(
+          host(
+            const SupyBarcodeScannerView(
+              showFinder: false,
+              header: SizedBox(height: 32, child: Text('H')),
+              footer: SizedBox(height: 32, child: Text('F')),
+            ),
           ),
-        ),
-      );
-      expect(find.text('H'), findsOneWidget);
-      expect(find.text('F'), findsOneWidget);
-      // preview + header + footer (no finder)
-      expect(scannerStackChildren(tester), 3);
-    });
-  });
+        );
+        expect(find.text('H'), findsOneWidget);
+        expect(find.text('F'), findsOneWidget);
+        // preview + header + footer (no finder)
+        expect(scannerStackChildren(tester), 3);
+      });
+    },
+  );
 
-  testWidgets('unsupported platforms render the placeholder text',
-      (tester) async {
+  testWidgets('unsupported platforms render the placeholder text', (
+    tester,
+  ) async {
     await withPlatform(TargetPlatform.macOS, () async {
       await tester.pumpWidget(host(const SupyBarcodeScannerView()));
       expect(
@@ -126,8 +130,9 @@ void main() {
     });
   });
 
-  testWidgets('dispose detaches the provided controller without throwing',
-      (tester) async {
+  testWidgets('dispose detaches the provided controller without throwing', (
+    tester,
+  ) async {
     await withPlatform(TargetPlatform.linux, () async {
       final controller = SupyBarcodeScannerController();
       await tester.pumpWidget(

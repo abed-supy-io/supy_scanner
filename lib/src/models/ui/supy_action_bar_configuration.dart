@@ -41,12 +41,12 @@ class SupyActionButtonSpec {
 
   @override
   int get hashCode => Object.hash(
-        visible,
-        backgroundColor,
-        foregroundColor,
-        activeBackgroundColor,
-        activeForegroundColor,
-      );
+    visible,
+    backgroundColor,
+    foregroundColor,
+    activeBackgroundColor,
+    activeForegroundColor,
+  );
 
   @override
   String toString() => 'SupyActionButtonSpec(visible: $visible)';
@@ -65,7 +65,7 @@ class SupyActionBarConfiguration {
     this.flipCameraButton = const SupyActionButtonSpec(),
     this.closeFocusButton = const SupyActionButtonSpec(),
     this.zoomFactor = 2.0,
-  })  : assert(zoomFactor > 0, 'zoomFactor must be > 0');
+  }) : assert(zoomFactor > 0, 'zoomFactor must be > 0');
 
   /// Whether the action bar is rendered at all.
   final bool visible;
@@ -99,15 +99,16 @@ class SupyActionBarConfiguration {
 
   @override
   int get hashCode => Object.hash(
-        visible,
-        flashButton,
-        zoomButton,
-        flipCameraButton,
-        closeFocusButton,
-        zoomFactor,
-      );
+    visible,
+    flashButton,
+    zoomButton,
+    flipCameraButton,
+    closeFocusButton,
+    zoomFactor,
+  );
 
   @override
-  String toString() => 'SupyActionBarConfiguration(visible: $visible, '
+  String toString() =>
+      'SupyActionBarConfiguration(visible: $visible, '
       'zoomFactor: $zoomFactor)';
 }

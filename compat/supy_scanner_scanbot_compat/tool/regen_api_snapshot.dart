@@ -64,7 +64,7 @@ List<String> _extractSymbols(String src) {
   // braces, then scan only the first level inside each class body. This
   // avoids picking up expression-level identifiers (e.g. `Scaffold(...)`
   // inside `build()`) which a naive multiline regex would otherwise grab.
-  int i = 0;
+  var i = 0;
   while (i < stripped.length) {
     final classMatch =
         RegExp(r'(?:abstract\s+)?class\s+(\w+)[^{]*\{').matchAsPrefix(
@@ -100,8 +100,8 @@ List<String> _scanClassBody(String className, String body) {
   // function expressions, collection literals).
   final out = <String>[];
   final buf = StringBuffer();
-  int depth = 0;
-  int parens = 0;
+  var depth = 0;
+  var parens = 0;
   for (var k = 0; k < body.length; k++) {
     final c = body[k];
     // Braces are only block scope when not inside a parameter list — `{` inside
@@ -119,8 +119,11 @@ List<String> _scanClassBody(String className, String body) {
       continue;
     }
     if (depth == 0) {
-      if (c == '(') parens++;
-      else if (c == ')') parens--;
+      if (c == '(') {
+        parens++;
+      } else if (c == ')') {
+        parens--;
+      }
       if (c == ';' && parens == 0) {
         buf.write(c);
         _emitMember(className, buf.toString(), out);
@@ -209,8 +212,9 @@ int _matchingBrace(String s, int openIdx) {
   var depth = 0;
   for (var k = openIdx; k < s.length; k++) {
     final c = s[k];
-    if (c == '{') depth++;
-    else if (c == '}') {
+    if (c == '{') {
+      depth++;
+    } else if (c == '}') {
       depth--;
       if (depth == 0) return k;
     }
@@ -224,7 +228,7 @@ List<String> _dedupe(List<String> xs) {
 }
 
 Directory _pkgRoot() {
-  Directory d = Directory.current;
+  var d = Directory.current;
   for (var i = 0; i < 5; i++) {
     if (File('${d.path}/pubspec.yaml').existsSync() &&
         File('${d.path}/pubspec.yaml')

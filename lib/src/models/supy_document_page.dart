@@ -115,14 +115,14 @@ class SupyDocumentPage {
 
   @override
   int get hashCode => Object.hash(
-        uri,
-        width,
-        height,
-        quality,
-        qualityScore,
-        enhancedStages,
-        enhanceMs,
-      );
+    uri,
+    width,
+    height,
+    quality,
+    qualityScore,
+    enhancedStages,
+    enhanceMs,
+  );
 
   @override
   String toString() =>

@@ -3,7 +3,7 @@ import 'dart:io';
 
 import 'package:test/test.dart';
 
-import '../lib/corpus.dart';
+import 'package:supy_bench/corpus.dart';
 
 void main() {
   late Directory tmp;
@@ -11,8 +11,11 @@ void main() {
   setUp(() => tmp = Directory.systemTemp.createTempSync('corpus_test'));
   tearDown(() => tmp.deleteSync(recursive: true));
 
-  Directory writeScene(String id, Map<String, Object?> json,
-      {bool withFrame = true}) {
+  Directory writeScene(
+    String id,
+    Map<String, Object?> json, {
+    bool withFrame = true,
+  }) {
     final dir = Directory('${tmp.path}/$id')..createSync(recursive: true);
     File('${dir.path}/scene.json').writeAsStringSync(jsonEncode(json));
     if (withFrame) {

@@ -24,8 +24,9 @@ class SupyDocumentData {
       pages: List.unmodifiable(rawPages),
       ocrText: (map['ocrText'] as String?) ?? '',
       pdfUri: map['pdfUri'] as String?,
-      resolvedBackend:
-          SupyDocumentScannerBackend.fromWire(map['resolvedBackend'] as String?),
+      resolvedBackend: SupyDocumentScannerBackend.fromWire(
+        map['resolvedBackend'] as String?,
+      ),
     );
   }
 

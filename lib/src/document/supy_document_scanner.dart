@@ -33,7 +33,8 @@ abstract final class SupyDocumentScanner {
     String? locale,
     SupyDocumentScanIntent intent = SupyDocumentScanIntent.generic,
   }) {
-    final resolvedLocale = locale ??
+    final resolvedLocale =
+        locale ??
         (Localizations.maybeLocaleOf(context)?.languageCode == 'ar'
             ? 'ar'
             : 'en');

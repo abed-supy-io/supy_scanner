@@ -84,10 +84,7 @@ void main() {
         cfg.hintFor(SupyDocumentFrameState.tooDark),
         'Move to a brighter spot',
       );
-      expect(
-        cfg.hintFor(SupyDocumentFrameState.tooClose),
-        'Move farther back',
-      );
+      expect(cfg.hintFor(SupyDocumentFrameState.tooClose), 'Move farther back');
       expect(cfg.hintFor(SupyDocumentFrameState.tooFar), 'Move closer');
       expect(
         cfg.hintFor(SupyDocumentFrameState.tooSkewed),
@@ -216,9 +213,9 @@ void main() {
 
     test('centerGuidanceEnabled=false packs the trailing sentinel as -1', () {
       expect(
-        const SupyDocumentGuidanceConfiguration(centerGuidanceEnabled: false)
-            .toConfigFloatArray()
-            .last,
+        const SupyDocumentGuidanceConfiguration(
+          centerGuidanceEnabled: false,
+        ).toConfigFloatArray().last,
         -1.0,
       );
     });

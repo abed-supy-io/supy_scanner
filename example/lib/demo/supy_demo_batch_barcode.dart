@@ -99,36 +99,38 @@ class _SupyDemoBatchBarcodePageState extends State<SupyDemoBatchBarcodePage> {
                 const SizedBox(height: 12),
               ],
               Expanded(
-                child: items.isEmpty
-                    ? const Center(
-                        child: Text(
-                          'No items yet. Start a batch session to scan\n'
-                          'multiple barcodes in one go.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: SupyBrand.onSurfaceMuted),
-                        ),
-                      )
-                    : Card(
-                        child: ListView.separated(
-                          itemCount: items.length,
-                          separatorBuilder: (_, __) => const Divider(
-                            height: 1,
-                            color: Color(0x140F1E3A),
+                child:
+                    items.isEmpty
+                        ? const Center(
+                          child: Text(
+                            'No items yet. Start a batch session to scan\n'
+                            'multiple barcodes in one go.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: SupyBrand.onSurfaceMuted),
                           ),
-                          itemBuilder: (_, i) {
-                            final b = items[i];
-                            return ListTile(
-                              leading: CircleAvatar(
-                                backgroundColor: SupyBrand.accentSoft,
-                                foregroundColor: SupyBrand.accent,
-                                child: Text('${i + 1}'),
-                              ),
-                              title: Text(b.rawValue),
-                              subtitle: Text(b.format.wireName),
-                            );
-                          },
+                        )
+                        : Card(
+                          child: ListView.separated(
+                            itemCount: items.length,
+                            separatorBuilder:
+                                (_, __) => const Divider(
+                                  height: 1,
+                                  color: Color(0x140F1E3A),
+                                ),
+                            itemBuilder: (_, i) {
+                              final b = items[i];
+                              return ListTile(
+                                leading: CircleAvatar(
+                                  backgroundColor: SupyBrand.accentSoft,
+                                  foregroundColor: SupyBrand.accent,
+                                  child: Text('${i + 1}'),
+                                ),
+                                title: Text(b.rawValue),
+                                subtitle: Text(b.format.wireName),
+                              );
+                            },
+                          ),
                         ),
-                      ),
               ),
             ],
           ),

@@ -46,13 +46,15 @@ class _ArOverlayPainter extends CustomPainter {
 
   @override
   void paint(Canvas canvas, Size size) {
-    final stroke = Paint()
-      ..color = config.strokeColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = config.strokeWidth;
-    final fill = Paint()
-      ..color = config.fillColor
-      ..style = PaintingStyle.fill;
+    final stroke =
+        Paint()
+          ..color = config.strokeColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = config.strokeWidth;
+    final fill =
+        Paint()
+          ..color = config.fillColor
+          ..style = PaintingStyle.fill;
 
     for (final b in barcodes) {
       final n = b.boundingBox;
@@ -110,10 +112,7 @@ class _ArOverlayPainter extends CustomPainter {
       chipRect,
       const Radius.circular(4),
     );
-    canvas.drawRRect(
-      chipRRect,
-      Paint()..color = config.labelBackgroundColor,
-    );
+    canvas.drawRRect(chipRRect, Paint()..color = config.labelBackgroundColor);
     tp.paint(canvas, Offset(left + hPad, top + vPad));
   }
 

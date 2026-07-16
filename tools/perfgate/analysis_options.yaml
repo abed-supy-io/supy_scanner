@@ -1,0 +1,8 @@
+# Dev-only performance-gate tooling — not part of the shipped library API.
+# This scoped config keeps the strict repo-root lints (public-API docs,
+# kebab-case filename) from applying to CLI scripts. perfgate is a pure-Dart
+# package with no flutter_lints dependency, so we don't include it here.
+linter:
+  rules:
+    public_member_api_docs: false
+    file_names: false

@@ -55,8 +55,6 @@ void main() {
         },
         header: const SizedBox.shrink(),
         footer: const SizedBox.shrink(),
-        useScanWindow: true,
-        findBarcodeAtCenter: true,
         scannerBoxBuilder: (active) => const SizedBox.shrink(),
         controller: controller,
         scanWindow: const Rect.fromLTWH(0, 0, 100, 100),
@@ -87,9 +85,10 @@ void main() {
       // Compile-time pin: the retailer never constructs a BarcodeItem
       // itself, but it reads `capture.first.text` as a String. A nullable
       // reference is enough to compile-check the getter shape.
-      BarcodeItem? item;
-      final String? t = item?.text;
-      expect(t, isNull);
+      // Compile-time pin of the `String text` getter shape. Declared as a
+      // function so `.text` is type-checked but never executed.
+      String textOf(BarcodeItem b) => b.text;
+      expect(textOf, isNotNull);
     });
   });
 

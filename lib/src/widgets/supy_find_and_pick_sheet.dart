@@ -51,10 +51,7 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _header(),
-                if (_expanded) _body(),
-              ],
+              children: [_header(), if (_expanded) _body()],
             );
           },
         ),
@@ -112,47 +109,48 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
       children: [
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 280),
-          child: rows.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: Text(
-                    'No expected items',
-                    style: TextStyle(color: cfg.bodyColor, fontSize: 13),
-                  ),
-                )
-              : ListView(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  children: [
-                    for (final r in rows) _row(r),
-                    if (unexpected.isNotEmpty) ...[
-                      const SizedBox(height: 12),
-                      Text(
-                        'Unexpected',
-                        style: TextStyle(
-                          color: cfg.bodyColor,
-                          fontSize: 11,
-                          fontWeight: FontWeight.w600,
-                          letterSpacing: 0.6,
-                        ),
-                      ),
-                      const SizedBox(height: 6),
-                      for (final b in unexpected)
-                        Padding(
-                          padding: const EdgeInsets.symmetric(vertical: 2),
-                          child: Text(
-                            b.rawValue,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                            style: TextStyle(
-                              color: cfg.bodyColor,
-                              fontSize: 13,
-                            ),
+          child:
+              rows.isEmpty
+                  ? Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                    child: Text(
+                      'No expected items',
+                      style: TextStyle(color: cfg.bodyColor, fontSize: 13),
+                    ),
+                  )
+                  : ListView(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    children: [
+                      for (final r in rows) _row(r),
+                      if (unexpected.isNotEmpty) ...[
+                        const SizedBox(height: 12),
+                        Text(
+                          'Unexpected',
+                          style: TextStyle(
+                            color: cfg.bodyColor,
+                            fontSize: 11,
+                            fontWeight: FontWeight.w600,
+                            letterSpacing: 0.6,
                           ),
                         ),
+                        const SizedBox(height: 6),
+                        for (final b in unexpected)
+                          Padding(
+                            padding: const EdgeInsets.symmetric(vertical: 2),
+                            child: Text(
+                              b.rawValue,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                              style: TextStyle(
+                                color: cfg.bodyColor,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                      ],
                     ],
-                  ],
-                ),
+                  ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
@@ -200,9 +198,7 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
       child: Row(
         children: [
           Icon(
-            row.isComplete
-                ? Icons.check_circle
-                : Icons.radio_button_unchecked,
+            row.isComplete ? Icons.check_circle : Icons.radio_button_unchecked,
             size: 18,
             color: color,
           ),
@@ -218,9 +214,8 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
                   style: TextStyle(
                     color: color,
                     fontSize: 14,
-                    fontWeight: row.isComplete
-                        ? FontWeight.w600
-                        : FontWeight.w500,
+                    fontWeight:
+                        row.isComplete ? FontWeight.w600 : FontWeight.w500,
                   ),
                 ),
                 if (row.expected.label != null)

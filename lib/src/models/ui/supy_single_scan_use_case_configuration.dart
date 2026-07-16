@@ -78,30 +78,29 @@ class SupySingleScanUseCaseConfiguration {
           other.sheetBackgroundColor == sheetBackgroundColor &&
           other.titleColor == titleColor &&
           other.bodyColor == bodyColor &&
-          other.confirmButtonBackgroundColor ==
-              confirmButtonBackgroundColor &&
-          other.confirmButtonForegroundColor ==
-              confirmButtonForegroundColor &&
+          other.confirmButtonBackgroundColor == confirmButtonBackgroundColor &&
+          other.confirmButtonForegroundColor == confirmButtonForegroundColor &&
           other.retryButtonForegroundColor == retryButtonForegroundColor;
 
   @override
   int get hashCode => Object.hash(
-        confirmationSheetEnabled,
-        title,
-        showBarcodeFormat,
-        showRawValue,
-        confirmButtonText,
-        retryButtonText,
-        sheetBackgroundColor,
-        titleColor,
-        bodyColor,
-        confirmButtonBackgroundColor,
-        confirmButtonForegroundColor,
-        retryButtonForegroundColor,
-      );
+    confirmationSheetEnabled,
+    title,
+    showBarcodeFormat,
+    showRawValue,
+    confirmButtonText,
+    retryButtonText,
+    sheetBackgroundColor,
+    titleColor,
+    bodyColor,
+    confirmButtonBackgroundColor,
+    confirmButtonForegroundColor,
+    retryButtonForegroundColor,
+  );
 
   @override
-  String toString() => 'SupySingleScanUseCaseConfiguration('
+  String toString() =>
+      'SupySingleScanUseCaseConfiguration('
       'confirmationSheetEnabled: $confirmationSheetEnabled, '
       'title: $title)';
 }

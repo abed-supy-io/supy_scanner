@@ -26,7 +26,7 @@ class SupyDocumentMetricsSmoother {
   /// `1.0` = no smoothing (passthrough), small = very smooth (laggy).
   /// Default `0.35` reaches ~90% of a step input in ~6 frames at 30fps.
   SupyDocumentMetricsSmoother({this.alpha = 0.35})
-      : assert(alpha > 0 && alpha <= 1.0, 'alpha must be in (0, 1]');
+    : assert(alpha > 0 && alpha <= 1.0, 'alpha must be in (0, 1]');
 
   /// EMA weight on the new sample. Higher = more responsive, lower = smoother.
   final double alpha;
@@ -102,8 +102,10 @@ class SupyDocumentMetricsSmoother {
     _cornerVelocity = _ema(_cornerVelocity, sample.cornerVelocity);
     _centerOffsetX = _ema(_centerOffsetX, sample.centerOffsetX);
     _centerOffsetY = _ema(_centerOffsetY, sample.centerOffsetY);
-    _perCornerStability =
-        _smoothPerCorner(_perCornerStability, sample.perCornerStability);
+    _perCornerStability = _smoothPerCorner(
+      _perCornerStability,
+      sample.perCornerStability,
+    );
     // liveQualityScore is opaque — pass the latest through without EMA so the
     // C++-computed value isn't re-filtered on Dart. The classifier already
     // smooths inputs on the C++ side; double-smoothing would just lag the

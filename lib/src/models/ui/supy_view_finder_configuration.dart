@@ -10,8 +10,8 @@ import 'package:meta/meta.dart';
 class SupyAspectRatio {
   /// Creates a ratio with the given unit-less components. Both must be > 0.
   const SupyAspectRatio(this.width, this.height)
-      : assert(width > 0, 'aspect width must be > 0'),
-        assert(height > 0, 'aspect height must be > 0');
+    : assert(width > 0, 'aspect width must be > 0'),
+      assert(height > 0, 'aspect height must be > 0');
 
   /// Width component of the ratio.
   final double width;
@@ -54,9 +54,9 @@ class SupyFinderCorneredStyle extends SupyFinderStyle {
     this.strokeWidth = 3.0,
     this.cornerLength = 24.0,
     this.cornerRadius = 4.0,
-  })  : assert(strokeWidth > 0, 'strokeWidth must be > 0'),
-        assert(cornerLength > 0, 'cornerLength must be > 0'),
-        assert(cornerRadius >= 0, 'cornerRadius must be >= 0');
+  }) : assert(strokeWidth > 0, 'strokeWidth must be > 0'),
+       assert(cornerLength > 0, 'cornerLength must be > 0'),
+       assert(cornerRadius >= 0, 'cornerRadius must be >= 0');
 
   /// Color of the corner brackets.
   final Color strokeColor;
@@ -124,6 +124,7 @@ class SupyViewFinderConfiguration {
   int get hashCode => Object.hash(visible, aspectRatio, style);
 
   @override
-  String toString() => 'SupyViewFinderConfiguration(visible: $visible, '
+  String toString() =>
+      'SupyViewFinderConfiguration(visible: $visible, '
       'aspectRatio: $aspectRatio, style: $style)';
 }

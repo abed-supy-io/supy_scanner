@@ -61,13 +61,13 @@ Future<int> main(List<String> argv) async {
       return 66;
     }
     await file.writeAsString(
-      const JsonEncoder.withIndent('  ').convert(s.toJson()) + '\n',
+      '${const JsonEncoder.withIndent('  ').convert(s.toJson())}\n',
     );
     if (justification != null && justification.isNotEmpty) {
       final j = File('${outDir.path}/${s.metric}.justification.md');
       await j.writeAsString(
         '# ${s.metric} baseline change\n\n'
-        '_Tier: $tier_\n\n'
+        '_Tier: ${tier}_\n\n'
         '$justification\n',
       );
     }
@@ -78,7 +78,7 @@ Future<int> main(List<String> argv) async {
 }
 
 Directory _repoRoot() {
-  Directory d = Directory.current;
+  var d = Directory.current;
   for (var i = 0; i < 6; i++) {
     final p = File('${d.path}/pubspec.yaml');
     if (p.existsSync() &&

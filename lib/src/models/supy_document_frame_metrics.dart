@@ -58,9 +58,10 @@ class SupyDocumentFrameMetrics {
       cornerVelocity: (map['cornerVelocity'] as num?)?.toDouble() ?? 0.0,
       centerOffsetX: (map['centerOffsetX'] as num?)?.toDouble() ?? 0.0,
       centerOffsetY: (map['centerOffsetY'] as num?)?.toDouble() ?? 0.0,
-      perCornerStability: perCorner.length == 4
-          ? List<double>.unmodifiable(perCorner)
-          : const <double>[],
+      perCornerStability:
+          perCorner.length == 4
+              ? List<double>.unmodifiable(perCorner)
+              : const <double>[],
       liveQualityScore: (map['liveQualityScore'] as num?)?.toDouble(),
     );
   }
@@ -159,21 +160,21 @@ class SupyDocumentFrameMetrics {
 
   @override
   int get hashCode => Object.hash(
-        Object.hashAll(quad),
-        coverageRatio,
-        tiltDegrees,
-        meanLuma,
-        blurScore,
-        clipsEdge,
-        quadStability,
-        interiorVariance,
-        glareRatio,
-        cornerVelocity,
-        centerOffsetX,
-        centerOffsetY,
-        Object.hashAll(perCornerStability),
-        liveQualityScore,
-      );
+    Object.hashAll(quad),
+    coverageRatio,
+    tiltDegrees,
+    meanLuma,
+    blurScore,
+    clipsEdge,
+    quadStability,
+    interiorVariance,
+    glareRatio,
+    cornerVelocity,
+    centerOffsetX,
+    centerOffsetY,
+    Object.hashAll(perCornerStability),
+    liveQualityScore,
+  );
 
   @override
   String toString() =>
