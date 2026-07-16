@@ -11,5 +11,18 @@
 #if !SWIFT_PACKAGE
 #include "../../../native/src/supy_scanner_core.cpp"
 #include "../../../native/barcode/barcode_decoder.cpp"
+#include "../../../native/barcode/binarize.cpp"
+#include "../../../native/barcode/temporal.cpp"
+#include "../../../native/barcode/datamatrix_locator.cpp"
 #include "../../../native/document/document_guidance_classifier.cpp"
+#include "../../../native/quality/frame_scorer.cpp"
+#include "../../../native/enhance/pipeline.cpp"
+#include "../../../native/enhance/illumination.cpp"
+#include "../../../native/enhance/tone.cpp"
+#include "../../../native/enhance/unsharp.cpp"
+#include "../../../native/enhance/quality_gate.cpp"
+#include "../../../native/enhance/morphology.cpp"
+#include "../../../native/enhance/tophat.cpp"
+#include "../../../native/enhance/clahe.cpp"
+#include "../../../native/document/perspective_warp.cpp"
 #endif

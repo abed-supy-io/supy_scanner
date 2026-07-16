@@ -30,6 +30,22 @@ enum SupyDeviceTier {
     }
   }
 
+  /// Cap the *document* live-detection rate, in FPS. Unlike `analyzerFpsCap`
+  /// (which caps the camera's hardware frame delivery for the barcode
+  /// pipeline), this throttles only the Vision segmentation + overlay-repaint
+  /// work — the preview layer keeps the camera's native cadence so the video
+  /// stays smooth. `VNDetectDocumentSegmentationRequest` is a neural-net
+  /// segmentation model (much heavier than the barcode rectangle detector),
+  /// and edge guidance needs no more than ~20 FPS, so every tier — including
+  /// HIGH — is capped here.
+  var documentDetectorFpsCap: Int {
+    switch self {
+    case .high: return 20
+    case .mid: return 15
+    case .low: return 12
+    }
+  }
+
   /// Idle pause threshold in milliseconds, or `nil` to disable.
   var idlePauseThresholdMs: Int? {
     switch self {
@@ -51,7 +67,7 @@ enum SupyDeviceTier {
   func jpegQuality(requested: Double) -> Double {
     switch self {
     case .high, .mid: return requested
-    case .low: return min(requested, 0.75)
+    case .low: return min(requested, 0.88)
     }
   }
 
@@ -59,11 +75,30 @@ enum SupyDeviceTier {
   // that's tracked separately by ThermalGovernor).
   private static var cached: SupyDeviceTier?
 
+  // Debug-only tier override. Honored by `detect()` so engineers can repro
+  // tier-low behaviour on a tier-high CI device. Set via the
+  // `debugForceTier` MethodChannel call from Dart, which is gated by
+  // `kDebugMode`; the native setter is further gated on `#if DEBUG` at the
+  // call site (see SupyScannerPlugin.swift) so release builds strip it.
+  private static var debugOverride: SupyDeviceTier?
+
   static func detect() -> SupyDeviceTier {
+    if let override = debugOverride { return override }
     if let cached = cached { return cached }
     let resolved = compute()
     cached = resolved
     return resolved
+  }
+
+  /// Forces `detect()` to return `tier` until cleared. Pass `nil` to clear.
+  /// Caller is responsible for gating on `#if DEBUG`.
+  static func setDebugOverride(_ tier: SupyDeviceTier?) {
+    debugOverride = tier
+  }
+
+  /// Current debug override or nil if none. Test/inspection helper.
+  static func currentDebugOverride() -> SupyDeviceTier? {
+    return debugOverride
   }
 
   private static func compute() -> SupyDeviceTier {

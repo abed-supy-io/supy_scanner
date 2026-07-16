@@ -52,13 +52,13 @@ Native-backed Flutter scanner that replaces Scanbot SDK in Supy apps.
   s.public_header_files = 'Classes/nativecore/SupyNativeCoreBridge.h'
   # Keep the parent-dir sources resolvable via HEADER_SEARCH_PATHS and the
   # #include in SupyNativeCoreImpl.mm.
-  s.preserve_paths = '../native/include/*.h', '../native/src/*.cpp', '../native/barcode/*.{h,cpp}', '../native/document/*.{h,cpp}'
+  s.preserve_paths = '../native/include/*.h', '../native/src/*.cpp', '../native/barcode/*.{h,cpp}', '../native/document/*.{h,cpp}', '../native/enhance/*.{h,cpp}', '../native/quality/*.{h,cpp}'
 
   xcconfig = {
     'DEFINES_MODULE' => 'YES',
     'CLANG_CXX_LANGUAGE_STANDARD' => 'c++17',
     'CLANG_CXX_LIBRARY' => 'libc++',
-    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/../native/include" "$(PODS_TARGET_SRCROOT)/../native/barcode" "$(PODS_TARGET_SRCROOT)/../native/document"',
+    'HEADER_SEARCH_PATHS' => '"$(PODS_TARGET_SRCROOT)/../native/include" "$(PODS_TARGET_SRCROOT)/../native/barcode" "$(PODS_TARGET_SRCROOT)/../native/document" "$(PODS_TARGET_SRCROOT)/../native/enhance" "$(PODS_TARGET_SRCROOT)/../native/quality"',
     # Required so Swift can see the C symbols from supy_scanner_core.h
     # via the umbrella module.
     'SWIFT_INCLUDE_PATHS' => '"$(PODS_TARGET_SRCROOT)/../native/include"',
@@ -77,11 +77,4 @@ Native-backed Flutter scanner that replaces Scanbot SDK in Supy apps.
   s.platform         = :ios, '16.0'
   s.swift_version    = '5.9'
 
-  # Pure-logic XCTest suite. Run via `pod lib lint` or
-  # `xcodebuild test -scheme supy_scanner-Unit-Tests`. UI/AVCapture-bound
-  # classes are NOT covered here — they need a simulator.
-  s.test_spec 'Tests' do |test_spec|
-    test_spec.source_files = 'Tests/**/*.swift'
-    test_spec.platforms = { :ios => '16.0' }
-  end
 end

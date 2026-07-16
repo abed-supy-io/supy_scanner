@@ -64,13 +64,17 @@ final class BatchBarcodeScannerPresenter: NSObject {
     let dedupeWindowMs = (args?["dedupeWindowMs"] as? Int) ?? 800
     let beep = (args?["beep"] as? Bool) ?? true
     let vibrate = (args?["vibrate"] as? Bool) ?? true
+    let requestedNativeCore = (args?["useNativeCore"] as? Bool) ?? false
+    let nativeCoreEnabled = requestedNativeCore && SupyNativeCore.hasZxing()
 
     let vc = BatchBarcodeScannerViewController(
       symbologies: SymbologyMapper.toVisionSymbologies(formats),
+      wireFormats: formats,
       maxBatchCount: maxBatchCount,
       dedupeWindowMs: dedupeWindowMs,
       beep: beep,
-      vibrate: vibrate
+      vibrate: vibrate,
+      useNativeCore: nativeCoreEnabled
     )
     vc.modalPresentationStyle = .fullScreen
     vc.onFinish = { [weak self] outcome in
@@ -152,10 +156,12 @@ final class BatchBarcodeScannerViewController: UIViewController {
   private var previewLayer: AVCaptureVideoPreviewLayer?
 
   private let symbologies: [VNBarcodeSymbology]?
+  private let wireFormats: [String]
   private let maxBatchCount: Int
   private let dedupeWindowMs: Int
   private let beep: Bool
   private let vibrate: Bool
+  private let useNativeCore: Bool
 
   private let stateLock = NSLock()
   private var items: [[String: String]] = []
@@ -178,16 +184,20 @@ final class BatchBarcodeScannerViewController: UIViewController {
 
   init(
     symbologies: [VNBarcodeSymbology]?,
+    wireFormats: [String],
     maxBatchCount: Int,
     dedupeWindowMs: Int,
     beep: Bool,
-    vibrate: Bool
+    vibrate: Bool,
+    useNativeCore: Bool
   ) {
     self.symbologies = symbologies
+    self.wireFormats = wireFormats
     self.maxBatchCount = maxBatchCount
     self.dedupeWindowMs = dedupeWindowMs
     self.beep = beep
     self.vibrate = vibrate
+    self.useNativeCore = useNativeCore
     super.init(nibName: nil, bundle: nil)
   }
 
@@ -199,11 +209,13 @@ final class BatchBarcodeScannerViewController: UIViewController {
 
   override func viewDidLoad() {
     super.viewDidLoad()
+    dispatchPrecondition(condition: .onQueue(.main))
     view.backgroundColor = .black
     buildChrome()
     registerSessionNotifications()
 
     detector.setSymbologies(symbologies)
+    detector.setUseNativeCore(useNativeCore, formats: wireFormats)
     detector.onDetections = { [weak self] detections in
       self?.handleDetections(detections)
     }
@@ -248,6 +260,15 @@ final class BatchBarcodeScannerViewController: UIViewController {
 
   deinit {
     NotificationCenter.default.removeObserver(self)
+    // Same rationale as SupyBarcodeScannerView.deinit: drop the AVFoundation
+    // strong reference to the delegate before the async stop dispatches.
+    videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
+    let session = self.session
+    sessionQueue.async {
+      if session.isRunning {
+        session.stopRunning()
+      }
+    }
   }
 
   // MARK: - Session interruption guard
@@ -286,12 +307,24 @@ final class BatchBarcodeScannerViewController: UIViewController {
   }
 
   @objc private func handleSessionRuntimeError(_ note: Notification) {
+    // Mid-session camera-permission revocation surfaces here as
+    // `AVError.applicationIsNotAuthorizedToUseDevice` — surface `permission_denied`
+    // so the batch caller sees the same wire code as a launch-time denial.
     let error = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+    let isNotAuthorized = error?.domain == AVFoundationErrorDomain &&
+      error?.code == AVError.Code.applicationIsNotAuthorizedToUseDevice.rawValue
     DispatchQueue.main.async { [weak self] in
-      self?.finishFailed(
-        code: "camera_unavailable",
-        message: "AVCaptureSession runtime error: \(error?.localizedDescription ?? "unknown")"
-      )
+      if isNotAuthorized {
+        self?.finishFailed(
+          code: "permission_denied",
+          message: "Camera permission revoked mid-session."
+        )
+      } else {
+        self?.finishFailed(
+          code: "camera_unavailable",
+          message: "AVCaptureSession runtime error: \(error?.localizedDescription ?? "unknown")"
+        )
+      }
     }
   }
 
