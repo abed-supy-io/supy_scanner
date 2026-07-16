@@ -42,9 +42,9 @@ class DeviceTierTest {
     }
 
     @Test
-    fun `LOW caps JPEG quality at 75 but does not raise lower requests`() {
-        assertEquals(75, DeviceTier.LOW.jpegQuality(95))
+    fun `LOW caps JPEG quality at 88 but does not raise lower requests`() {
+        assertEquals(88, DeviceTier.LOW.jpegQuality(95))
         assertEquals(60, DeviceTier.LOW.jpegQuality(60))
-        assertEquals(75, DeviceTier.LOW.jpegQuality(75))
+        assertEquals(88, DeviceTier.LOW.jpegQuality(88))
     }
 }

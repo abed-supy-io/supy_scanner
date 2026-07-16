@@ -12,9 +12,14 @@ import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import androidx.camera.view.CameraController
+import androidx.annotation.MainThread
+import androidx.annotation.WorkerThread
 import androidx.camera.view.LifecycleCameraController
 import androidx.camera.view.PreviewView
 import androidx.lifecycle.LifecycleOwner
+import io.supy.scanner.nativecore.NativeBarcode
+import io.supy.scanner.nativecore.SupyNativeCore
+import java.nio.ByteBuffer
 import io.supy.scanner.perf.DeviceTier
 import io.supy.scanner.perf.IdleDetector
 import io.supy.scanner.perf.ThermalGovernor
@@ -74,10 +79,29 @@ class SupyBarcodeScannerView(
     private var eventSink: EventChannel.EventSink? = null
     private var previewStartedAnnounced: Boolean = false
 
+    private val wireFormats: List<String> = extractFormats(creationParams)
+
     // One ML Kit client per PlatformView. Closed in dispose().
-    private var barcodeScanner: BarcodeScanner = createScanner(extractFormats(creationParams))
+    private var barcodeScanner: BarcodeScanner = createScanner(wireFormats)
 
     private val cameraConfig: CameraConfig = CameraConfig.from(creationParams)
+
+    // Native-core decode opts in via creationParams.useNativeCore. Three-layer gate:
+    //   (1) Dart caller passed useNativeCore=true,
+    //   (2) the .so loaded,
+    //   (3) the build linked zxing-cpp (supy_core_has_zxing() == 1).
+    // Any miss → ML Kit. Result is cached at construction; flips require a new view.
+    private val nativeCoreEnabled: Boolean =
+        (creationParams?.get("useNativeCore") as? Boolean == true) && SupyNativeCore.hasZxing()
+
+    // libdmtx ROI assist: only run when (a) native decode is on, (b) the build
+    // linked libdmtx. Whether to engage the locator on a given frame still
+    // depends on the per-call format mask including Data Matrix.
+    private val nativeDmLocateEnabled: Boolean =
+        nativeCoreEnabled && SupyNativeCore.hasLibdmtx()
+
+    @Volatile
+    private var nativeFormatMask: Int = FormatMapper.toSupyFormatMask(wireFormats)
 
     private val deviceTier: DeviceTier = DeviceTier.detect(context)
     private val analyzerExecutor = Executors.newSingleThreadExecutor { r ->
@@ -265,6 +289,7 @@ class SupyBarcodeScannerView(
 
         @SuppressLint("UnsafeOptInUsageError")
         @OptIn(ExperimentalGetImage::class)
+        @WorkerThread
         override fun analyze(image: ImageProxy) {
             if (thermalPaused) {
                 image.close()
@@ -305,6 +330,11 @@ class SupyBarcodeScannerView(
                 return
             }
 
+            if (nativeCoreEnabled && tryNativeDecode(image)) {
+                // Native path consumed the frame (decoded or cleanly empty).
+                return
+            }
+
             val input = InputImage.fromMediaImage(
                 mediaImage,
                 image.imageInfo.rotationDegrees,
@@ -322,6 +352,269 @@ class SupyBarcodeScannerView(
                     image.close()
                 }
         }
+
+        /**
+         * Attempts a native-core decode on the frame's Y plane. Returns true when
+         * the native path handled the frame (image already closed). Returns false
+         * when we couldn't safely use the native path — the caller must fall back
+         * to ML Kit on the same ImageProxy and is responsible for closing it.
+         */
+        private fun tryNativeDecode(image: ImageProxy): Boolean {
+            val plane = image.planes.getOrNull(0) ?: return false
+            // YUV_420_888 normally has pixelStride==1 on Y. Some packed formats
+            // (NV12 with interleaved Y? unlikely, but defensive) report >1; bail.
+            if (plane.pixelStride != 1) return false
+            val buf = plane.buffer
+            if (!buf.isDirect) return false
+            val w = image.width
+            val h = image.height
+            val rowStride = plane.rowStride
+            if (w <= 0 || h <= 0 || rowStride < w) return false
+
+            val mask = nativeFormatMask
+            val dmHits: List<NativeBarcode> = if (
+                nativeDmLocateEnabled && FormatMapper.maskIncludesDataMatrix(mask)
+            ) {
+                tryDatamatrixRoiAssist(buf, w, h, rowStride)
+            } else {
+                emptyList()
+            }
+
+            // After the assist, run the full-frame decode for the remaining
+            // formats. If only DM was requested we can skip — but only when
+            // the assist actually ran (mask had DM and locator was enabled).
+            val fullMask = if (dmHits.isNotEmpty() || nativeDmLocateEnabled) {
+                FormatMapper.maskWithoutDataMatrix(mask)
+            } else {
+                mask
+            }
+
+            val full: List<NativeBarcode>? = if (fullMask != 0) {
+                try {
+                    SupyNativeCore.decodeBarcodes(
+                        y = buf,
+                        w = w,
+                        h = h,
+                        rowStride = rowStride,
+                        formatMask = fullMask,
+                        tryHarder = false,
+                        tryRotate = true,
+                    )
+                } catch (_: Throwable) {
+                    null
+                }
+            } else {
+                emptyList()
+            }
+            if (full == null && dmHits.isEmpty()) {
+                // Nothing ran successfully — fall back to ML Kit.
+                return false
+            }
+            val merged: List<NativeBarcode> = if (full == null || full.isEmpty()) {
+                dmHits
+            } else if (dmHits.isEmpty()) {
+                full
+            } else {
+                ArrayList<NativeBarcode>(dmHits.size + full.size).also {
+                    it.addAll(dmHits); it.addAll(full)
+                }
+            }
+            if (merged.isNotEmpty()) {
+                emitNativeDetections(merged)
+            }
+            image.close()
+            return true
+        }
+
+        // V1-S2-06.2: ring of the last two locator-hit frames used for
+        // temporal median-of-3 luma fusion. Owned by the analyzer; never
+        // touched off-thread.
+        private val temporalRing = DatamatrixTemporalRing()
+
+        // Runs the libdmtx locator on the luma plane, then re-feeds each region's
+        // axis-aligned bbox crop into the native decode with a DM-only mask.
+        // Returns an empty list on miss / locator failure — callers treat empty
+        // and "locator off" identically and continue to the full-frame decode.
+        private fun tryDatamatrixRoiAssist(
+            buf: ByteBuffer,
+            w: Int,
+            h: Int,
+            rowStride: Int,
+        ): List<NativeBarcode> {
+            val regions = try {
+                SupyNativeCore.locateDatamatrix(buf, w, h, rowStride)
+            } catch (_: Throwable) {
+                null
+            } ?: return emptyList()
+            if (regions.isEmpty()) return emptyList()
+
+            val hits = ArrayList<NativeBarcode>(regions.size)
+            val frameBoxes = ArrayList<DatamatrixTemporalRing.Box>(regions.size)
+            for (q in regions) {
+                if (q.size != 8) continue
+                var minX = q[0]; var maxX = q[0]
+                var minY = q[1]; var maxY = q[1]
+                var i = 2
+                while (i < 8) {
+                    val x = q[i]; val y = q[i + 1]
+                    if (x < minX) minX = x; if (x > maxX) maxX = x
+                    if (y < minY) minY = y; if (y > maxY) maxY = y
+                    i += 2
+                }
+                // Pad ~6% on each side to give zxing-cpp quiet-zone slack,
+                // then clamp to the frame.
+                val padX = ((maxX - minX) * 0.06f).coerceAtLeast(2f)
+                val padY = ((maxY - minY) * 0.06f).coerceAtLeast(2f)
+                val rx0 = (minX - padX).toInt().coerceAtLeast(0)
+                val ry0 = (minY - padY).toInt().coerceAtLeast(0)
+                val rx1 = (maxX + padX).toInt().coerceAtMost(w - 1)
+                val ry1 = (maxY + padY).toInt().coerceAtMost(h - 1)
+                if (rx1 - rx0 + 1 < 12 || ry1 - ry0 + 1 < 12) continue
+                val box = DatamatrixTemporalRing.Box(rx0, ry0, rx1, ry1)
+                frameBoxes.add(box)
+
+                // V1-S2-06.2: prefer the temporal-median fusion when this
+                // region IoU-matched bboxes in BOTH prior frames. Otherwise
+                // fall back to the raw current-frame luma — the same path
+                // V1-S2-05.1 shipped with.
+                val fused = temporalRing.tryFuse(buf, w, h, rowStride, box)
+                val cropBuf: ByteBuffer
+                val cw: Int
+                val ch: Int
+                val srcX0: Int
+                val srcY0: Int
+                if (fused != null) {
+                    cropBuf = fused.luma
+                    cw = fused.width
+                    ch = fused.height
+                    srcX0 = fused.srcX0
+                    srcY0 = fused.srcY0
+                } else {
+                    cw = rx1 - rx0 + 1
+                    ch = ry1 - ry0 + 1
+                    srcX0 = rx0
+                    srcY0 = ry0
+                    val raw = ensureCropCapacity(cw * ch)
+                    copyLumaCrop(buf, rowStride, srcX0, srcY0, cw, ch, raw)
+                    cropBuf = raw
+                }
+                // V1-S2-05.1: Sauvola adaptive binarization on the DM crop
+                // before zxing-cpp sees it. Soft fallback — failure means we
+                // hand the un-binarized luma straight to decode.
+                try {
+                    SupyNativeCore.binarizeLumaCrop(
+                        y = cropBuf,
+                        w = cw,
+                        h = ch,
+                        rowStride = cw,
+                        mode = SupyNativeCore.BinarizeMode.Sauvola2D,
+                    )
+                } catch (_: Throwable) {
+                    // ignore — proceed with raw luma
+                }
+                val dm = try {
+                    SupyNativeCore.decodeBarcodes(
+                        y = cropBuf,
+                        w = cw,
+                        h = ch,
+                        rowStride = cw,
+                        formatMask = FormatMapper.SUPY_FORMAT_DATA_MATRIX_BIT,
+                        tryHarder = true,
+                        tryRotate = true,
+                    )
+                } catch (_: Throwable) {
+                    null
+                } ?: continue
+                if (dm.isEmpty()) continue
+                // Translate corners back into the source frame so the emitted
+                // bounding box is in input-image pixel space (matching the
+                // existing emitNativeDetections contract).
+                for (b in dm) {
+                    val translated = FloatArray(8)
+                    var j = 0
+                    while (j < 8) {
+                        translated[j]     = b.corners[j] + srcX0
+                        translated[j + 1] = b.corners[j + 1] + srcY0
+                        j += 2
+                    }
+                    hits.add(NativeBarcode(b.rawValue, b.formatBit, translated))
+                }
+            }
+
+            // Push this frame into the ring AFTER per-region fusion attempts
+            // so the next frame can match against today's located bboxes.
+            if (frameBoxes.isNotEmpty()) {
+                temporalRing.push(buf, w, h, rowStride, frameBoxes)
+            }
+            return hits
+        }
+
+        // Reusable packed luma crop buffer — direct, grown lazily.
+        private var cropBuffer: ByteBuffer? = null
+
+        private fun ensureCropCapacity(needed: Int): ByteBuffer {
+            val cur = cropBuffer
+            if (cur != null && cur.capacity() >= needed) {
+                cur.clear()
+                return cur
+            }
+            // Grow with slack so subsequent frames don't reallocate.
+            val grown = ByteBuffer.allocateDirect(needed + (needed shr 1))
+            cropBuffer = grown
+            return grown
+        }
+
+        private fun copyLumaCrop(
+            src: ByteBuffer,
+            srcStride: Int,
+            x0: Int,
+            y0: Int,
+            cw: Int,
+            ch: Int,
+            dst: ByteBuffer,
+        ) {
+            // ImageProxy planes expose a direct ByteBuffer positioned at 0; we
+            // rely on absolute get/put via duplicated views so the original
+            // position is untouched.
+            val srcView = src.duplicate()
+            dst.position(0).limit(dst.capacity())
+            val row = ByteArray(cw)
+            for (yy in 0 until ch) {
+                val srcOff = (y0 + yy) * srcStride + x0
+                srcView.position(srcOff)
+                srcView.get(row, 0, cw)
+                dst.put(row, 0, cw)
+            }
+            dst.flip()
+        }
+    }
+
+    private fun emitNativeDetections(results: List<NativeBarcode>) {
+        val items = results.map { r ->
+            val c = r.corners
+            // Derive axis-aligned bbox from the four corner pairs.
+            var minX = c[0]; var maxX = c[0]
+            var minY = c[1]; var maxY = c[1]
+            var i = 2
+            while (i < 8) {
+                val x = c[i]; val y = c[i + 1]
+                if (x < minX) minX = x; if (x > maxX) maxX = x
+                if (y < minY) minY = y; if (y > maxY) maxY = y
+                i += 2
+            }
+            mapOf(
+                "rawValue" to r.rawValue,
+                "format" to FormatMapper.supyBitToWire(r.formatBit),
+                "boundingBox" to mapOf(
+                    "left" to minX.toDouble(),
+                    "top" to minY.toDouble(),
+                    "width" to (maxX - minX).toDouble(),
+                    "height" to (maxY - minY).toDouble(),
+                ),
+            )
+        }
+        if (items.isEmpty()) return
+        sendEvent(mapOf("type" to "detection", "items" to items))
     }
 
     private fun emitDetections(barcodes: List<Barcode>) {
@@ -352,6 +645,7 @@ class SupyBarcodeScannerView(
 
     // ───────── MethodChannel ─────────
 
+    @MainThread
     override fun onMethodCall(call: MethodCall, result: MethodChannel.Result) {
         when (call.method) {
             "pause" -> {
@@ -441,6 +735,7 @@ class SupyBarcodeScannerView(
                 val raw = call.argument<List<String>>("formats") ?: emptyList()
                 val oldScanner = barcodeScanner
                 barcodeScanner = createScanner(raw)
+                nativeFormatMask = FormatMapper.toSupyFormatMask(raw)
                 runCatching { oldScanner.close() }
                 result.success(null)
             }
@@ -469,6 +764,7 @@ class SupyBarcodeScannerView(
 
     override fun getView(): View = container
 
+    @MainThread
     override fun dispose() {
         methodChannel.setMethodCallHandler(null)
         // Send `endOfStream` before tearing down the channel so the Dart side

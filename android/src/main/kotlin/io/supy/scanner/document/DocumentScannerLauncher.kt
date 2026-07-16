@@ -3,7 +3,8 @@ package io.supy.scanner.document
 import android.app.Activity
 import android.content.Intent
 import android.net.Uri
-import android.util.Log
+import androidx.appcompat.app.AlertDialog
+import io.supy.scanner.log.SupyLog
 import com.google.android.gms.tasks.Task
 import com.google.mlkit.vision.documentscanner.GmsDocumentScannerOptions
 import com.google.mlkit.vision.documentscanner.GmsDocumentScanning
@@ -25,6 +26,11 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
     private var pendingJpegQuality: Int = DEFAULT_JPEG_QUALITY
     private var pendingOutputFormat: PageReencoder.Format = PageReencoder.Format.JPG
     private var pendingWantPdf: Boolean = false
+    private var pendingEnhanceMode: PageReencoder.EnhanceMode = PageReencoder.EnhanceMode.BALANCED
+    private var pendingResolvedBackend: String = BACKEND_UNKNOWN
+    private var pendingMinPageQualityOrdinal: Int = 0
+    private var pendingLocale: String = "en"
+    private var pendingIntent: String = INTENT_GENERIC
     private val ocrRunner: OcrRunner = OcrRunner()
 
     /**
@@ -67,9 +73,8 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         // launcher still routes to GMS in v1.0 regardless.
         val useNativeCore = (args?.get("useNativeCore") as? Boolean) ?: false
         if (useNativeCore) {
-            Log.i(
-                "SupyScanner",
-                "Document scan requested useNativeCore=true; ignored on v1.0 (reserved for v1.1).",
+            SupyLog.i(
+                message = "Document scan requested useNativeCore=true; ignored on v1.0 (reserved for v1.1).",
             )
         }
 
@@ -83,6 +88,15 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
             else -> PageReencoder.Format.JPG
         }
         val wantPdf = outputFormatWire == "pdf"
+
+        // v1.2: optional native enhancement pass on the captured pages.
+        // Default = balanced on Android (VisionKit handles iOS internally).
+        val enhanceMode = when ((args?.get("enhanceMode") as? String)?.lowercase()) {
+            "off" -> PageReencoder.EnhanceMode.OFF
+            "fast" -> PageReencoder.EnhanceMode.FAST
+            "max" -> PageReencoder.EnhanceMode.MAX
+            else -> PageReencoder.EnhanceMode.BALANCED
+        }
 
         val resultFormats = if (wantPdf) {
             GmsDocumentScannerOptions.RESULT_FORMAT_JPEG or
@@ -104,21 +118,40 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         pendingJpegQuality = jpegQuality
         pendingOutputFormat = outputFormat
         pendingWantPdf = wantPdf
+        pendingEnhanceMode = enhanceMode
+        pendingLocale = (args?.get("locale") as? String) ?: "en"
+        pendingIntent = (args?.get("intent") as? String) ?: INTENT_GENERIC
+        // Wire string from `SupyDocumentPageQuality.name`. The Dart layer
+        // resolves caller > intent-preset > defaults, so we trust whatever
+        // arrives. Default "veryPoor" admits every page — non-breaking.
+        pendingMinPageQualityOrdinal =
+            wireToQualityOrdinal((args?.get("minPageQuality") as? String) ?: "veryPoor")
+
+        // v1.2 Phase CXD1: honor `preferredBackend` if the Dart layer set it.
+        // `cameraX` forces the fallback even when GMS is usable (tests,
+        // dogfood); `gms` only works if GMS is actually usable, else we fall
+        // through to the natural availability gate below. `unknown` / null /
+        // anything else = auto.
+        val preferredBackend = args?.get("preferredBackend") as? String
+        val gmsUsable = GmsAvailability.isUsable(activity)
+        val useCameraX = shouldUseCameraX(preferredBackend, gmsUsable)
 
         // v1.2 Phase CXD: when GMS is unavailable, bypass the document-scanner
         // client and launch the CameraX-backed manual capture flow. The
         // re-encode + OCR pipeline downstream is shared with the GMS path —
         // result shape stays identical, retailer code is unchanged.
-        if (!GmsAvailability.isUsable(activity)) {
-            if (wantPdf) {
-                Log.i(
-                    "SupyScanner",
-                    "outputFormat=pdf requested but Play services is unavailable; " +
-                        "the CameraX fallback emits JPEG only (v1.2 limitation).",
-                )
-            }
+        if (useCameraX) {
+            pendingResolvedBackend = BACKEND_CAMERAX
+            val autoCaptureDelayMs = (args?.get("autoCaptureDelayMs") as? Number)?.toInt() ?: 0
+            val locale = (args?.get("locale") as? String) ?: "en"
             val intent = Intent(activity, CameraXDocumentScannerActivity::class.java).apply {
                 putExtra(CameraXDocumentScannerActivity.EXTRA_MAX_PAGES, maxPages)
+                putExtra(CameraXDocumentScannerActivity.EXTRA_AUTO_CAPTURE_DELAY_MS, autoCaptureDelayMs)
+                putExtra(CameraXDocumentScannerActivity.EXTRA_LOCALE, locale)
+                putExtra(
+                    CameraXDocumentScannerActivity.EXTRA_MIN_PAGE_QUALITY,
+                    qualityOrdinalToWire(pendingMinPageQualityOrdinal),
+                )
             }
             try {
                 activity.startActivityForResult(intent, REQUEST_CODE_CAMX)
@@ -128,6 +161,7 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
             return
         }
 
+        pendingResolvedBackend = BACKEND_GMS
         val client = GmsDocumentScanning.getClient(options)
         val task: Task<android.content.IntentSender> = client.getStartScanIntent(activity)
         task
@@ -166,18 +200,19 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         val scanResult = GmsDocumentScanningResult.fromActivityResultIntent(data)
         val rawUris = scanResult?.pages?.mapNotNull { it.imageUri } ?: emptyList()
         val pdfUri: String? = if (pendingWantPdf) scanResult?.pdf?.uri?.toString() else null
-        val pageUris = if (activity != null && rawUris.isNotEmpty()) {
+        val pages: List<PageReencoder.ReencodedPage> = if (activity != null && rawUris.isNotEmpty()) {
             PageReencoder.reencode(
                 activity.applicationContext,
                 rawUris,
                 pendingJpegQuality,
                 pendingOutputFormat,
+                pendingEnhanceMode,
             )
         } else {
-            rawUris
+            rawUris.map { PageReencoder.ReencodedPage(it, quality = null, qualityScore = null) }
         }
 
-        if (pageUris.isEmpty() || activity == null) {
+        if (pages.isEmpty() || activity == null) {
             pendingResult = null
             pendingActivity = null
             pending.success(
@@ -191,21 +226,67 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         }
 
         val capturedPdfUri = pdfUri
-        // OCR + dimension decode happens off the UI thread inside OcrRunner —
-        // ML Kit dispatches its own executors. Reply on the same thread the
-        // success listener fires on (main), which is what Flutter expects.
-        ocrRunner.run(activity.applicationContext, pageUris) { pages, ocrText ->
-            pendingResult = null
-            pendingActivity = null
-            pending.success(
-                buildResponse(
-                    pages = pages,
-                    ocrText = ocrText,
-                    pdfUri = capturedPdfUri,
-                ),
-            )
+        gateLowQualityPages(activity, pages) { acceptedPages ->
+            // OCR + dimension decode happens off the UI thread inside OcrRunner —
+            // ML Kit dispatches its own executors. Reply on the same thread the
+            // success listener fires on (main), which is what Flutter expects.
+            ocrRunner.run(activity.applicationContext, acceptedPages) { resultPages, ocrText ->
+                pendingResult = null
+                pendingActivity = null
+                pending.success(
+                    buildResponse(
+                        pages = resultPages,
+                        ocrText = ocrText,
+                        pdfUri = capturedPdfUri,
+                    ),
+                )
+            }
         }
         return true
+    }
+
+    /**
+     * Asymmetric quality-gate for the GMS path. GMS owns its own UI, so we
+     * can only check pages at flow exit. If any fall below
+     * [pendingMinPageQualityOrdinal], surface a single summary dialog with
+     * Keep-all / Discard-low choices. The CameraX path gates each page
+     * in-flow inside the activity itself — see
+     * [CameraXDocumentScannerActivity.shouldGatePage]. Documented in
+     * `docs/ARCHITECTURE.md`.
+     */
+    private fun gateLowQualityPages(
+        activity: Activity,
+        pages: List<PageReencoder.ReencodedPage>,
+        onContinue: (List<PageReencoder.ReencodedPage>) -> Unit,
+    ) {
+        if (pendingMinPageQualityOrdinal <= 0) {
+            onContinue(pages)
+            return
+        }
+        val accepted = pages.filter { page ->
+            val ordinal = wireToQualityOrdinal(page.quality ?: return@filter true)
+            ordinal >= pendingMinPageQualityOrdinal
+        }
+        val rejected = pages.size - accepted.size
+        if (rejected == 0) {
+            onContinue(pages)
+            return
+        }
+        val ar = pendingLocale.startsWith("ar", ignoreCase = true)
+        AlertDialog.Builder(activity)
+            .setTitle(if (ar) "جودة بعض الصفحات منخفضة" else "Some pages have low quality")
+            .setMessage(
+                if (ar) "${rejected} من ${pages.size} صفحة دون الحد المطلوب."
+                else "$rejected of ${pages.size} pages are below the requested quality.",
+            )
+            .setPositiveButton(if (ar) "احتفظ بها" else "Keep all") { d, _ ->
+                d.dismiss(); onContinue(pages)
+            }
+            .setNegativeButton(if (ar) "تجاهل المنخفضة" else "Discard low") { d, _ ->
+                d.dismiss(); onContinue(accepted)
+            }
+            .setCancelable(false)
+            .show()
     }
 
     private fun buildResponse(
@@ -216,6 +297,7 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         val payload = mutableMapOf<String, Any?>(
             "pages" to pages,
             "ocrText" to ocrText,
+            "resolvedBackend" to pendingResolvedBackend,
         )
         if (pdfUri != null) payload["pdfUri"] = pdfUri
         return payload
@@ -259,19 +341,30 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
             return true
         }
 
-        // PageReencoder + OcrRunner is shared with the GMS path. The CameraX
-        // fallback never emits PDF (see launch() log), so pdfUri stays null.
-        val pageUris = PageReencoder.reencode(
+        // PageReencoder + OcrRunner is shared with the GMS path. v1.2 CXD2:
+        // PdfAssembler closes the PDF-output parity gap so `outputFormat=pdf`
+        // works on non-GMS devices too — the source pages are the same
+        // re-encoded JPEGs OCR runs against.
+        val pages = PageReencoder.reencode(
             activity.applicationContext,
             rawUris,
             pendingJpegQuality,
             pendingOutputFormat,
+            pendingEnhanceMode,
         )
 
-        ocrRunner.run(activity.applicationContext, pageUris) { pages, ocrText ->
+        val pdfUri = if (pendingWantPdf) {
+            runCatching {
+                PdfAssembler.assemble(activity.applicationContext, pages.map { it.uri })
+            }.onFailure {
+                SupyLog.i(message = "PdfAssembler failed on CameraX path: ${it.message}")
+            }.getOrNull()?.let { Uri.fromFile(it).toString() }
+        } else null
+
+        ocrRunner.run(activity.applicationContext, pages) { resultPages, ocrText ->
             pendingResult = null
             pendingActivity = null
-            pending.success(buildResponse(pages = pages, ocrText = ocrText, pdfUri = null))
+            pending.success(buildResponse(pages = resultPages, ocrText = ocrText, pdfUri = pdfUri))
         }
         return true
     }
@@ -283,11 +376,57 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         pending.error(code, message, null)
     }
 
+    /**
+     * Releases the held [OcrRunner]'s ML Kit `TextRecognizer`. Called from
+     * `SupyScannerPlugin.onDetachedFromEngine` — the recognizer is a
+     * `Closeable` whose native resources leak if the JVM exits without it.
+     */
+    fun close() {
+        runCatching { ocrRunner.close() }
+    }
+
     companion object {
         private const val REQUEST_CODE = 0x5506
         private const val REQUEST_CODE_CAMX = 0x5507
         private const val DEFAULT_MAX_PAGES = 10
         private const val DEFAULT_JPEG_QUALITY = 85
         private const val MAX_PAGE_CAP = 50
+        internal const val BACKEND_GMS = "gms"
+        internal const val BACKEND_CAMERAX = "cameraX"
+        internal const val BACKEND_UNKNOWN = "unknown"
+
+        internal const val INTENT_GENERIC = "generic"
+        internal const val INTENT_INVOICE = "invoice"
+
+        internal fun wireToQualityOrdinal(wire: String?): Int = when (wire) {
+            "veryPoor" -> 0
+            "poor" -> 1
+            "ok" -> 2
+            "good" -> 3
+            "excellent" -> 4
+            else -> 0
+        }
+
+        internal fun qualityOrdinalToWire(ordinal: Int): String = when (ordinal) {
+            1 -> "poor"
+            2 -> "ok"
+            3 -> "good"
+            4 -> "excellent"
+            else -> "veryPoor"
+        }
+
+        /// v1.2 Phase CXD1: backend resolution. `cameraX` forces the
+        /// fallback even when GMS is usable (tests, dogfood); `gms` only
+        /// works if GMS is actually usable, else we fall through to the
+        /// natural availability gate. Any other value (null, `unknown`) is
+        /// auto.
+        internal fun shouldUseCameraX(
+            preferredBackend: String?,
+            gmsUsable: Boolean,
+        ): Boolean = when (preferredBackend) {
+            BACKEND_CAMERAX -> true
+            BACKEND_GMS -> !gmsUsable
+            else -> !gmsUsable
+        }
     }
 }
