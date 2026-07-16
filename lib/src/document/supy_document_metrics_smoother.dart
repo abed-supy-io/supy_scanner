@@ -38,6 +38,12 @@ class SupyDocumentMetricsSmoother {
   double? _blur;
   double? _stability;
   double? _interior;
+  double? _glare;
+  double? _cornerVelocity;
+  double? _centerOffsetX;
+  double? _centerOffsetY;
+  List<double>? _perCornerStability;
+  double? _liveQualityScore;
   List<Offset>? _quad;
   bool _lastClipsEdge = false;
 
@@ -49,6 +55,10 @@ class SupyDocumentMetricsSmoother {
       _blur != null ||
       _stability != null ||
       _interior != null ||
+      _glare != null ||
+      _cornerVelocity != null ||
+      _perCornerStability != null ||
+      _liveQualityScore != null ||
       _quad != null;
 
   /// Smoothed metrics derived from the stream so far. Returns the zero-default
@@ -64,6 +74,12 @@ class SupyDocumentMetricsSmoother {
       clipsEdge: _lastClipsEdge,
       quadStability: _stability ?? 0.0,
       interiorVariance: _interior ?? 0.0,
+      glareRatio: _glare ?? 0.0,
+      cornerVelocity: _cornerVelocity ?? 0.0,
+      centerOffsetX: _centerOffsetX ?? 0.0,
+      centerOffsetY: _centerOffsetY ?? 0.0,
+      perCornerStability: _perCornerStability ?? const <double>[],
+      liveQualityScore: _liveQualityScore,
     );
   }
 
@@ -82,6 +98,17 @@ class SupyDocumentMetricsSmoother {
     _blur = _ema(_blur, sample.blurScore);
     _stability = _ema(_stability, sample.quadStability);
     _interior = _ema(_interior, sample.interiorVariance);
+    _glare = _ema(_glare, sample.glareRatio);
+    _cornerVelocity = _ema(_cornerVelocity, sample.cornerVelocity);
+    _centerOffsetX = _ema(_centerOffsetX, sample.centerOffsetX);
+    _centerOffsetY = _ema(_centerOffsetY, sample.centerOffsetY);
+    _perCornerStability =
+        _smoothPerCorner(_perCornerStability, sample.perCornerStability);
+    // liveQualityScore is opaque — pass the latest through without EMA so the
+    // C++-computed value isn't re-filtered on Dart. The classifier already
+    // smooths inputs on the C++ side; double-smoothing would just lag the
+    // surfaced score.
+    _liveQualityScore = sample.liveQualityScore ?? _liveQualityScore;
     _quad = _smoothQuad(_quad, sample.quad);
     return current;
   }
@@ -95,6 +122,12 @@ class SupyDocumentMetricsSmoother {
     _blur = null;
     _stability = null;
     _interior = null;
+    _glare = null;
+    _cornerVelocity = null;
+    _centerOffsetX = null;
+    _centerOffsetY = null;
+    _perCornerStability = null;
+    _liveQualityScore = null;
     _quad = null;
     _lastClipsEdge = false;
   }
@@ -102,6 +135,23 @@ class SupyDocumentMetricsSmoother {
   double _ema(double? previous, double sample) {
     if (previous == null) return sample;
     return previous + alpha * (sample - previous);
+  }
+
+  /// Per-corner EMA. If the incoming sample doesn't carry four corner values
+  /// (which the native sides only emit when a quad is present), treat this as
+  /// "no signal this frame" and hold whatever we already had — that way one
+  /// dropped detection doesn't reset the corner stability history.
+  List<double>? _smoothPerCorner(List<double>? previous, List<double> sample) {
+    if (sample.length != 4) return previous;
+    if (previous == null || previous.length != 4) {
+      return List<double>.unmodifiable(sample);
+    }
+    final smoothed = List<double>.generate(
+      4,
+      (i) => previous[i] + alpha * (sample[i] - previous[i]),
+      growable: false,
+    );
+    return List<double>.unmodifiable(smoothed);
   }
 
   List<Offset> _smoothQuad(List<Offset>? previous, List<Offset> sample) {

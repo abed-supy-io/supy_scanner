@@ -111,6 +111,55 @@ class SupyScannerChannel {
       return SupyNativeCoreProbe(
         version: version,
         abiVersion: abiVersion,
+        gmsDocumentScannerAvailable:
+            (raw['gmsDocumentScannerAvailable'] as bool?) ?? false,
+      );
+    } on PlatformException catch (e) {
+      throw _wrap(e);
+    }
+  }
+
+  /// Returns the device performance tier (`high`, `mid`, or `low`) as
+  /// computed by the native heuristic in `DeviceTier` (Android) /
+  /// `SupyDeviceTier` (iOS).
+  ///
+  /// Used by the perfgate harness (`tools/perfgate/`) to pick the right
+  /// baseline JSON file. Cached natively for the process lifetime.
+  Future<SupyDeviceTier> getDeviceTier() async {
+    try {
+      final raw = await _methodChannel.invokeMapMethod<String, Object?>(
+        'getDeviceTier',
+      );
+      return SupyDeviceTier.fromWire(raw?['tier'] as String?);
+    } on PlatformException catch (e) {
+      throw _wrap(e);
+    }
+  }
+
+  /// Forces the native device-tier heuristic to report [tier] on all
+  /// subsequent calls (analyzer downscale, FPS cap, OCR long-edge cap, idle
+  /// threshold, JPEG quality clamp, `getDeviceTier()`). Pass `null` to clear.
+  ///
+  /// Debug-only: on release builds (`!kDebugMode`) this is a no-op and never
+  /// reaches the channel. The native side additionally refuses the call on
+  /// non-debuggable Android builds (`FLAG_DEBUGGABLE`) and on iOS binaries
+  /// built without `#if DEBUG`.
+  ///
+  /// [SupyDeviceTier.unknown] is treated as a clear (same as `null`) — the
+  /// override surface is write-only for the three real tiers.
+  Future<void> debugForceTier(SupyDeviceTier? tier) async {
+    if (!kDebugMode) return;
+    final wire = switch (tier) {
+      SupyDeviceTier.high => 'high',
+      SupyDeviceTier.mid => 'mid',
+      SupyDeviceTier.low => 'low',
+      SupyDeviceTier.unknown => null,
+      null => null,
+    };
+    try {
+      await _methodChannel.invokeMethod<void>(
+        'debugForceTier',
+        <String, Object?>{'tier': wire},
       );
     } on PlatformException catch (e) {
       throw _wrap(e);
@@ -141,7 +190,11 @@ class SupyScannerChannel {
 @immutable
 class SupyNativeCoreProbe {
   /// Creates a native-core probe result.
-  const SupyNativeCoreProbe({required this.version, required this.abiVersion});
+  const SupyNativeCoreProbe({
+    required this.version,
+    required this.abiVersion,
+    this.gmsDocumentScannerAvailable = false,
+  });
 
   /// Semantic version reported by the native core (e.g. `'1.1.0-dev.1'`).
   final String version;
@@ -150,19 +203,55 @@ class SupyNativeCoreProbe {
   /// a stale plugin/native build pair.
   final int abiVersion;
 
+  /// Whether the GMS ML Kit Document Scanner module is usable on this
+  /// device. `true` on Android with usable Play Services + the document
+  /// scanner module; `false` on non-GMS Android devices and always on iOS.
+  /// v1.2 / Phase CXD1.
+  final bool gmsDocumentScannerAvailable;
+
   @override
   String toString() =>
-      'SupyNativeCoreProbe(version: $version, abiVersion: $abiVersion)';
+      'SupyNativeCoreProbe(version: $version, abiVersion: $abiVersion, '
+      'gmsDocumentScannerAvailable: $gmsDocumentScannerAvailable)';
 
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SupyNativeCoreProbe &&
           other.version == version &&
-          other.abiVersion == abiVersion;
+          other.abiVersion == abiVersion &&
+          other.gmsDocumentScannerAvailable == gmsDocumentScannerAvailable;
 
   @override
-  int get hashCode => Object.hash(version, abiVersion);
+  int get hashCode =>
+      Object.hash(version, abiVersion, gmsDocumentScannerAvailable);
+}
+
+/// Device performance tier reported by the native side. Mirrors
+/// `io.supy.scanner.perf.DeviceTier` (Android) and `SupyDeviceTier` (iOS).
+enum SupyDeviceTier {
+  /// High-end devices (recent flagships).
+  high,
+  /// Mid-range devices — the default fallback.
+  mid,
+  /// Low-RAM or older devices.
+  low,
+  /// Tier could not be determined.
+  unknown;
+
+  /// Parses a wire-format tier string into a [SupyDeviceTier].
+  static SupyDeviceTier fromWire(String? value) {
+    switch (value) {
+      case 'high':
+        return SupyDeviceTier.high;
+      case 'mid':
+        return SupyDeviceTier.mid;
+      case 'low':
+        return SupyDeviceTier.low;
+      default:
+        return SupyDeviceTier.unknown;
+    }
+  }
 }
 
 /// Outcome of a [SupyScannerChannel.requestCameraPermission] call.

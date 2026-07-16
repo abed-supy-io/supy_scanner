@@ -198,6 +198,10 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
   );
   bool _readyAnnounced = false;
 
+  // Current recenter direction while `_frame.state == offCenter`, else null.
+  // Derived from the native centroid offset by [_resolveNudge].
+  SupyDocumentNudge? _nudge;
+
   // Reticle pulse animation (1.2 s, repeating)
   late final AnimationController _pulseController;
 
@@ -256,8 +260,28 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
 
   void _handleEvent(SupyDocumentEvent event) {
     switch (event) {
-      case SupyDocumentFrameMetricsEvent(:final metrics):
-        final next = _stateMachine.tick(metrics);
+      case SupyDocumentFrameMetricsEvent(:final metrics, :final nativeState):
+        // When the platform classifies on-device (iOS C++ GuidanceClassifier)
+        // it ships the resolved `state`; trust it and skip the Dart FSM. The
+        // native payload is stateless per frame, so we count framesAtState
+        // here by comparing against the last emitted frame. When `nativeState`
+        // is null (Android embedded view) the Dart FSM classifies as before.
+        final SupyDocumentGuidanceFrame next;
+        if (nativeState != null) {
+          final framesAtState =
+              nativeState == _frame.state ? _frame.framesAtState + 1 : 1;
+          next = SupyDocumentGuidanceFrame(
+            state: nativeState,
+            metrics: metrics,
+            framesAtState: framesAtState,
+          );
+        } else {
+          next = _stateMachine.tick(metrics);
+        }
+        // `offCenter` is classified natively (C++ on iOS, the mirrored Dart FSM
+        // on Android) — derive only the directional arrow here from the
+        // native-computed centroid offset; never rewrite the state in Dart.
+        _resolveNudge(next);
         setState(() => _frame = next);
         widget.onGuidance?.call(next);
         if (next.state == SupyDocumentFrameState.ready && !_readyAnnounced) {
@@ -272,6 +296,29 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
         widget.onPreviewStarted?.call(flashAvailable);
       case SupyDocumentErrorEvent(:final error):
         widget.onError?.call(error);
+    }
+  }
+
+  /// Derives the directional recenter arrow for the coaching pill.
+  ///
+  /// The off-center *decision* is made natively (the C++ classifier on iOS,
+  /// the mirrored Dart FSM on Android) and arrives as
+  /// [SupyDocumentFrameState.offCenter]; this only picks which arrow to draw,
+  /// from the signed native-computed centroid offset in [frame]'s metrics.
+  /// Clears [_nudge] for any non-`offCenter` state.
+  void _resolveNudge(SupyDocumentGuidanceFrame frame) {
+    if (frame.state != SupyDocumentFrameState.offCenter) {
+      _nudge = null;
+      return;
+    }
+    final dx = frame.metrics.centerOffsetX;
+    final dy = frame.metrics.centerOffsetY;
+    // Nudge along the dominant axis: a centroid right/below center means the
+    // user should pan the camera left/up to recenter.
+    if (dx.abs() >= dy.abs()) {
+      _nudge = dx > 0 ? SupyDocumentNudge.left : SupyDocumentNudge.right;
+    } else {
+      _nudge = dy > 0 ? SupyDocumentNudge.up : SupyDocumentNudge.down;
     }
   }
 
@@ -424,7 +471,8 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
       case SupyDocumentFrameState.captured:
         return widget.guidance.readyColor;
       case SupyDocumentFrameState.holdSteady:
-        // Amber midpoint
+      case SupyDocumentFrameState.offCenter:
+        // Amber midpoint — framing has cleared, just settling / recentering.
         return Color.lerp(
           widget.guidance.warningColor,
           widget.guidance.readyColor,
@@ -436,21 +484,84 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
       case SupyDocumentFrameState.tooFar:
       case SupyDocumentFrameState.tooSkewed:
       case SupyDocumentFrameState.blurry:
+      case SupyDocumentFrameState.glare:
+      case SupyDocumentFrameState.occluded:
+      case SupyDocumentFrameState.handShake:
+      case SupyDocumentFrameState.edgeClipped:
         return widget.guidance.warningColor;
     }
   }
 
   Widget _buildHintCard() {
+    final state = _effectiveState;
+    // For `offCenter` prefer the resolved directional copy over the generic
+    // "Center the document" so the user knows which way to move.
+    final text = state == SupyDocumentFrameState.offCenter
+        ? widget.guidance.hints.nudgeText(_nudge)
+        : widget.guidance.hintFor(state);
     return Positioned(
       left: 16,
       right: 16,
       bottom: 32,
       child: IgnorePointer(
         child: _HintCard(
-          text: widget.guidance.hintFor(_effectiveState),
+          text: text,
+          icon: _iconForState(state, _nudge),
+          accentColor: widget.guidance.colorFor(state),
         ),
       ),
     );
+  }
+
+  /// Per-state glyph for the coaching pill. For [SupyDocumentFrameState.offCenter]
+  /// the icon is the directional arrow matching [nudge].
+  static IconData _iconForState(
+    SupyDocumentFrameState state,
+    SupyDocumentNudge? nudge,
+  ) {
+    switch (state) {
+      case SupyDocumentFrameState.noDocument:
+        return Icons.document_scanner_outlined;
+      case SupyDocumentFrameState.tooDark:
+        return Icons.lightbulb_outline;
+      case SupyDocumentFrameState.tooClose:
+        return Icons.zoom_out_map;
+      case SupyDocumentFrameState.tooFar:
+        return Icons.zoom_in_map;
+      case SupyDocumentFrameState.tooSkewed:
+        return Icons.crop_rotate;
+      case SupyDocumentFrameState.blurry:
+        return Icons.center_focus_weak;
+      case SupyDocumentFrameState.glare:
+        return Icons.flare;
+      case SupyDocumentFrameState.occluded:
+        return Icons.pan_tool_outlined;
+      case SupyDocumentFrameState.handShake:
+        return Icons.vibration;
+      case SupyDocumentFrameState.edgeClipped:
+        return Icons.crop_free;
+      case SupyDocumentFrameState.holdSteady:
+        return Icons.hourglass_top;
+      case SupyDocumentFrameState.ready:
+        return Icons.check_circle_outline;
+      case SupyDocumentFrameState.capturing:
+        return Icons.camera_alt_outlined;
+      case SupyDocumentFrameState.captured:
+        return Icons.check_circle;
+      case SupyDocumentFrameState.offCenter:
+        switch (nudge) {
+          case SupyDocumentNudge.left:
+            return Icons.arrow_back;
+          case SupyDocumentNudge.right:
+            return Icons.arrow_forward;
+          case SupyDocumentNudge.up:
+            return Icons.arrow_upward;
+          case SupyDocumentNudge.down:
+            return Icons.arrow_downward;
+          case null:
+            return Icons.center_focus_strong;
+        }
+    }
   }
 
   Widget _buildPreview() {
@@ -463,9 +574,15 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
           onPlatformViewCreated: _onPlatformViewCreated,
         );
       case TargetPlatform.iOS:
+        // iOS classifies frames on-device with the C++ GuidanceClassifier, so
+        // hand it the same thresholds the Dart FSM would have used. Android's
+        // embedded view still classifies in Dart this slice, hence its empty
+        // params above.
         return UiKitView(
           viewType: _kDocumentViewTypeId,
-          creationParams: const <String, Object?>{},
+          creationParams: <String, Object?>{
+            'guidanceConfig': widget.guidance.toConfigFloatArray(),
+          },
           creationParamsCodec: const StandardMessageCodec(),
           onPlatformViewCreated: _onPlatformViewCreated,
         );
@@ -610,13 +727,22 @@ class _DocumentGuidancePainter extends CustomPainter {
 }
 
 // ---------------------------------------------------------------------------
-// Hint card — text only, no border
+// Hint card — coaching pill with a per-state icon
 // ---------------------------------------------------------------------------
 
 class _HintCard extends StatelessWidget {
-  const _HintCard({required this.text});
+  const _HintCard({
+    required this.text,
+    required this.icon,
+    required this.accentColor,
+  });
 
   final String text;
+  final IconData icon;
+
+  /// State-derived accent used to tint the icon (green when ready, the
+  /// not-ready palette otherwise).
+  final Color accentColor;
 
   @override
   Widget build(BuildContext context) {
@@ -632,21 +758,37 @@ class _HintCard extends StatelessWidget {
             child: child,
           ),
         ),
-        child: Text(
-          text,
-          key: ValueKey<String>(text),
-          textAlign: TextAlign.center,
-          style: const TextStyle(
-            color: Colors.white,
-            fontSize: 15,
-            fontWeight: FontWeight.w600,
-            shadows: [
-              Shadow(
-                color: Colors.black54,
-                blurRadius: 4,
-                offset: Offset(0, 1),
-              ),
+        // Key on text+icon so the switcher animates whenever either changes
+        // (e.g. the directional arrow flipping while the copy is unchanged).
+        child: DecoratedBox(
+          key: ValueKey<String>('${icon.codePoint}:$text'),
+          decoration: BoxDecoration(
+            color: Colors.black.withValues(alpha: 0.55),
+            borderRadius: BorderRadius.circular(24),
+            boxShadow: const [
+              BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
             ],
+          ),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(icon, color: accentColor, size: 20),
+                const SizedBox(width: 8),
+                Flexible(
+                  child: Text(
+                    text,
+                    textAlign: TextAlign.center,
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 15,
+                      fontWeight: FontWeight.w600,
+                    ),
+                  ),
+                ),
+              ],
+            ),
           ),
         ),
       ),
