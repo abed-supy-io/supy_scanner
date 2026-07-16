@@ -36,6 +36,7 @@ class BatchBarcodeScannerLauncher : PluginRegistry.ActivityResultListener {
             ?: DEFAULT_DEDUPE_WINDOW_MS
         val beep = (args?.get("beep") as? Boolean) ?: true
         val vibrate = (args?.get("vibrate") as? Boolean) ?: true
+        val useNativeCore = (args?.get("useNativeCore") as? Boolean) ?: false
 
         val intent = Intent(activity, BatchBarcodeScannerActivity::class.java).apply {
             putStringArrayListExtra(
@@ -46,6 +47,7 @@ class BatchBarcodeScannerLauncher : PluginRegistry.ActivityResultListener {
             putExtra(BatchBarcodeScannerActivity.EXTRA_DEDUPE_MS, dedupeWindowMs)
             putExtra(BatchBarcodeScannerActivity.EXTRA_BEEP, beep)
             putExtra(BatchBarcodeScannerActivity.EXTRA_VIBRATE, vibrate)
+            putExtra(BatchBarcodeScannerActivity.EXTRA_USE_NATIVE_CORE, useNativeCore)
         }
 
         pendingResult = result

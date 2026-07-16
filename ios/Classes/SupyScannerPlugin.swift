@@ -42,6 +42,14 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
       requestCameraPermission(result: result)
     case "scanDocument":
       guard let args = Self.expectMapArgs(call, result: result) else { return }
+      // CQG-G3: `intent` is resolved (caller > preset > defaults) on the
+      // Dart side before the wire hop. Plugin-side parsing is logged-only —
+      // VisionKit multi-page is built-in (analogous to GMS), so there's no
+      // native UI gate to toggle from `intent` here. Asymmetry documented
+      // in `docs/ARCHITECTURE.md`.
+      if let intent = args["intent"] as? String, intent != "generic" {
+        SupyLog.i("scanDocument intent=\(intent) (resolved on Dart side; VisionKit owns multi-page)")
+      }
       documentPresenter.present(args: args, result: result)
     case "scanBarcodesBatch":
       guard let args = Self.expectMapArgs(call, result: result) else { return }
@@ -49,6 +57,67 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
     case "prewarm":
       documentPresenter.prewarm()
       result(nil)
+    case "getDeviceTier":
+      let wire: String
+      switch SupyDeviceTier.detect() {
+      case .high: wire = "high"
+      case .mid: wire = "mid"
+      case .low: wire = "low"
+      }
+      result(["tier": wire])
+    case "debugForceTier":
+      // Debug-only tier override. Dart side already gates with `kDebugMode`;
+      // `#if DEBUG` is belt-and-braces so a release-built plugin binary
+      // cannot honor a forged channel call.
+      #if DEBUG
+      let raw = (call.arguments as? [String: Any?])?["tier"] as? String
+      let tier: SupyDeviceTier?
+      switch raw {
+      case "high": tier = .high
+      case "mid": tier = .mid
+      case "low": tier = .low
+      case nil: tier = nil
+      default:
+        result(
+          FlutterError(
+            code: "unknown",
+            message: "debugForceTier: unknown tier '\(raw ?? "nil")' (want high|mid|low|null)",
+            details: nil
+          )
+        )
+        return
+      }
+      SupyDeviceTier.setDebugOverride(tier)
+      result(nil)
+      #else
+      result(nil)
+      #endif
+    case "parseInvoice":
+      // Phase IXP — experimental, example-app-only. Dart wrapper is not
+      // exported from the public barrel. Channel arg: `imagePath` (file URL
+      // string of an already-captured page).
+      guard let args = Self.expectMapArgs(call, result: result) else { return }
+      guard let path = args["imagePath"] as? String, !path.isEmpty else {
+        result(FlutterError(
+          code: "unknown",
+          message: "parseInvoice: missing or empty `imagePath` arg",
+          details: nil
+        ))
+        return
+      }
+      let url = path.hasPrefix("file://") ? URL(string: path)! : URL(fileURLWithPath: path)
+      guard let data = try? Data(contentsOf: url),
+            let image = UIImage(data: data) else {
+        result(FlutterError(
+          code: "unknown",
+          message: "parseInvoice: could not load image at \(path)",
+          details: nil
+        ))
+        return
+      }
+      InvoiceParser.parse(image: image) { dict in
+        result(dict)
+      }
     case "nativeCoreProbe":
       let version = SupyNativeCore.version()
       let abiVersion = Int(SupyNativeCore.abiVersion())
@@ -66,6 +135,9 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
         result([
           "version": version,
           "abiVersion": abiVersion,
+          // iOS uses VisionKit; the GMS ML Kit document scanner is
+          // Android-only. v1.2 / Phase CXD1.
+          "gmsDocumentScannerAvailable": false,
         ])
       }
     default:

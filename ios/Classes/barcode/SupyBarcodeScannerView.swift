@@ -45,6 +45,10 @@ final class SupyBarcodeScannerView: NSObject, FlutterPlatformView,
   private let videoDataOutput: AVCaptureVideoDataOutput = AVCaptureVideoDataOutput()
   private let initialWireFormats: [String]
   private let initialCameraConfig: InitialCameraConfig
+  /// Resolved at construction — three-layer gate (caller arg && build linked
+  /// zxing-cpp). Per-frame native-decode is the detector's job; this flag is
+  /// only here so `setFormats` can re-sync the detector's native mask too.
+  private let nativeCoreEnabled: Bool
 
   private var thermalGovernor: SupyThermalGovernor?
   /// True while the OS thermal state has forced us to stop the capture session.
@@ -98,6 +102,12 @@ final class SupyBarcodeScannerView: NSObject, FlutterPlatformView,
     self.initialWireFormats =
       (creationParams?["formats"] as? [String]) ?? []
     self.initialCameraConfig = InitialCameraConfig.from(creationParams)
+    // Three-layer gate matching Android (`SupyBarcodeScannerView.kt`): caller
+    // opted in, build linked zxing-cpp. Resolve once at construction so the
+    // detector doesn't probe the C ABI per-frame.
+    let requestedNativeCore =
+      (creationParams?["useNativeCore"] as? Bool) ?? false
+    self.nativeCoreEnabled = requestedNativeCore && SupyNativeCore.hasZxing()
 
     super.init()
 
@@ -131,6 +141,7 @@ final class SupyBarcodeScannerView: NSObject, FlutterPlatformView,
     detector.setSymbologies(
       SymbologyMapper.toVisionSymbologies(initialWireFormats)
     )
+    detector.setUseNativeCore(nativeCoreEnabled, formats: initialWireFormats)
 
     registerSessionNotifications()
     configureSessionAsync()
@@ -234,11 +245,27 @@ final class SupyBarcodeScannerView: NSObject, FlutterPlatformView,
     // startRunning once we're back on the queue. If the error was a media
     // services reset we'd need to rebuild inputs — out of scope for the v1
     // patch; surface it to Flutter and let the host recreate the view.
+    // Mid-session permission revocation (Settings → Privacy → Camera off) lands
+    // here too, as `AVError.applicationIsNotAuthorizedToUseDevice` — surface it as
+    // `permission_denied` so the host can distinguish from hardware failure.
     let error = note.userInfo?[AVCaptureSessionErrorKey] as? NSError
+    if isNotAuthorizedError(error) {
+      emitError(
+        code: "permission_denied",
+        message: "Camera permission revoked mid-session."
+      )
+      return
+    }
     emitError(
       code: "camera_unavailable",
       message: "AVCaptureSession runtime error: \(error?.localizedDescription ?? "unknown")"
     )
+  }
+
+  private func isNotAuthorizedError(_ error: NSError?) -> Bool {
+    guard let error = error else { return false }
+    return error.domain == AVFoundationErrorDomain &&
+      error.code == AVError.Code.applicationIsNotAuthorizedToUseDevice.rawValue
   }
 
   /// Always call instead of `session.startRunning()` directly. Must be invoked
@@ -438,6 +465,7 @@ final class SupyBarcodeScannerView: NSObject, FlutterPlatformView,
   // MARK: - MethodChannel
 
   private func handle(call: FlutterMethodCall, result: @escaping FlutterResult) {
+    dispatchPrecondition(condition: .onQueue(.main))
     switch call.method {
     case "pause":
       sessionQueue.async { [weak self] in
@@ -464,6 +492,7 @@ final class SupyBarcodeScannerView: NSObject, FlutterPlatformView,
       let formats =
         (call.arguments as? [String: Any])?["formats"] as? [String] ?? []
       detector.setSymbologies(SymbologyMapper.toVisionSymbologies(formats))
+      detector.setUseNativeCore(nativeCoreEnabled, formats: formats)
       result(nil)
     default:
       result(FlutterMethodNotImplemented)
@@ -648,6 +677,12 @@ final class SupyBarcodeScannerView: NSObject, FlutterPlatformView,
     runningObservation?.invalidate()
     runningObservation = nil
     NotificationCenter.default.removeObserver(self)
+    // Detach the sample-buffer delegate synchronously so AVFoundation cannot
+    // dispatch one more `captureOutput(_:didOutput:from:)` after the owning
+    // view has been torn down. `stopRunning()` is async on `sessionQueue` and
+    // would otherwise leave a window where a stale frame can fire through the
+    // detector against a deinitialized view.
+    videoDataOutput.setSampleBufferDelegate(nil, queue: nil)
     let session = self.session
     sessionQueue.async {
       if session.isRunning {

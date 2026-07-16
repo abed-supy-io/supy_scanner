@@ -33,25 +33,26 @@ internal class OcrRunner {
      */
     fun run(
         context: Context,
-        pageUris: List<Uri>,
+        pages: List<PageReencoder.ReencodedPage>,
         onComplete: (pages: List<Map<String, Any?>>, ocrText: String) -> Unit,
     ) {
-        if (pageUris.isEmpty()) {
+        if (pages.isEmpty()) {
             onComplete(emptyList(), "")
             return
         }
 
-        val results = arrayOfNulls<PageOcr>(pageUris.size)
-        var remaining = pageUris.size
+        val results = arrayOfNulls<PageOcr>(pages.size)
+        var remaining = pages.size
 
         val longEdgeCap = DeviceTier.detect(context).ocrLongEdgeCap()
 
-        pageUris.forEachIndexed { index, uri ->
+        pages.forEachIndexed { index, page ->
+            val uri = page.uri
             val (width, height) = readDimensions(context, uri)
             val image = try {
                 buildInputImage(context, uri, width, height, longEdgeCap)
             } catch (e: IOException) {
-                results[index] = PageOcr(uri, width, height, "")
+                results[index] = PageOcr(uri, width, height, "", page.quality, page.qualityScore)
                 remaining -= 1
                 if (remaining == 0) emit(results, onComplete)
                 return@forEachIndexed
@@ -59,12 +60,12 @@ internal class OcrRunner {
 
             recognizer.process(image)
                 .addOnSuccessListener { recognized ->
-                    results[index] = PageOcr(uri, width, height, recognized.text)
+                    results[index] = PageOcr(uri, width, height, recognized.text, page.quality, page.qualityScore)
                 }
                 .addOnFailureListener {
                     // Per-page failure → empty text for that page, partial
                     // result for the rest. Don't surface an error code.
-                    results[index] = PageOcr(uri, width, height, "")
+                    results[index] = PageOcr(uri, width, height, "", page.quality, page.qualityScore)
                 }
                 .addOnCompleteListener {
                     remaining -= 1
@@ -82,11 +83,13 @@ internal class OcrRunner {
         onComplete: (List<Map<String, Any?>>, String) -> Unit,
     ) {
         val pages = results.filterNotNull().map { page ->
-            mapOf<String, Any?>(
-                "uri" to page.uri.toString(),
-                "width" to page.width,
-                "height" to page.height,
-            )
+            buildMap<String, Any?> {
+                put("uri", page.uri.toString())
+                put("width", page.width)
+                put("height", page.height)
+                if (page.quality != null) put("quality", page.quality)
+                if (page.qualityScore != null) put("qualityScore", page.qualityScore)
+            }
         }
         val text = results.filterNotNull()
             .joinToString(separator = "\n\n") { it.text }
@@ -143,5 +146,7 @@ internal class OcrRunner {
         val width: Int,
         val height: Int,
         val text: String,
+        val quality: String?,
+        val qualityScore: Double?,
     )
 }

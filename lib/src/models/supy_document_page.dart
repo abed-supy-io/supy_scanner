@@ -22,6 +22,31 @@ enum SupyDocumentPageQuality {
   excellent,
 }
 
+/// Extension on [SupyDocumentPageQuality] exposing the symmetric counterpart
+/// to the internal `_qualityFromWire` parser. Names must stay byte-identical
+/// to the wire strings the native side emits — these are the values the
+/// per-page quality gate threshold (`minPageQuality`) ships across the
+/// channel.
+extension SupyDocumentPageQualityWire on SupyDocumentPageQuality {
+  /// Channel-stable identifier (`'veryPoor'`/`'poor'`/`'ok'`/`'good'`/
+  /// `'excellent'`). Mirrors the strings parsed by the internal
+  /// `_qualityFromWire`.
+  String get wireName {
+    switch (this) {
+      case SupyDocumentPageQuality.veryPoor:
+        return 'veryPoor';
+      case SupyDocumentPageQuality.poor:
+        return 'poor';
+      case SupyDocumentPageQuality.ok:
+        return 'ok';
+      case SupyDocumentPageQuality.good:
+        return 'good';
+      case SupyDocumentPageQuality.excellent:
+        return 'excellent';
+    }
+  }
+}
+
 /// One captured page of a scanned document.
 @immutable
 class SupyDocumentPage {
@@ -32,6 +57,8 @@ class SupyDocumentPage {
     required this.height,
     this.quality,
     this.qualityScore,
+    this.enhancedStages,
+    this.enhanceMs,
   });
 
   /// Deserializes a page from a channel map.
@@ -42,6 +69,8 @@ class SupyDocumentPage {
       height: (map['height']! as num).toInt(),
       quality: _qualityFromWire(map['quality'] as String?),
       qualityScore: (map['qualityScore'] as num?)?.toDouble(),
+      enhancedStages: (map['enhancedStages'] as num?)?.toInt(),
+      enhanceMs: (map['enhanceMs'] as num?)?.toInt(),
     );
   }
 
@@ -64,6 +93,14 @@ class SupyDocumentPage {
   /// Laplacian + luma). `null` when the scorer hasn't run.
   final double? qualityScore;
 
+  /// Bitmask of enhance stages that ran on this page. `null` when enhance
+  /// was disabled or unsupported. See `docs/ENHANCEMENT.md` for bit layout.
+  final int? enhancedStages;
+
+  /// Wall-clock milliseconds the enhance pipeline spent on this page. `null`
+  /// when enhance didn't run.
+  final int? enhanceMs;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -72,16 +109,26 @@ class SupyDocumentPage {
           other.width == width &&
           other.height == height &&
           other.quality == quality &&
-          other.qualityScore == qualityScore;
+          other.qualityScore == qualityScore &&
+          other.enhancedStages == enhancedStages &&
+          other.enhanceMs == enhanceMs;
 
   @override
-  int get hashCode =>
-      Object.hash(uri, width, height, quality, qualityScore);
+  int get hashCode => Object.hash(
+        uri,
+        width,
+        height,
+        quality,
+        qualityScore,
+        enhancedStages,
+        enhanceMs,
+      );
 
   @override
   String toString() =>
       'SupyDocumentPage(uri: $uri, ${width}x$height, '
-      'quality: $quality, score: $qualityScore)';
+      'quality: $quality, score: $qualityScore, '
+      'enhancedStages: $enhancedStages, enhanceMs: $enhanceMs)';
 }
 
 SupyDocumentPageQuality? _qualityFromWire(String? wire) {

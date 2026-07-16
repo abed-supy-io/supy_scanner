@@ -14,6 +14,8 @@ import io.supy.scanner.barcode.SupyBarcodeScannerViewFactory
 import io.supy.scanner.document.DocumentScannerLauncher
 import io.supy.scanner.document.SupyDocumentScannerViewFactory
 import io.supy.scanner.nativecore.SupyNativeCore
+import android.content.pm.ApplicationInfo
+import io.supy.scanner.perf.DeviceTier
 import io.supy.scanner.permissions.CameraPermissionHandler
 
 /**
@@ -49,6 +51,10 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
         channel.setMethodCallHandler(null)
+        // ML Kit's TextRecognizer (held inside DocumentScannerLauncher.ocrRunner)
+        // is Closeable and pins native resources until released. Engine detach is
+        // the last guaranteed teardown signal on the plugin lifecycle.
+        documentLauncher.close()
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -66,12 +72,70 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                 documentLauncher.prewarm(activityHolder.activity?.applicationContext)
                 result.success(null)
             }
+            "getDeviceTier" -> {
+                val ctx = activityHolder.activity?.applicationContext
+                val tier = if (ctx != null) {
+                    when (DeviceTier.detect(ctx)) {
+                        DeviceTier.HIGH -> "high"
+                        DeviceTier.MID -> "mid"
+                        DeviceTier.LOW -> "low"
+                    }
+                } else {
+                    "unknown"
+                }
+                result.success(mapOf("tier" to tier))
+            }
+            "debugForceTier" -> {
+                // Debug-only tier override. Silently no-ops on non-debuggable
+                // builds — Dart side already gates with `kDebugMode`, this is
+                // belt-and-braces so a hand-crafted method call from a release
+                // build cannot force the tier.
+                val ctx = activityHolder.activity?.applicationContext
+                val debuggable = ctx != null &&
+                    (ctx.applicationInfo.flags and ApplicationInfo.FLAG_DEBUGGABLE) != 0
+                if (!debuggable) {
+                    result.success(null)
+                    return
+                }
+                val raw = call.argument<String?>("tier")
+                val tier = when (raw) {
+                    "high" -> DeviceTier.HIGH
+                    "mid" -> DeviceTier.MID
+                    "low" -> DeviceTier.LOW
+                    null -> null
+                    else -> {
+                        result.error(
+                            "unknown",
+                            "debugForceTier: unknown tier '$raw' (want high|mid|low|null)",
+                            null,
+                        )
+                        return
+                    }
+                }
+                DeviceTier.setDebugOverride(tier)
+                result.success(null)
+            }
+            "parseInvoice" -> {
+                // Phase IXP — iOS-only in v1.2. Surface the canonical
+                // `unimplemented` wire code so the Dart side can detect and
+                // fall back gracefully (the experimental wrapper translates
+                // it into a typed result).
+                result.error(
+                    "unimplemented",
+                    "parseInvoice is iOS-only in v1.2 (Phase IXP)",
+                    null,
+                )
+            }
             "nativeCoreProbe" -> {
                 try {
+                    val ctx = activityHolder.activity?.applicationContext
+                    val gmsAvailable = ctx != null &&
+                        io.supy.scanner.document.GmsAvailability.isUsable(ctx)
                     result.success(
                         mapOf(
                             "version" to SupyNativeCore.version(),
                             "abiVersion" to SupyNativeCore.abiVersion(),
+                            "gmsDocumentScannerAvailable" to gmsAvailable,
                         ),
                     )
                 } catch (t: Throwable) {

@@ -20,7 +20,7 @@ final class OcrRunner {
   /// invokes [completion] on the main queue once. Per-page failures yield
   /// empty text for that page rather than failing the whole batch.
   func run(
-    pages: [(uri: URL, image: UIImage, width: Int, height: Int)],
+    pages: [(uri: URL, image: UIImage, width: Int, height: Int, quality: String?, qualityScore: Double?)],
     languages: [String],
     completion: @escaping (_ pages: [[String: Any]], _ ocrText: String) -> Void
   ) {
@@ -37,11 +37,14 @@ final class OcrRunner {
         return Self.recognizeText(in: prepared, languages: languages)
       }
       let entries: [[String: Any]] = pages.map { page in
-        [
+        var entry: [String: Any] = [
           "uri": page.uri.absoluteString,
           "width": page.width,
           "height": page.height,
         ]
+        if let q = page.quality { entry["quality"] = q }
+        if let qs = page.qualityScore { entry["qualityScore"] = qs }
+        return entry
       }
       let joined = recognized
         .joined(separator: "\n\n")

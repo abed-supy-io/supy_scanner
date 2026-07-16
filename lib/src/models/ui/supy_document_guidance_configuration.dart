@@ -25,6 +25,13 @@ class SupyDocumentGuidanceConfiguration {
     this.readyStabilityFloor = 0.75,
     this.interiorVarianceFloor = 5.0,
     this.holdSteadyFrames = 6,
+    this.maxGlareRatio = 0.04,
+    this.glareExitMargin = 0.50,
+    this.maxCornerVelocity = 0.020,
+    this.minPerCornerStability = 0.55,
+    this.edgeClipBlocking = false,
+    this.centerGuidanceEnabled = true,
+    this.maxCenterOffset = 0.12,
     this.autoCapture = true,
     this.autoCaptureDelay = const Duration(milliseconds: 600),
     this.allowUnrectifiedFallback = true,
@@ -34,6 +41,27 @@ class SupyDocumentGuidanceConfiguration {
     this.scrimColor = const Color(0x99000000),
     this.hints = const SupyDocumentGuidanceHints(),
   });
+
+  /// Preset that pairs with [SupyDocumentScanIntent.invoice]. Tightens the
+  /// live-preview gates so a truncated footer / glare across a receipt can't
+  /// reach `ready`:
+  ///
+  /// - [maxCoverageRatio] = 0.85 — leave headroom for slight tilt without
+  ///   clipping the footer.
+  /// - [edgeClipBlocking] = `true` — clipped vertices block capture instead
+  ///   of being folded into `tooClose`.
+  /// - [interiorVarianceFloor] = 8.0 — discourage capturing a phone screen
+  ///   showing an invoice (low-texture surface).
+  /// - [readyStableFrames] / [holdSteadyFrames] one frame longer than the
+  ///   generic defaults — invoices are harder to hold steady.
+  static const SupyDocumentGuidanceConfiguration invoice =
+      SupyDocumentGuidanceConfiguration(
+    maxCoverageRatio: 0.85,
+    interiorVarianceFloor: 8.0,
+    edgeClipBlocking: true,
+    readyStableFrames: 6,
+    holdSteadyFrames: 7,
+  );
 
   /// Minimum quad area / preview area before a document is "close enough".
   final double minCoverageRatio;
@@ -86,6 +114,56 @@ class SupyDocumentGuidanceConfiguration {
   /// promote `holdSteady` → `ready`.
   final int holdSteadyFrames;
 
+  /// Maximum fraction of pixels inside the quad allowed to exceed the
+  /// specular-highlight luma threshold before [SupyDocumentFrameState.glare]
+  /// fires. Defaults to `0.04` (~4% of the page) — enough headroom for a
+  /// printed sticker / coupon but not a lamp reflection across the whole bill.
+  final double maxGlareRatio;
+
+  /// Additional fractional headroom applied to `maxGlareRatio` while already
+  /// in `glare` — glare is bursty (a phone shifts a degree and the highlight
+  /// disappears), so we use a wider exit margin than the global [exitMargin].
+  /// Defaults to `0.50` → must drop below `maxGlareRatio * 1.50` to exit.
+  final double glareExitMargin;
+
+  /// Maximum L2 corner displacement (normalized to preview diagonal at 30fps)
+  /// allowed before [SupyDocumentFrameState.handShake] fires. Distinct from
+  /// [minBlurScore] — captures *movement* blur a static-sharpness check can
+  /// miss. Defaults to `0.020` (~2% of the diagonal per frame).
+  final double maxCornerVelocity;
+
+  /// Minimum per-corner stability (each corner's EMA distance from its
+  /// smoothed position, in `[0..1]`) before [SupyDocumentFrameState.occluded]
+  /// fires. A finger over one corner drags only that corner's score below the
+  /// floor; the others stay stable — so this catches occlusion in a way that
+  /// `quadStability` (an aggregate) misses. Defaults to `0.55`.
+  final double minPerCornerStability;
+
+  /// When `true`, a quad whose vertices touch the preview edge surfaces as
+  /// [SupyDocumentFrameState.edgeClipped] (a blocking state) instead of
+  /// being folded into [SupyDocumentFrameState.tooClose]. Defaults to `false`
+  /// for drop-in safety; the invoice preset flips this to `true` so a
+  /// truncated footer can't reach `ready`.
+  final bool edgeClipBlocking;
+
+  /// When `true`, once framing checks pass (distance / skew / glare / focus)
+  /// the C++ classifier emits [SupyDocumentFrameState.offCenter] for a document
+  /// sitting off to one side, before promoting to `ready`; the overlay pairs it
+  /// with a directional arrow derived from the native centroid offset. This
+  /// flag is encoded into [toConfigFloatArray] as a sentinel: when `false`,
+  /// [maxCenterOffset] is sent as `-1.0`, which disables off-center detection
+  /// natively (the classifier gates on `maxCenterOffset > 0`). Defaults to
+  /// `true`.
+  final bool centerGuidanceEnabled;
+
+  /// Maximum allowed distance of the quad centroid from the preview center,
+  /// as a fraction of the preview's half-extent on each axis, before
+  /// [SupyDocumentFrameState.offCenter] fires. `0.12` ≈ the document may sit
+  /// up to 12% off-center on either axis and still be considered centered.
+  /// Sent to the C++ classifier (sentinel `-1.0` when [centerGuidanceEnabled]
+  /// is `false`); paired with [exitMargin]-style hysteresis natively.
+  final double maxCenterOffset;
+
   /// Whether the widget should auto-fire `captureAndRectify` after a brief
   /// countdown when `ready` first lands.
   final bool autoCapture;
@@ -113,6 +191,39 @@ class SupyDocumentGuidanceConfiguration {
   /// Per-state hint copy.
   final SupyDocumentGuidanceHints hints;
 
+  /// Packs the 19 native-classifier thresholds in the wire-coupled order the
+  /// C++ bridge unpacks by index. MUST stay byte-for-byte aligned with
+  /// `GuidanceConfig.toFloatArray()` in `SupyNativeCore.kt` and
+  /// `GuidanceConfig.toNumberArray()` in `SupyNativeCore.swift` — the C++
+  /// JNI / Obj-C++ shims unpack by position. UI-only fields (colors, hints,
+  /// autoCapture) are intentionally excluded; they never reach native.
+  ///
+  /// The 19th entry encodes both [centerGuidanceEnabled] and [maxCenterOffset]:
+  /// `maxCenterOffset` when enabled, sentinel `-1.0` when disabled. The C++
+  /// classifier gates off-center detection on `maxCenterOffset > 0`, so a
+  /// negative value cleanly turns the feature off without a 20th float.
+  List<double> toConfigFloatArray() => <double>[
+        minCoverageRatio,
+        maxCoverageRatio,
+        maxTiltDegrees,
+        minMeanLuma,
+        minBlurScore,
+        readyStabilityFloor,
+        interiorVarianceFloor,
+        exitMargin,
+        smoothingAlpha,
+        readyStableFrames.toDouble(),
+        holdSteadyFrames.toDouble(),
+        lostDocumentGraceFrames.toDouble(),
+        minDwellFrames.toDouble(),
+        maxGlareRatio,
+        glareExitMargin,
+        maxCornerVelocity,
+        minPerCornerStability,
+        edgeClipBlocking ? 1.0 : 0.0,
+        centerGuidanceEnabled ? maxCenterOffset : -1.0,
+      ];
+
   /// Returns the hint text to show for [state].
   String hintFor(SupyDocumentFrameState state) => hints.textFor(state);
 
@@ -133,7 +244,12 @@ class SupyDocumentGuidanceConfiguration {
       case SupyDocumentFrameState.tooFar:
       case SupyDocumentFrameState.tooSkewed:
       case SupyDocumentFrameState.blurry:
+      case SupyDocumentFrameState.glare:
+      case SupyDocumentFrameState.occluded:
+      case SupyDocumentFrameState.handShake:
+      case SupyDocumentFrameState.edgeClipped:
       case SupyDocumentFrameState.holdSteady:
+      case SupyDocumentFrameState.offCenter:
         return notReadyColor;
     }
   }
@@ -155,6 +271,13 @@ class SupyDocumentGuidanceConfiguration {
           other.readyStabilityFloor == readyStabilityFloor &&
           other.interiorVarianceFloor == interiorVarianceFloor &&
           other.holdSteadyFrames == holdSteadyFrames &&
+          other.maxGlareRatio == maxGlareRatio &&
+          other.glareExitMargin == glareExitMargin &&
+          other.maxCornerVelocity == maxCornerVelocity &&
+          other.minPerCornerStability == minPerCornerStability &&
+          other.edgeClipBlocking == edgeClipBlocking &&
+          other.centerGuidanceEnabled == centerGuidanceEnabled &&
+          other.maxCenterOffset == maxCenterOffset &&
           other.autoCapture == autoCapture &&
           other.autoCaptureDelay == autoCaptureDelay &&
           other.allowUnrectifiedFallback == allowUnrectifiedFallback &&
@@ -179,6 +302,13 @@ class SupyDocumentGuidanceConfiguration {
         readyStabilityFloor,
         interiorVarianceFloor,
         holdSteadyFrames,
+        maxGlareRatio,
+        glareExitMargin,
+        maxCornerVelocity,
+        minPerCornerStability,
+        edgeClipBlocking,
+        centerGuidanceEnabled,
+        maxCenterOffset,
         autoCapture,
         autoCaptureDelay,
         allowUnrectifiedFallback,
@@ -195,6 +325,7 @@ class SupyDocumentGuidanceConfiguration {
       'tilt≤$maxTiltDegrees°, luma≥$minMeanLuma, '
       'blur≥$minBlurScore, stable=$readyStableFrames, '
       'holdSteady=$holdSteadyFrames@$readyStabilityFloor, '
+      'centerGuidance=$centerGuidanceEnabled@$maxCenterOffset, '
       'autoCapture=$autoCapture)';
 }
 
@@ -209,10 +340,19 @@ class SupyDocumentGuidanceHints {
     this.tooFar = 'Move closer',
     this.tooSkewed = 'Hold the camera flat',
     this.blurry = 'Hold steady',
+    this.glare = 'Reduce glare — tilt the page',
+    this.occluded = 'Move fingers off the page',
+    this.handShake = 'Steady your hands',
+    this.edgeClipped = 'Fit the whole page in frame',
     this.holdSteady = 'Hold steady…',
     this.ready = "Don't move",
     this.capturing = 'Capturing…',
     this.captured = 'Captured!',
+    this.centerDocument = 'Center the document',
+    this.moveLeft = 'Move left',
+    this.moveRight = 'Move right',
+    this.moveUp = 'Move up',
+    this.moveDown = 'Move down',
   });
 
   /// Hint shown for [SupyDocumentFrameState.noDocument].
@@ -233,6 +373,18 @@ class SupyDocumentGuidanceHints {
   /// Hint shown for [SupyDocumentFrameState.blurry].
   final String blurry;
 
+  /// Hint shown for [SupyDocumentFrameState.glare].
+  final String glare;
+
+  /// Hint shown for [SupyDocumentFrameState.occluded].
+  final String occluded;
+
+  /// Hint shown for [SupyDocumentFrameState.handShake].
+  final String handShake;
+
+  /// Hint shown for [SupyDocumentFrameState.edgeClipped].
+  final String edgeClipped;
+
   /// Hint shown for [SupyDocumentFrameState.holdSteady].
   final String holdSteady;
 
@@ -244,6 +396,41 @@ class SupyDocumentGuidanceHints {
 
   /// Hint shown for [SupyDocumentFrameState.captured].
   final String captured;
+
+  /// Generic hint shown for [SupyDocumentFrameState.offCenter] when no single
+  /// dominant direction applies. Directional variants ([moveLeft], [moveRight],
+  /// [moveUp], [moveDown]) are preferred via [nudgeText] when the overlay has
+  /// resolved a [SupyDocumentNudge].
+  final String centerDocument;
+
+  /// Directional hint for [SupyDocumentNudge.left].
+  final String moveLeft;
+
+  /// Directional hint for [SupyDocumentNudge.right].
+  final String moveRight;
+
+  /// Directional hint for [SupyDocumentNudge.up].
+  final String moveUp;
+
+  /// Directional hint for [SupyDocumentNudge.down].
+  final String moveDown;
+
+  /// Returns the directional recenter hint for [nudge], or [centerDocument]
+  /// when [nudge] is `null`.
+  String nudgeText(SupyDocumentNudge? nudge) {
+    switch (nudge) {
+      case SupyDocumentNudge.left:
+        return moveLeft;
+      case SupyDocumentNudge.right:
+        return moveRight;
+      case SupyDocumentNudge.up:
+        return moveUp;
+      case SupyDocumentNudge.down:
+        return moveDown;
+      case null:
+        return centerDocument;
+    }
+  }
 
   /// Returns the hint text for [state].
   String textFor(SupyDocumentFrameState state) {
@@ -260,6 +447,14 @@ class SupyDocumentGuidanceHints {
         return tooSkewed;
       case SupyDocumentFrameState.blurry:
         return blurry;
+      case SupyDocumentFrameState.glare:
+        return glare;
+      case SupyDocumentFrameState.occluded:
+        return occluded;
+      case SupyDocumentFrameState.handShake:
+        return handShake;
+      case SupyDocumentFrameState.edgeClipped:
+        return edgeClipped;
       case SupyDocumentFrameState.holdSteady:
         return holdSteady;
       case SupyDocumentFrameState.ready:
@@ -268,6 +463,8 @@ class SupyDocumentGuidanceHints {
         return capturing;
       case SupyDocumentFrameState.captured:
         return captured;
+      case SupyDocumentFrameState.offCenter:
+        return centerDocument;
     }
   }
 
@@ -281,22 +478,40 @@ class SupyDocumentGuidanceHints {
           other.tooFar == tooFar &&
           other.tooSkewed == tooSkewed &&
           other.blurry == blurry &&
+          other.glare == glare &&
+          other.occluded == occluded &&
+          other.handShake == handShake &&
+          other.edgeClipped == edgeClipped &&
           other.holdSteady == holdSteady &&
           other.ready == ready &&
           other.capturing == capturing &&
-          other.captured == captured;
+          other.captured == captured &&
+          other.centerDocument == centerDocument &&
+          other.moveLeft == moveLeft &&
+          other.moveRight == moveRight &&
+          other.moveUp == moveUp &&
+          other.moveDown == moveDown;
 
   @override
-  int get hashCode => Object.hash(
+  int get hashCode => Object.hashAll([
         noDocument,
         tooDark,
         tooClose,
         tooFar,
         tooSkewed,
         blurry,
+        glare,
+        occluded,
+        handShake,
+        edgeClipped,
         holdSteady,
         ready,
         capturing,
         captured,
-      );
+        centerDocument,
+        moveLeft,
+        moveRight,
+        moveUp,
+        moveDown,
+      ]);
 }

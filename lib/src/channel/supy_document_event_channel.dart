@@ -1,6 +1,7 @@
 import 'package:flutter/services.dart';
 
 import '../models/supy_document_frame_metrics.dart';
+import '../models/supy_document_frame_state.dart';
 import '../models/supy_scan_error.dart';
 import 'supy_scanner_channel.dart';
 
@@ -21,6 +22,7 @@ sealed class SupyDocumentEvent {
       case 'frame_metrics':
         return SupyDocumentFrameMetricsEvent(
           metrics: SupyDocumentFrameMetrics.fromMap(map),
+          nativeState: _nativeStateFromWire(map['state']),
         );
       case 'preview_started':
         return SupyDocumentPreviewStartedEvent(
@@ -43,15 +45,32 @@ sealed class SupyDocumentEvent {
         );
     }
   }
+
+  /// Maps a raw `state` ordinal from the native payload to a
+  /// [SupyDocumentFrameState] via the wire-stable index, or `null` when the
+  /// platform did not classify this frame (Dart-FSM path). Out-of-range
+  /// ordinals fall through to `null` so a stale native build can't crash the
+  /// consumer — the Dart state machine then takes over.
+  static SupyDocumentFrameState? _nativeStateFromWire(Object? raw) {
+    if (raw is! int) return null;
+    if (raw < 0 || raw >= kSupyDocumentFrameStateWireIndex.length) return null;
+    return kSupyDocumentFrameStateWireIndex[raw];
+  }
 }
 
 /// One frame's worth of measurements from the native detector.
 class SupyDocumentFrameMetricsEvent extends SupyDocumentEvent {
   /// Creates a metrics event.
-  const SupyDocumentFrameMetricsEvent({required this.metrics});
+  const SupyDocumentFrameMetricsEvent({required this.metrics, this.nativeState});
 
   /// The metrics payload to feed into the state machine.
   final SupyDocumentFrameMetrics metrics;
+
+  /// The frame classification computed natively (C++ `GuidanceClassifier`),
+  /// when the platform classifies on-device. `null` means the platform sent
+  /// raw metrics only and the Dart [SupyDocumentStateMachine] should classify.
+  /// iOS embedded view emits this; Android embedded view does not yet.
+  final SupyDocumentFrameState? nativeState;
 }
 
 /// Emitted once the native camera preview has actually started rendering.

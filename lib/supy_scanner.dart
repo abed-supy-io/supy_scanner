@@ -7,8 +7,21 @@ library supy_scanner;
 export 'src/channel/supy_document_event_channel.dart';
 export 'src/channel/supy_event_channel.dart';
 export 'src/channel/supy_scanner_channel.dart';
+export 'src/document/supy_document_scanner.dart'
+    show SupyDocumentScanner;
 export 'src/document/supy_document_state_machine.dart'
     show SupyDocumentStateMachine;
+export 'src/enhance/supy_document_enhance_mode.dart'
+    show SupyDocumentEnhanceMode;
+export 'src/enhance/supy_document_filter.dart' show SupyDocumentFilter;
+export 'src/log/supy_log.dart'
+    show
+        SupyLog,
+        SupyLogLevel,
+        SupyLogRecord,
+        SupyLogSink,
+        SupyDebugPrintLogSink,
+        SupyNullLogSink;
 export 'src/models/supy_barcode.dart';
 export 'src/models/supy_barcode_format.dart';
 export 'src/models/supy_batch_barcode_options.dart';
@@ -17,8 +30,10 @@ export 'src/models/supy_document_data.dart';
 export 'src/models/supy_document_frame_metrics.dart'
     show SupyDocumentFrameMetrics;
 export 'src/models/supy_document_frame_state.dart'
-    show SupyDocumentFrameState, SupyDocumentGuidanceFrame;
+    show SupyDocumentFrameState, SupyDocumentGuidanceFrame, SupyDocumentNudge;
 export 'src/models/supy_document_page.dart';
+export 'src/models/supy_document_scanner_backend.dart'
+    show SupyDocumentScannerBackend;
 export 'src/models/supy_scan_error.dart';
 export 'src/models/supy_scan_options.dart';
 export 'src/models/ui/supy_action_bar_configuration.dart'

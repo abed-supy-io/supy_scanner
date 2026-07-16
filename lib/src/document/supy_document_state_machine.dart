@@ -140,6 +140,22 @@ class SupyDocumentStateMachine {
       return failing;
     }
 
+    // All hard failures pass — but if the document sits too far off-center,
+    // prompt a recenter before letting it settle toward `ready`. Disabled when
+    // `centerGuidanceEnabled` is `false`. While already in `offCenter`, relax
+    // the threshold by `exitMargin` so the prompt doesn't flicker as the user
+    // nudges it back across the band. Mirrors the C++ classifier (priority 10).
+    if (c.centerGuidanceEnabled && c.maxCenterOffset > 0.0) {
+      final centerCeiling = _state == SupyDocumentFrameState.offCenter
+          ? c.maxCenterOffset * (1.0 + c.exitMargin)
+          : c.maxCenterOffset;
+      if (m.centerOffsetX.abs() > centerCeiling ||
+          m.centerOffsetY.abs() > centerCeiling) {
+        _goodStreak = 0;
+        return SupyDocumentFrameState.offCenter;
+      }
+    }
+
     // All hard failures pass — but require quad stability before promoting
     // to `ready`. While holding in `holdSteady`, relax the floor by
     // `exitMargin` so we don't bounce out on a micro-jitter.
@@ -183,12 +199,41 @@ class SupyDocumentStateMachine {
     final loose = 1.0 + c.exitMargin; // for "must be above" floors
     final tight = 1.0 - c.exitMargin; // for "must be below" ceilings
 
+    // Occlusion comes first — a finger over the quad invalidates every other
+    // measurement on this frame (luma is biased by the finger, blur sampled
+    // through the finger is meaningless, tilt is computed off a corrupted
+    // corner). Surface this and stop.
+    if (m.perCornerStability.length == 4) {
+      final occlusionFloor = _state == SupyDocumentFrameState.occluded
+          ? c.minPerCornerStability * (1.0 - c.exitMargin)
+          : c.minPerCornerStability;
+      var anyBelow = false;
+      for (final s in m.perCornerStability) {
+        if (s < occlusionFloor) {
+          anyBelow = true;
+          break;
+        }
+      }
+      if (anyBelow) return SupyDocumentFrameState.occluded;
+    }
+
     final minLuma = _state == SupyDocumentFrameState.tooDark
         ? c.minMeanLuma * loose
         : c.minMeanLuma;
     if (m.meanLuma < minLuma) return SupyDocumentFrameState.tooDark;
 
-    if (m.clipsEdge) return SupyDocumentFrameState.tooClose;
+    final maxGlare = _state == SupyDocumentFrameState.glare
+        ? c.maxGlareRatio * (1.0 + c.glareExitMargin)
+        : c.maxGlareRatio;
+    if (m.glareRatio > maxGlare) return SupyDocumentFrameState.glare;
+
+    if (m.clipsEdge) {
+      // `edgeClipBlocking` only controls whether a clipping quad is escalated
+      // to its own state. When `false`, fall through to the existing tooClose
+      // branch so prior behaviour is preserved on drop-in upgrade.
+      if (c.edgeClipBlocking) return SupyDocumentFrameState.edgeClipped;
+      return SupyDocumentFrameState.tooClose;
+    }
     final maxCov = _state == SupyDocumentFrameState.tooClose
         ? c.maxCoverageRatio * tight
         : c.maxCoverageRatio;
@@ -208,37 +253,65 @@ class SupyDocumentStateMachine {
         ? c.minBlurScore * loose
         : c.minBlurScore;
     if (m.blurScore < minBlur) return SupyDocumentFrameState.blurry;
+
+    final maxVel = _state == SupyDocumentFrameState.handShake
+        ? c.maxCornerVelocity * (1.0 + c.exitMargin)
+        : c.maxCornerVelocity;
+    if (m.cornerVelocity > maxVel) return SupyDocumentFrameState.handShake;
     return null;
   }
 
   /// Priority ordering for min-dwell preemption: smaller = more urgent.
-  /// Matches the order in which [_firstFailure] surfaces issues.
+  /// Matches the order in which [_firstFailure] surfaces issues — and must
+  /// stay byte-identical to the C++ `priority()` table in
+  /// `native/document/document_guidance_classifier.cpp`. A drift here vs.
+  /// there causes the launcher path (C++-driven) and the PlatformView path
+  /// (Dart-driven) to surface different hints on the same frame stream.
   static int _priority(SupyDocumentFrameState s) {
     switch (s) {
       case SupyDocumentFrameState.noDocument:
         return 0;
-      case SupyDocumentFrameState.tooDark:
+      case SupyDocumentFrameState.occluded:
+        // First because a finger over the quad invalidates every other
+        // measurement on this frame.
         return 1;
-      case SupyDocumentFrameState.tooClose:
+      case SupyDocumentFrameState.tooDark:
         return 2;
-      case SupyDocumentFrameState.tooFar:
+      case SupyDocumentFrameState.glare:
+        // Same family as tooDark — both are exposure pathologies that bias
+        // every downstream metric, so they preempt geometry checks.
         return 3;
-      case SupyDocumentFrameState.tooSkewed:
+      case SupyDocumentFrameState.edgeClipped:
+        // Edge-clipping preempts tooClose because the hint copy is different
+        // (pan, don't pull back) and the user should see it first.
         return 4;
-      case SupyDocumentFrameState.blurry:
+      case SupyDocumentFrameState.tooClose:
         return 5;
-      case SupyDocumentFrameState.holdSteady:
-        // Sits between `blurry` and `ready`: all hard quality checks pass,
-        // but the quad still needs to settle before we promote.
+      case SupyDocumentFrameState.tooFar:
         return 6;
-      case SupyDocumentFrameState.ready:
+      case SupyDocumentFrameState.tooSkewed:
         return 7;
+      case SupyDocumentFrameState.blurry:
+        return 8;
+      case SupyDocumentFrameState.handShake:
+        // Distinct from blurry: defocus vs motion. Sits just below blurry
+        // because blurry already covers the static-unsharp case and we want
+        // it to win when both fire on the same frame.
+        return 9;
+      case SupyDocumentFrameState.offCenter:
+        // Reached only once every hard failure clears, but must preempt the
+        // settle-toward-ready holdSteady so the recenter prompt wins.
+        return 10;
+      case SupyDocumentFrameState.holdSteady:
+        // All hard quality checks pass, but the quad still needs to settle.
+        return 11;
+      case SupyDocumentFrameState.ready:
+        return 12;
       case SupyDocumentFrameState.capturing:
       case SupyDocumentFrameState.captured:
-        // UI-only terminal states — the FSM never classifies into them so
-        // this branch is unreachable. Treated as least-urgent for the sake of
-        // the exhaustive switch.
-        return 8;
+        // UI-only states — the FSM never classifies into them. Least-urgent
+        // for the exhaustive switch.
+        return 13;
     }
   }
 }

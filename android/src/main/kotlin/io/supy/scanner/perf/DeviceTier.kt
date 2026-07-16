@@ -47,19 +47,40 @@ enum class DeviceTier {
     fun jpegQuality(requested: Int): Int = when (this) {
         HIGH -> requested
         MID -> requested
-        LOW -> minOf(requested, 75)
+        LOW -> minOf(requested, 88)
     }
 
     companion object {
         @Volatile
         private var cached: DeviceTier? = null
 
+        // Debug-only tier override. Honored by `detect()` in debuggable builds
+        // so engineers can repro tier-low behaviour on a tier-high CI device.
+        // Set via the `debugForceTier` MethodChannel call from Dart, which is
+        // itself gated by `kDebugMode` — so this is also gated on the
+        // application's `FLAG_DEBUGGABLE` to belt-and-braces strip in release.
+        @Volatile
+        private var debugOverride: DeviceTier? = null
+
         fun detect(context: Context): DeviceTier {
+            debugOverride?.let { return it }
             cached?.let { return it }
             val resolved = compute(context)
             cached = resolved
             return resolved
         }
+
+        /**
+         * Forces [detect] to return [tier] until cleared. No-op on release
+         * builds (caller-side `FLAG_DEBUGGABLE` check enforces this).
+         * Pass `null` to clear.
+         */
+        fun setDebugOverride(tier: DeviceTier?) {
+            debugOverride = tier
+        }
+
+        /** Current debug override or null if none. Test/inspection helper. */
+        fun debugOverride(): DeviceTier? = debugOverride
 
         private fun compute(context: Context): DeviceTier {
             val am = context.applicationContext

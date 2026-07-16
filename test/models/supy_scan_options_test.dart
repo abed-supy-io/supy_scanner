@@ -1,5 +1,7 @@
 import 'package:flutter_test/flutter_test.dart';
+import 'package:supy_scanner/src/enhance/supy_document_filter.dart';
 import 'package:supy_scanner/src/models/supy_barcode_format.dart';
+import 'package:supy_scanner/src/models/supy_document_scanner_backend.dart';
 import 'package:supy_scanner/src/models/supy_scan_options.dart';
 
 void main() {
@@ -65,6 +67,47 @@ void main() {
       );
       expect(png.toWire()['outputFormat'], 'png');
       expect(pdf.toWire()['outputFormat'], 'pdf');
+    });
+
+    test('preferredBackend is omitted by default', () {
+      const opts = SupyDocumentScanOptions();
+      expect(opts.preferredBackend, isNull);
+      expect(opts.toWire().containsKey('preferredBackend'), isFalse);
+    });
+
+    test('preferredBackend serializes to its wireName', () {
+      const cameraX = SupyDocumentScanOptions(
+        preferredBackend: SupyDocumentScannerBackend.cameraX,
+      );
+      const gms = SupyDocumentScanOptions(
+        preferredBackend: SupyDocumentScannerBackend.gms,
+      );
+      expect(cameraX.toWire()['preferredBackend'], 'cameraX');
+      expect(gms.toWire()['preferredBackend'], 'gms');
+    });
+
+    test('filter defaults to color on the wire', () {
+      const opts = SupyDocumentScanOptions();
+      expect(opts.filter, SupyDocumentFilter.color);
+      expect(opts.toWire()['filter'], 'color');
+    });
+
+    test('filter serializes grayscale/blackAndWhite/original', () {
+      expect(
+        const SupyDocumentScanOptions(filter: SupyDocumentFilter.grayscale)
+            .toWire()['filter'],
+        'grayscale',
+      );
+      expect(
+        const SupyDocumentScanOptions(filter: SupyDocumentFilter.blackAndWhite)
+            .toWire()['filter'],
+        'blackAndWhite',
+      );
+      expect(
+        const SupyDocumentScanOptions(filter: SupyDocumentFilter.original)
+            .toWire()['filter'],
+        'original',
+      );
     });
   });
 }

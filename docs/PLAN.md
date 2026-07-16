@@ -298,7 +298,7 @@ Build `supy_scanner_scanbot_compat` so retailer can adopt with minimal churn.
 | Sprint 4 | wks 7–8 | Phase 4 + Phase 5 (first half) |
 | Buffer | wk 9 | Phase 5 finish, regression, v1.0.0 |
 
-Detailed ticket-level breakdown lives in [`docs/SPRINTS.md`](SPRINTS.md).
+Detailed ticket-level breakdown lives in [`docs/HISTORY.md`](HISTORY.md#archived-v10-sprint-plan-was-docssprintsmd-shipped-with-v100) (archived; all sprints shipped with v1.0.0).
 
 ### Post-v1.0 — v1.1 Performance workstream
 
@@ -331,6 +331,75 @@ Replaces the current `model_unavailable` failure on non-GMS Android devices (Hua
 | CXD6 — Sign-off | pending | Manual walkthrough on one non-GMS device (Huawei P30 or emulator with GMS stripped); D1/D2/D4/D10/D12 all pass; tag `v1.2.0`. |
 
 **Exit:** `SupyDocumentScanner.startMultiPage` succeeds on a non-GMS device; result shape identical to GMS path; retailer code is unchanged.
+
+#### Phase CSU — Custom scanner UI (own VisionKit + GMS replacement)
+
+Replaces Apple's `VNDocumentCameraViewController` (iOS) and Google's GMS Document Scanner (Android, GMS path) with a first-party scanner UI on both platforms so we own the in-scanner experience end-to-end — hint capsule, edge brackets, auto-capture timing, branding. The closed UIs cannot be skinned; they're the reason the embedded smart-guidance vocabulary is currently invisible inside the standalone document flow. Reuses the C++ `supy::scanner::document::classify()` classifier (landed in PR-A) so iOS and Android share one FSM. **Channel surface (`io.supy.scanner/v1`) and `SupyDocumentData` result shape stay unchanged** — retailer code is not touched.
+
+Drop-in compatibility constraints carried in: no paid SDK dep, on-device only, iOS 16 floor, `AVCaptureSession` start/stop off `.main`, public Dart types stay `Supy*`-prefixed.
+
+| Sub-phase | Status | Scope |
+|---|---|---|
+| CSU1 — iOS custom AVCapture scanner | pending | New `CustomDocumentScannerViewController` (Swift, `ios/Classes/document/`). `AVCaptureSession` on a background queue; preview layer + analyzer feeding `Vision` `VNDetectRectanglesRequest` for quad + frame metrics. Hint capsule (UILabel) + edge brackets rendered as a `CAShapeLayer` overlay, driven by `supy::scanner::document::classify` via the existing `SupyNativeCoreBridge`. Auto-capture fires after `kReady` dwell completes; manual shutter fallback. Replaces `VNDocumentCameraViewController` in `DocumentScannerPresenter.swift`. |
+| CSU2 — Android CameraX promotion | pending | Lift `CameraXDocumentScannerActivity` from the non-GMS fallback path (Phase CXD) to the **default** Android document scanner. `DocumentScannerLauncher` stops calling `GoogleApiAvailability` for routing; GMS code path gated behind a build-time opt-in (`supyUseGmsDocumentScanner=true` gradle prop) for one release as an escape hatch, removed in v1.4. Activity gains the hint capsule (TextView) + bracket overlay (custom `View` drawing the quad), driven by the C++ classifier via JNI (new `nativeClassifyGuidance` shim — separate ticket). Auto-capture replaces tap-to-capture as default; tap stays as manual override. |
+| CSU3 — Classifier ↔ camera plumbing | pending | iOS: feed `VNRectangleObservation` + per-frame luma/blur metrics into `classify()`; marshal `SmoothedMetrics` back across the bridge for overlay paint. Android: extend `supy_scanner_core_jni.cpp` with `nativeClassifyGuidance(ByteBuffer yuv, int w, int h, int stride, …, FloatArray outMetrics)`; CameraX `ImageAnalysis` analyzer calls it per frame. Both sides reuse the same `SupyDocumentGuidanceConfiguration` thresholds shipped in `lib/src/models/ui/`. |
+| CSU4 — Dart options + hint plumbing | pending | Extend `SupyDocumentScanOptions` with `guidance: SupyDocumentGuidanceConfiguration?` (nullable; default uses native defaults). `toWire()` serializes thresholds + hint strings under a new `guidance` map key; both native handlers parse it. **No new channel methods** — channel stays at `io.supy.scanner/v1`. Update `docs/ARCHITECTURE.md` `scanDocument` arg table with the new key in the same PR (per CLAUDE.md). Mocked unit test pins the wire shape. |
+| CSU5 — Result-contract parity + pipeline reuse | pending | Pages → existing `PageReencoder` (Android) / `OcrRunner`+`PDFKit` (iOS) — no changes to OCR or PDF assembly. Integration tests in `example/integration_test/` pin that `scanDocument` returns the same `SupyDocumentData` shape (pages, ocrText, pdfUri) on both platforms after the swap. Cancel path matches D4 (`success([])`). Permission / camera-unavailable errors keep their current codes. |
+| CSU6 — Docs + QA + sign-off | pending | `docs/ARCHITECTURE.md`: new module rows (`CustomDocumentScannerViewController`, custom-overlay `View`), updated `DocumentScannerLauncher` row (default routing flipped). `docs/MIGRATION.md`: note GMS Document Scanner dep removal in v1.3, escape-hatch flag for one release. `docs/QA.md`: D13 (custom-UI hint capsule visible end-to-end), D14 (auto-capture timing on iPhone SE 3 + Moto G Power), update D1/D2 expected screenshots. Manual walkthrough on iPhone SE 3 + Pixel 8 + Huawei P30; tag `v1.3.0`. |
+
+**Exit:** `scanDocument` on both platforms renders the Supy hint capsule + brackets inside the scanner (no VNDocumentCamera, no GMS UI in default path); result shape unchanged; retailer code unchanged; GMS Document Scanner Gradle dep removable behind opt-in flag.
+
+**Risk additions to register:** R9 — custom AVCapture / CameraX scanner quality (corner snapping, false captures) below VNDocumentCamera baseline. Mitigation: side-by-side capture comparison on the v1.0 acceptance bench before flipping the default; opt-in escape hatch on Android for one release.
+
+#### Phase DIE — Document image enhancement
+
+Shared native C++ post-processing for captured document pages so Android (raw CameraX JPEG) and iOS (VisionKit) produce comparable output for AI/LLM ingestion, on-device OCR, and human review. **Additive** — channel stays at `v1`, public API gains `SupyDocumentScanOptions.enhanceMode` (default null → platform picks) and per-page `enhancedStages` / `enhanceMs`. No OpenCV. Full design in [`docs/ENHANCEMENT.md`](ENHANCEMENT.md).
+
+| Sub-phase | Status | Scope |
+|---|---|---|
+| DIE1 — Native C ABI + pipeline | ✅ done | `supy_scanner_enhance.h` + `native/enhance/{pipeline,illumination,tone,unsharp,quality_gate}.cpp`. Blur-gate verdict, separable morphological closing, gamma+S-curve LUT, separable unsharp. |
+| DIE2 — Android JNI + PageReencoder integration | ✅ done | `nativeEnhanceRgba` JNI entry; `PageReencoder.reencodeOne` runs the pipeline between decode and re-encode. Default mode `balanced`. |
+| DIE3 — iOS bridge + DocumentScannerPresenter | ✅ done | Obj-C++ shim over the C ABI; presenter runs the pipeline between `UIImage` delivery and `jpegData`. Default mode `off` (VisionKit pre-enhances). |
+| DIE4 — Dart plumbing | ✅ done | `SupyDocumentEnhanceMode` enum re-exported from `supy_scanner.dart`; `SupyDocumentScanOptions.enhanceMode` (nullable, platform-default); per-page `enhancedStages` / `enhanceMs`. |
+| DIE5 — Tests + docs | ✅ done | Host GoogleTest suite (`native/enhance/enhance_test.cpp`), `docs/ENHANCEMENT.md`, `docs/ARCHITECTURE.md` channel row + subsystem subsection. |
+| DIE6 — Perf bench + QA | pending | `tools/bench_enhance` micro-benchmark; manual QA on 5 scenarios from [`docs/QA.md`](QA.md) on one Android + one iPhone. |
+
+#### Phase IXP — Invoice eXtraction Prototype (iOS lab feature)
+
+On-device structured-field extraction from captured invoices/receipts. **Lab feature only** — surfaced in the example app behind an "Invoice (Lab)" tab; **no public `Supy*` API in `lib/` yet** so we can iterate on the data shape without shipping a contract. Channel stays at `io.supy.scanner/v1` with one additive method (`parseInvoice`). Vision text recognition + heuristic row/column clustering + keyword-anchored field extractors — no Core ML model, no cloud, no paid SDK dep. iOS-first; Android tracked as IXP-Android.
+
+Drop-in compatibility constraints carried in: no paid SDK dep, on-device only, iOS 16 floor, `VNRequest` work on background queue, no breakage of existing `scanDocument` callers.
+
+| Sub-phase | Status | Scope |
+|---|---|---|
+| IXP1 — Native iOS pipeline | pending | New `ios/Classes/invoice/InvoiceParser.swift`. `VNRecognizeTextRequest` (`.accurate` revision, `usesLanguageCorrection: false`, custom-words list seeded with currency codes + invoice keywords). Pre-processes input through `DocumentEnhancer` to lift text contrast before OCR. All work on `userInitiated` background queue per CLAUDE.md iOS threading rule. |
+| IXP2 — Field extraction heuristics | pending | Row clustering by Y-band tolerance, column inference by X-percentile; field extractors for vendor (largest-font text near top), date (multi-format regex), invoice number (keyword + alphanumeric), currency (symbol + ISO code dictionary), total (keyword anchor + largest numeric below), tax/VAT (keyword anchor), line items (rows with both text and right-aligned numeric). Returns `[String: Any]` over the channel; structure pinned in IXP4. |
+| IXP3 — Channel method + Android stub | pending | Add `parseInvoice` to `io.supy.scanner/v1` (args: `imagePath`, optional `locales: [String]`). iOS dispatches to `InvoiceParser`. Android `SupyScannerPlugin.kt` returns `FlutterError("unimplemented", "parseInvoice is iOS-only in v1.2", nil)`. Update `docs/ARCHITECTURE.md` channel table same PR (per CLAUDE.md). |
+| IXP4 — Experimental Dart wrapper | pending | `lib/src/experimental/supy_invoice_parser.dart` — `SupyInvoiceData` immutable value type (vendor, invoiceNumber, date, currency, total, tax, lineItems, rawOcrText, confidence). **NOT exported** from `package:supy_scanner/supy_scanner.dart`; example app imports via internal path. Marked `@experimental` doc-comment. Mocked unit test pins channel wire shape. |
+| IXP5 — Example app lab tab | pending | New tab in `example/lib/` ("Invoice (Lab)"). Captures via existing document scanner, parses the first page, shows extracted fields in a card + raw OCR text in an expandable section. Surface Android unimplemented case gracefully ("iOS-only in v1.2 lab"). |
+| IXP6 — Tests + docs | pending | `ios/Tests/invoice/InvoiceParserTests.swift` (pure-logic extractor tests with synthetic `VNRecognizedTextObservation` stand-ins). Dart mocked-channel test. `docs/ARCHITECTURE.md` row. No `MIGRATION.md` entry (lab feature). |
+
+**Exit:** Example app parses a real invoice end-to-end on iPhone, surfaces vendor + date + total + currency + ≥3 line items, with raw OCR text shown for verification. **No `lib/` public-API change**, no promise of stability, no retailer cutover.
+
+**Promotion gate to public API (post-IXP):** retailer surfaces a concrete need and the heuristic accuracy passes a labeled benchmark of ≥20 real Supy invoices (>80% header fields correct, >70% line-item rows correct). Promotion would add `lib/src/invoice/` public types, MIGRATION.md row, and IXP-Android parity work.
+
+#### Phase FQS — Frame Quality Score (shared C++ scorer)
+
+Pulls the per-frame **mean luma + variance-of-Laplacian** computation out of platform code (Swift `DocumentDetector.computeLumaMetrics`, Kotlin `DocumentFrameAnalyzer`) into a shared C++ module under `native/quality/`. Single source of truth so the existing C++ guidance classifier (`native/document/document_guidance_classifier.cpp`) sees identical numbers on both platforms.
+
+**Native-internal only** — no Dart-visible change, no MethodChannel addition. The scorer is wired through `SupyNativeCoreBridge` on iOS and JNI on Android. Channel stays at `io.supy.scanner/v1`.
+
+| Sub-phase | Status | Scope |
+|---|---|---|
+| FQS1 — C++ scorer | completed | `native/quality/frame_scorer.{h,cpp}`. Center-60% crop, stride-sampled to ~96 px long edge, mean luma + 4-neighbour Laplacian variance. Pure-C++, no platform deps. Added to `native/CMakeLists.txt` `SUPY_CORE_SOURCES`. |
+| FQS2 — iOS bridge | completed | `+SupyNativeCoreBridge.scoreLumaPlane:width:height:rowStride:` returns `{meanLuma, blurScore}` dictionary. `DocumentDetector.computeLumaMetrics` reduced to a Y-plane lock + bridge call. Pod includes via `SupyNativeCoreImpl.mm`, `preserve_paths` + `HEADER_SEARCH_PATHS` updated for `../native/quality`. |
+| FQS3 — Host tests | completed | `native/quality/frame_scorer_test.cpp` — null/bad-dim guard, uniform→zero blur, edges > gradient > flat ordering, row-stride padding insensitivity. Wired into `supy_scanner_core_tests`. |
+| FQS4 — Android JNI parity | pending | Mirror on Android: replace the Kotlin Laplacian in `DocumentFrameAnalyzer` with a JNI call into the same `compute_luma_metrics`. Out of scope until iOS validation lands. |
+| FQS5 — QA | pending | Walk `docs/QA.md` Phase FQS scenarios on one iPhone before declaring done. |
+
+**Exit (iOS half):** `DocumentDetector` produces the same `LumaMetrics` numbers via the C++ scorer that the Swift implementation produced, classifier transitions unchanged in manual QA.
+
+**Decision:** FrameScore parity on Android is a follow-up JNI binding after iOS validation lands — keeps the bring-up cost on one platform at a time.
 
 #### Post-v1.2 — candidates
 

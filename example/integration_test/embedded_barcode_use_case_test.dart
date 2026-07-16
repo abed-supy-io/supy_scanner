@@ -4,7 +4,6 @@
 // falls back to its unsupported-platform placeholder so the page is still
 // safe to pump in CI; native frames only flow on a connected device.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:supy_scanner_example/demo/supy_demo_embedded_barcode.dart';

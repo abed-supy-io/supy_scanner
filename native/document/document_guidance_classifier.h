@@ -19,6 +19,14 @@
 
 namespace supy::scanner::document {
 
+// Wire-stable indices. Values 0..7 match the original v1.0 ordering and MUST
+// NOT be reordered — `kSupyDocumentFrameStateWireIndex` on the Dart side maps
+// by these numbers, and the launcher path persists state across native ↔
+// channel boundaries by name + raw value. New variants append only.
+//
+// Detection-priority ordering (which state preempts which when several apply
+// on the same frame) is encoded separately in `priority()` in the .cpp — it
+// is NOT the same as this enum's numeric ordering.
 enum class FrameState : std::uint8_t {
   kNoDocument = 0,
   kTooDark = 1,
@@ -28,6 +36,19 @@ enum class FrameState : std::uint8_t {
   kBlurry = 5,
   kHoldSteady = 6,
   kReady = 7,
+  // Appended for the CQG sprint. Order here is wire-stable; matches the
+  // tail of `kSupyDocumentFrameStateWireIndex` in
+  // `lib/src/models/supy_document_frame_state.dart`.
+  kGlare = 8,
+  kOccluded = 9,
+  kHandShake = 10,
+  kEdgeClipped = 11,
+  // Framing checks all pass but the quad sits too far off-center. Emitted
+  // after `firstFailure` clears, before the stability gate, so the consumer
+  // can prompt a recenter before promoting to ready. The arrow direction is
+  // a pure render detail derived from the signed centerOffset — no direction
+  // is encoded in the state itself.
+  kOffCenter = 12,
 };
 
 // Mirror of `SupyDocumentFrameMetrics`. Pure data — populate from the
@@ -41,6 +62,20 @@ struct FrameMetrics {
   float blurScore = 0.0f;       // variance-of-Laplacian
   float quadStability = 0.0f;   // 0..1
   float interiorVariance = 0.0f;
+  // CQG additions — see Dart `SupyDocumentFrameMetrics` for semantics.
+  float glareRatio = 0.0f;          // 0..1, fraction of luma > 245 inside quad
+  float cornerVelocity = 0.0f;      // 0..~0.1, L2 of quad delta / preview diag
+  // Per-corner EMA distance from `QuadStabilityTracker` (TL/TR/BR/BL).
+  // Length-4 if present; a length-0 array signals "no per-corner signal this
+  // frame" — the classifier holds its prior occlusion judgement.
+  std::array<float, 4> perCornerStability{};
+  bool hasPerCornerStability = false;
+  // Signed quad-centroid offset from preview center, per axis, in half-extent
+  // fractions: `(centroid - 0.5) * 2`. Range ~[-1, 1]. Positive X = quad sits
+  // right of center; positive Y = below center. Native detectors compute this
+  // from the quad they already have (the smoothed path carries no usable quad).
+  float centerOffsetX = 0.0f;
+  float centerOffsetY = 0.0f;
 };
 
 // Mirror of `SupyDocumentGuidanceConfiguration` (threshold subset — colors and
@@ -59,6 +94,18 @@ struct GuidanceConfig {
   int holdSteadyFrames = 6;
   int lostDocumentGraceFrames = 3;
   int minDwellFrames = 4;
+  // CQG additions — mirror of the Dart `SupyDocumentGuidanceConfiguration`.
+  float maxGlareRatio = 0.04f;
+  float glareExitMargin = 0.50f;  // wider than `exitMargin` — glare is bursty
+  float maxCornerVelocity = 0.020f;
+  float minPerCornerStability = 0.55f;
+  bool edgeClipBlocking = false;  // invoice preset flips this to true
+  // Max allowed quad-centroid offset from center (half-extent fraction) before
+  // `kOffCenter` fires once framing otherwise passes. A non-positive value
+  // disables center guidance entirely — Dart passes a sentinel `-1` when the
+  // consumer turns `centerGuidanceEnabled` off, so no extra wire bool is
+  // needed.
+  float maxCenterOffset = 0.12f;
 };
 
 // Internal classifier state. Zero-initialise on construction; `reset()`
@@ -83,6 +130,19 @@ struct GuidanceState {
   bool hasQuad = false;
   bool lastClipsEdge = false;
 
+  // CQG additions.
+  float glare = 0.0f;
+  float cornerVelocity = 0.0f;
+  std::array<float, 4> perCornerStability{};
+  bool hasPerCornerStability = false;
+  // Smoothed signed center offset (half-extent fractions, per axis).
+  float centerOffsetX = 0.0f;
+  float centerOffsetY = 0.0f;
+  // Live, opaque quality estimate in [0,1] surfaced to consumers. Computed
+  // ONLY on the C++ side; the Dart smoother treats this as passthrough so we
+  // don't double-smooth. See header doc for the source-of-truth exception.
+  float liveQualityScore = 0.0f;
+
   void reset() { *this = GuidanceState{}; }
 };
 
@@ -98,6 +158,17 @@ struct SmoothedMetrics {
   float quadStability = 0.0f;
   float interiorVariance = 0.0f;
   std::array<float, 8> quad{};
+  // CQG additions.
+  float glareRatio = 0.0f;
+  float cornerVelocity = 0.0f;
+  std::array<float, 4> perCornerStability{};
+  bool hasPerCornerStability = false;
+  // Smoothed signed center offset (half-extent fractions, per axis).
+  float centerOffsetX = 0.0f;
+  float centerOffsetY = 0.0f;
+  // Opaque, C++-computed quality estimate surfaced in `frame_metrics` to
+  // consumers. Dart never recomputes — see header doc.
+  float liveQualityScore = 0.0f;
 };
 
 #if defined(_WIN32)

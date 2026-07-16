@@ -11,6 +11,22 @@ final class SupyDeviceTierTests: XCTestCase {
     XCTAssertNil(SupyDeviceTier.high.ocrLongEdgeCap)
   }
 
+  /// Unlike the barcode `analyzerFpsCap` (HIGH = uncapped), the document
+  /// detector is capped on every tier — the Vision segmentation model is heavy
+  /// enough that even flagships benefit, and edge guidance needs no more than
+  /// ~20 FPS. Caps must descend high ≥ mid ≥ low.
+  func testDocumentDetectorFpsCapPerTier() {
+    XCTAssertEqual(SupyDeviceTier.high.documentDetectorFpsCap, 20)
+    XCTAssertEqual(SupyDeviceTier.mid.documentDetectorFpsCap, 15)
+    XCTAssertEqual(SupyDeviceTier.low.documentDetectorFpsCap, 12)
+    XCTAssertGreaterThanOrEqual(
+      SupyDeviceTier.high.documentDetectorFpsCap,
+      SupyDeviceTier.mid.documentDetectorFpsCap)
+    XCTAssertGreaterThanOrEqual(
+      SupyDeviceTier.mid.documentDetectorFpsCap,
+      SupyDeviceTier.low.documentDetectorFpsCap)
+  }
+
   func testMidDialsMatchPerformanceDocsPolicyTable() {
     let size = SupyDeviceTier.mid.barcodeAnalyzerSize
     XCTAssertEqual(size?.width, 960)
@@ -34,9 +50,9 @@ final class SupyDeviceTierTests: XCTestCase {
     XCTAssertEqual(SupyDeviceTier.mid.jpegQuality(requested: 0.95), 0.95)
   }
 
-  func testLowCapsJpegQualityAtPointSevenFiveButDoesNotRaiseLowerRequests() {
-    XCTAssertEqual(SupyDeviceTier.low.jpegQuality(requested: 0.95), 0.75)
+  func testLowCapsJpegQualityAtPointEightEightButDoesNotRaiseLowerRequests() {
+    XCTAssertEqual(SupyDeviceTier.low.jpegQuality(requested: 0.95), 0.88)
     XCTAssertEqual(SupyDeviceTier.low.jpegQuality(requested: 0.60), 0.60)
-    XCTAssertEqual(SupyDeviceTier.low.jpegQuality(requested: 0.75), 0.75)
+    XCTAssertEqual(SupyDeviceTier.low.jpegQuality(requested: 0.88), 0.88)
   }
 }

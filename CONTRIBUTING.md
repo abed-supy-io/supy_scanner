@@ -108,4 +108,4 @@ Copy this into the PR description:
 
 - Architecture / channel design — `docs/ARCHITECTURE.md`, then ask in `#mobile-eng`.
 - Symbology questions — `docs/SYMBOLOGIES.md`, then ask in `#mobile-eng`.
-- Process / sprint scope — `docs/SPRINTS.md`, then ask the mobile lead.
+- Process / sprint scope — `docs/HISTORY.md` (archived v1.0 sprint plan), then ask the mobile lead.

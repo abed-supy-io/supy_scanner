@@ -20,7 +20,7 @@ iOS is untouched — VisionKit is in every supported iOS 16+ device. The fallbac
 
 ## Capture UX (v1.2)
 
-Manual capture only. Auto-snap (edge-detected) is deferred to a v1.3 candidate (see `docs/PLAN.md` Post-v1.2).
+Manual capture by default. Auto-snap activates when `SupyDocumentScanOptions.autoCaptureDelayMs > 0` (CXD-AS1, v1.2.x): the activity attaches `DocumentFrameAnalyzer` on a dedicated executor and drives the C++ guidance state machine (`native/document/document_guidance_classifier.{h,cpp}`) through the `SupyNativeCore.guidance*` JNI facade. Once the classifier sits at `Ready` for `autoCaptureDelayMs` milliseconds it fires `ImageCapture.takePicture(...)` on the main thread. Dwell is tier-aware (LOW=18 / MID=12 / HIGH=9 ready stable frames) and an in-preview hint label renders bilingual (en/ar) guidance copy for the eight `GuidanceFrameState` values. `autoCaptureDelayMs == 0` disables auto-snap and hides the hint — manual FAB capture remains the only path.
 
 ```
 ┌─────────────────────────────────────────┐
@@ -88,9 +88,9 @@ Modified files:
 
 ## Out of scope for v1.2
 
-- **Edge detection / auto-snap.** Deferred to v1.3 candidate. Capture is purely manual.
+- **Edge detection / auto-snap.** Shipped in v1.2.x via CXD-AS1 (see "Capture UX" above). Edge detection runs on the analyzer thread through `DocumentFrameAnalyzer`; the classifier itself is the same C++ FSM iOS uses.
 - **Perspective correction.** Captured JPEGs are saved as-shot. The v1.1 Sprint 6 `captureAndRectify` path is GMS-only; revisiting non-GMS rectification is a v1.3 conversation.
-- **PDF / PNG output for the fallback.** v1.2 emits JPEG only on the non-GMS path. The `SupyDocumentOutputFormat` request is honored on the GMS path (v1.1 Sprint 7) and ignored on the CameraX path with a single log line.
+- **PNG output for the fallback.** PNG is emitted per-page when requested. PDF output (v1.2 P2 / CXD2 PDF parity, 2026-06-16): the CameraX path now assembles a PDF via `PdfAssembler` (Android `PdfDocument`) over the re-encoded JPEG pages — `pdfUri` is populated on both backends. Byte-for-byte parity with the GMS-produced PDF is not a goal; format-level parity (page count + extractable text) is.
 - **iOS.** No iOS work — VisionKit is universal on iOS 16+.
 
 ## Exit criteria

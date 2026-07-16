@@ -19,6 +19,12 @@ class SupyDocumentFrameMetrics {
     this.clipsEdge = false,
     this.quadStability = 0.0,
     this.interiorVariance = 0.0,
+    this.glareRatio = 0.0,
+    this.cornerVelocity = 0.0,
+    this.centerOffsetX = 0.0,
+    this.centerOffsetY = 0.0,
+    this.perCornerStability = const <double>[],
+    this.liveQualityScore,
   });
 
   /// Parses a raw map from the native event channel.
@@ -32,6 +38,13 @@ class SupyDocumentFrameMetrics {
         if (dx != null && dy != null) points.add(Offset(dx, dy));
       }
     }
+    final rawPerCorner =
+        (map['perCornerStability'] as List<Object?>?) ?? const [];
+    final perCorner = <double>[];
+    for (final entry in rawPerCorner) {
+      final value = (entry as num?)?.toDouble();
+      if (value != null) perCorner.add(value);
+    }
     return SupyDocumentFrameMetrics(
       quad: points.length == 4 ? List.unmodifiable(points) : const [],
       coverageRatio: (map['coverageRatio'] as num?)?.toDouble() ?? 0.0,
@@ -41,6 +54,14 @@ class SupyDocumentFrameMetrics {
       clipsEdge: (map['clipsEdge'] as bool?) ?? false,
       quadStability: (map['quadStability'] as num?)?.toDouble() ?? 0.0,
       interiorVariance: (map['interiorVariance'] as num?)?.toDouble() ?? 0.0,
+      glareRatio: (map['glareRatio'] as num?)?.toDouble() ?? 0.0,
+      cornerVelocity: (map['cornerVelocity'] as num?)?.toDouble() ?? 0.0,
+      centerOffsetX: (map['centerOffsetX'] as num?)?.toDouble() ?? 0.0,
+      centerOffsetY: (map['centerOffsetY'] as num?)?.toDouble() ?? 0.0,
+      perCornerStability: perCorner.length == 4
+          ? List<double>.unmodifiable(perCorner)
+          : const <double>[],
+      liveQualityScore: (map['liveQualityScore'] as num?)?.toDouble(),
     );
   }
 
@@ -76,6 +97,44 @@ class SupyDocumentFrameMetrics {
   /// is empty.
   final double interiorVariance;
 
+  /// Fraction of pixels inside the quad whose luma exceeds the specular-
+  /// highlight threshold (~`245/255`). Range `[0..1]`. 0.0 when [quad] is
+  /// empty. Drives [SupyDocumentFrameState.glare].
+  final double glareRatio;
+
+  /// L2 displacement of the quad vertices between this frame and the previous
+  /// one, normalized by the preview diagonal at 30fps. Drives
+  /// [SupyDocumentFrameState.handShake]. 0.0 when [quad] is empty or when no
+  /// prior frame exists.
+  final double cornerVelocity;
+
+  /// Signed horizontal offset of the quad centroid from preview center, in
+  /// half-extent fractions: `(centroidX - 0.5) * 2`, range ~`[-1..1]`.
+  /// Positive = quad sits right of center. `0.0` when [quad] is empty. Computed
+  /// natively from the detected quad and shipped on the wire so both the
+  /// classifier and the UI arrow read one source of truth. Drives
+  /// [SupyDocumentFrameState.offCenter].
+  final double centerOffsetX;
+
+  /// Signed vertical offset of the quad centroid from preview center, in
+  /// half-extent fractions: `(centroidY - 0.5) * 2`, range ~`[-1..1]`.
+  /// Positive = quad sits below center. `0.0` when [quad] is empty. Drives
+  /// [SupyDocumentFrameState.offCenter].
+  final double centerOffsetY;
+
+  /// Per-corner stability score (EMA distance from the smoothed corner), in
+  /// `[0..1]` — 1 = rock-solid, 0 = wildly moving. Index order matches [quad]
+  /// (TL/TR/BR/BL). Empty when [quad] is empty. Drives
+  /// [SupyDocumentFrameState.occluded].
+  final List<double> perCornerStability;
+
+  /// Aggregate quality score in `[0..1]` produced by the C++ classifier and
+  /// surfaced opaquely on each frame. Computed **only** in C++ — Dart never
+  /// recomputes it — so PlatformView consumers can preview the per-page
+  /// quality bucket before the user fires capture. `null` when the native
+  /// side hasn't populated it.
+  final double? liveQualityScore;
+
   /// `true` when the frame contains a usable document quad.
   bool get hasDocument => quad.length == 4;
 
@@ -83,14 +142,20 @@ class SupyDocumentFrameMetrics {
   bool operator ==(Object other) =>
       identical(this, other) ||
       other is SupyDocumentFrameMetrics &&
-          _listEquals(other.quad, quad) &&
+          _quadEquals(other.quad, quad) &&
           other.coverageRatio == coverageRatio &&
           other.tiltDegrees == tiltDegrees &&
           other.meanLuma == meanLuma &&
           other.blurScore == blurScore &&
           other.clipsEdge == clipsEdge &&
           other.quadStability == quadStability &&
-          other.interiorVariance == interiorVariance;
+          other.interiorVariance == interiorVariance &&
+          other.glareRatio == glareRatio &&
+          other.cornerVelocity == cornerVelocity &&
+          other.centerOffsetX == centerOffsetX &&
+          other.centerOffsetY == centerOffsetY &&
+          _doubleListEquals(other.perCornerStability, perCornerStability) &&
+          other.liveQualityScore == liveQualityScore;
 
   @override
   int get hashCode => Object.hash(
@@ -102,6 +167,12 @@ class SupyDocumentFrameMetrics {
         clipsEdge,
         quadStability,
         interiorVariance,
+        glareRatio,
+        cornerVelocity,
+        centerOffsetX,
+        centerOffsetY,
+        Object.hashAll(perCornerStability),
+        liveQualityScore,
       );
 
   @override
@@ -113,10 +184,25 @@ class SupyDocumentFrameMetrics {
       'blur: ${blurScore.toStringAsFixed(0)}, '
       'clipsEdge: $clipsEdge, '
       'stability: ${quadStability.toStringAsFixed(2)}, '
-      'interior: ${interiorVariance.toStringAsFixed(0)})';
+      'interior: ${interiorVariance.toStringAsFixed(0)}, '
+      'glare: ${glareRatio.toStringAsFixed(3)}, '
+      'cornerVel: ${cornerVelocity.toStringAsFixed(4)}, '
+      'centerOff: (${centerOffsetX.toStringAsFixed(2)}, '
+      '${centerOffsetY.toStringAsFixed(2)}), '
+      'perCorner: ${perCornerStability.length}, '
+      'liveQ: ${liveQualityScore?.toStringAsFixed(2) ?? '-'})';
 }
 
-bool _listEquals(List<Offset> a, List<Offset> b) {
+bool _quadEquals(List<Offset> a, List<Offset> b) {
+  if (identical(a, b)) return true;
+  if (a.length != b.length) return false;
+  for (var i = 0; i < a.length; i++) {
+    if (a[i] != b[i]) return false;
+  }
+  return true;
+}
+
+bool _doubleListEquals(List<double> a, List<double> b) {
   if (identical(a, b)) return true;
   if (a.length != b.length) return false;
   for (var i = 0; i < a.length; i++) {

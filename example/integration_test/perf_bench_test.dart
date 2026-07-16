@@ -27,6 +27,24 @@ import 'package:supy_scanner/supy_scanner.dart';
 void main() {
   IntegrationTestWidgetsFlutterBinding.ensureInitialized();
 
+  setUpAll(() async {
+    // Emit the device tier once at the start of the run so tools/perfgate
+    // picks the matching baseline file. Falls back to SUPY_PERF_TIER for
+    // environments where the channel can't reach the platform (host tests).
+    String tier;
+    try {
+      final detected = await SupyScannerChannel.instance.getDeviceTier();
+      tier = detected.name;
+    } on Object {
+      tier = const String.fromEnvironment(
+        'SUPY_PERF_TIER',
+        defaultValue: 'unknown',
+      );
+    }
+    // ignore: avoid_print
+    print('BENCH_TIER ${jsonEncode(<String, Object?>{'tier': tier})}');
+  });
+
   testWidgets('Preview cold start latency', (tester) async {
     const runs = 20;
     final samples = <int>[];

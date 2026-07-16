@@ -1,0 +1,24 @@
+{
+  "tier": "low",
+  "baselinesDir": "/Users/abdalqaderalnajjar/Projects/supy-projects/supy-scanner/tools/perfgate/baselines",
+  "observed": [
+    {
+      "metric": "qr_cold_detect_ms",
+      "runs": 50,
+      "min": 500,
+      "max": 1100,
+      "p50": 700,
+      "p95": 1000
+    }
+  ],
+  "results": [
+    {
+      "metric": "qr_cold_detect_ms",
+      "status": "regressed",
+      "observedP95": 1000,
+      "baselineP95": 800,
+      "deltaPct": 0.25
+    }
+  ],
+  "regressed": true
+}

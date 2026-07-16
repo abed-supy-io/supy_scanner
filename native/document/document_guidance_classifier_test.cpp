@@ -195,3 +195,76 @@ TEST(GuidanceClassifier, SmoothedMetricsPopulated) {
   EXPECT_GT(out.coverageRatio, 0.0f);
   EXPECT_GT(out.meanLuma, 0.0f);
 }
+
+TEST(GuidanceClassifier, OffCenterHorizontalHeldBeforeReady) {
+  // Framing otherwise passes but the doc sits well right of center
+  // (centerOffsetX 0.5 >> maxCenterOffset 0.12). Must hold at kOffCenter
+  // instead of promoting to ready.
+  doc::GuidanceConfig c{};
+  doc::GuidanceState s{};
+  doc::FrameMetrics off = goodFrame();
+  off.centerOffsetX = 0.5f;
+  EXPECT_EQ(run(s, c, off, 30), doc::FrameState::kOffCenter);
+}
+
+TEST(GuidanceClassifier, OffCenterVerticalHeldBeforeReady) {
+  // Same on the vertical axis — the dominant-axis check is symmetric.
+  doc::GuidanceConfig c{};
+  doc::GuidanceState s{};
+  doc::FrameMetrics off = goodFrame();
+  off.centerOffsetY = -0.5f;
+  EXPECT_EQ(run(s, c, off, 30), doc::FrameState::kOffCenter);
+}
+
+TEST(GuidanceClassifier, CenteredDocumentReachesReady) {
+  // A tiny offset comfortably inside maxCenterOffset must NOT trip kOffCenter.
+  doc::GuidanceConfig c{};
+  doc::GuidanceState s{};
+  doc::FrameMetrics centered = goodFrame();
+  centered.centerOffsetX = 0.05f;
+  centered.centerOffsetY = 0.05f;
+  EXPECT_EQ(run(s, c, centered, 30), doc::FrameState::kReady);
+}
+
+TEST(GuidanceClassifier, OffCenterDisabledWhenMaxCenterOffsetNonPositive) {
+  // maxCenterOffset <= 0 is Dart's centerGuidanceEnabled == false sentinel:
+  // off-center framing must be ignored and the frame promoted to ready.
+  doc::GuidanceConfig c{};
+  c.maxCenterOffset = -1.0f;
+  doc::GuidanceState s{};
+  doc::FrameMetrics off = goodFrame();
+  off.centerOffsetX = 0.5f;
+  EXPECT_EQ(run(s, c, off, 30), doc::FrameState::kReady);
+}
+
+TEST(GuidanceClassifier, OffCenterUsesRelaxedExitCeiling) {
+  // offCenter is a "value-too-high" state in the quick-clear family (like
+  // glare/handShake): while already in kOffCenter the ceiling is *raised* to
+  // maxCenterOffset * (1 + exitMargin) = 0.12 * 1.10 = 0.132, so the prompt
+  // doesn't re-arm on hand jitter that nudges the offset just past entry.
+  // An offset comfortably above the relaxed ceiling must keep us in kOffCenter.
+  doc::GuidanceConfig c{};
+  doc::GuidanceState s{};
+  doc::FrameMetrics off = goodFrame();
+  off.centerOffsetX = 0.5f;
+  run(s, c, off, 30);
+  ASSERT_EQ(s.current, doc::FrameState::kOffCenter);
+
+  doc::FrameMetrics stillOff = goodFrame();
+  stillOff.centerOffsetX = 0.20f;  // > relaxed exit ceiling (0.132)
+  for (int i = 0; i < 12; ++i) doc::classify(stillOff, c, s, nullptr);
+  EXPECT_EQ(s.current, doc::FrameState::kOffCenter);
+}
+
+TEST(GuidanceClassifier, OffCenterClearsOnceRecentered) {
+  // Once the user brings the document back inside maxCenterOffset, the
+  // off-center prompt clears and framing settles toward ready.
+  doc::GuidanceConfig c{};
+  doc::GuidanceState s{};
+  doc::FrameMetrics off = goodFrame();
+  off.centerOffsetX = 0.5f;
+  run(s, c, off, 30);
+  ASSERT_EQ(s.current, doc::FrameState::kOffCenter);
+
+  EXPECT_EQ(run(s, c, goodFrame(), 30), doc::FrameState::kReady);
+}

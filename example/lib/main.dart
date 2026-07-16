@@ -1,9 +1,13 @@
-import 'dart:async';
+  import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
 import 'package:supy_scanner/supy_scanner.dart';
 
+// ignore_for_file: experimental_member_use, implementation_imports
+import 'package:supy_scanner/src/experimental/supy_invoice_parser.dart';
+
+import 'debug/supy_debug_hud.dart';
 import 'demo/supy_demo_home.dart';
 
 void main() {
@@ -21,7 +25,7 @@ class SupyScannerExampleApp extends StatelessWidget {
         useMaterial3: true,
         colorSchemeSeed: const Color(0xFF6448C3),
       ),
-      home: const _Home(),
+      home: const SupyDebugHudScope(child: _Home()),
     );
   }
 }
@@ -39,6 +43,7 @@ class _Home extends StatelessWidget {
             'native core ${probe.version} (abi ${probe.abiVersion})',
           ),
         ),
+        
       );
     } on SupyScanError catch (e) {
       messenger.showSnackBar(
@@ -63,6 +68,17 @@ class _Home extends StatelessWidget {
                   onPressed: () => _probeNativeCore(innerContext),
                 ),
               ),
+              Builder(
+                builder: (innerContext) {
+                  final hud = SupyDebugHud.of(innerContext);
+                  if (hud == null) return const SizedBox.shrink();
+                  return IconButton(
+                    tooltip: 'Toggle SupyLog HUD',
+                    icon: const Icon(Icons.bug_report_outlined),
+                    onPressed: hud.toggle,
+                  );
+                },
+              ),
             ],
             bottom: const TabBar(
               isScrollable: true,
@@ -72,7 +88,7 @@ class _Home extends StatelessWidget {
                 Tab(text: 'Gallery', icon: Icon(Icons.dashboard)),
                 Tab(text: 'Batch', icon: Icon(Icons.dynamic_feed)),
                 Tab(text: 'Document', icon: Icon(Icons.document_scanner)),
-                Tab(text: 'Guidance', icon: Icon(Icons.center_focus_strong)),
+                Tab(text: 'Invoice (Lab)', icon: Icon(Icons.receipt_long)),
               ],
             ),
           ),
@@ -86,7 +102,7 @@ class _Home extends StatelessWidget {
               const _GalleryTab(),
               const _BatchBarcodeTab(),
               const _DocumentTab(),
-              const _DocumentGuidanceTab(),
+              const _InvoiceLabTab(),
             ],
           ),
         ),
@@ -440,6 +456,7 @@ class _DocumentTabState extends State<_DocumentTab> {
   SupyDocumentData? _result;
   String? _error;
   bool _running = false;
+  SupyDocumentFilter _filter = SupyDocumentFilter.color;
 
   Future<void> _scan({int maxPages = 0}) async {
     setState(() {
@@ -448,7 +465,7 @@ class _DocumentTabState extends State<_DocumentTab> {
     });
     try {
       final result = await SupyScannerChannel.instance.scanDocument(
-        SupyDocumentScanOptions(maxPages: maxPages),
+        SupyDocumentScanOptions(maxPages: maxPages, filter: _filter),
       );
       setState(() => _result = result);
     } on SupyScanError catch (e) {
@@ -470,6 +487,37 @@ class _DocumentTabState extends State<_DocumentTab> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
+          Align(
+            alignment: AlignmentDirectional.centerStart,
+            child: SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: SegmentedButton<SupyDocumentFilter>(
+                segments: const [
+                  ButtonSegment(
+                    value: SupyDocumentFilter.color,
+                    label: Text('Color'),
+                  ),
+                  ButtonSegment(
+                    value: SupyDocumentFilter.grayscale,
+                    label: Text('Gray'),
+                  ),
+                  ButtonSegment(
+                    value: SupyDocumentFilter.blackAndWhite,
+                    label: Text('B&W'),
+                  ),
+                  ButtonSegment(
+                    value: SupyDocumentFilter.original,
+                    label: Text('Original'),
+                  ),
+                ],
+                selected: {_filter},
+                onSelectionChanged: _running
+                    ? null
+                    : (s) => setState(() => _filter = s.first),
+              ),
+            ),
+          ),
+          const SizedBox(height: 8),
           Row(
             children: [
               Expanded(
@@ -546,87 +594,164 @@ class _DocumentTabState extends State<_DocumentTab> {
   }
 }
 
-/// Demonstrates the embedded `SupyDocumentScannerView` with live edge guidance.
-/// Shows the green/red outline + hint copy driven by the state machine, and
-/// fires a snackbar the first time the document is deemed `ready` (auto-snap
-/// target — capture/OCR wiring lands downstream of this prototype).
-class _DocumentGuidanceTab extends StatefulWidget {
-  const _DocumentGuidanceTab();
+/// Phase IXP — Invoice eXtraction Prototype lab tab.
+///
+/// Captures a single document page via the existing scanner, runs the
+/// experimental on-device invoice parser, and renders the parsed fields
+/// next to the raw OCR text for verification.
+class _InvoiceLabTab extends StatefulWidget {
+  const _InvoiceLabTab();
 
   @override
-  State<_DocumentGuidanceTab> createState() => _DocumentGuidanceTabState();
+  State<_InvoiceLabTab> createState() => _InvoiceLabTabState();
 }
 
-class _DocumentGuidanceTabState extends State<_DocumentGuidanceTab> {
-  final SupyDocumentScannerController _controller =
-      SupyDocumentScannerController();
-  SupyDocumentFrameState _state = SupyDocumentFrameState.noDocument;
-  bool _torchOn = false;
-  bool _flashAvailable = false;
+class _InvoiceLabTabState extends State<_InvoiceLabTab> {
+  final SupyInvoiceParser _parser = SupyInvoiceParser();
+  SupyInvoiceData? _parsed;
+  String? _imagePath;
+  String? _error;
+  bool _busy = false;
 
-  @override
-  void dispose() {
-    _controller.dispose();
-    super.dispose();
-  }
-
-  void _onReady(SupyDocumentGuidanceFrame frame) {
-    final messenger = ScaffoldMessenger.of(context);
-    messenger.showSnackBar(
-      const SnackBar(
-        content: Text('Document ready — capture would fire here.'),
-        duration: Duration(seconds: 1),
-      ),
-    );
+  Future<void> _captureAndParse() async {
+    setState(() {
+      _busy = true;
+      _error = null;
+    });
+    try {
+      final doc = await SupyScannerChannel.instance.scanDocument(
+        const SupyDocumentScanOptions(maxPages: 1),
+      );
+      if (doc == null || doc.pages.isEmpty) {
+        if (!mounted) return;
+        setState(() => _busy = false);
+        return;
+      }
+      final path = Uri.parse(doc.pages.first.uri).toFilePath();
+      final parsed = await _parser.parse(path);
+      if (!mounted) return;
+      setState(() {
+        _parsed = parsed;
+        _imagePath = path;
+        _busy = false;
+      });
+    } on SupyInvoiceParserUnsupportedError catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.message;
+        _busy = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() {
+        _error = e.toString();
+        _busy = false;
+      });
+    }
   }
 
   @override
   Widget build(BuildContext context) {
-    return Stack(
-      fit: StackFit.expand,
-      children: [
-        SupyDocumentScannerView(
-          controller: _controller,
-          onGuidance: (frame) {
-            if (frame.state != _state) {
-              setState(() => _state = frame.state);
-            }
-          },
-          onReady: _onReady,
-          onPreviewStarted: (flashAvailable) =>
-              setState(() => _flashAvailable = flashAvailable),
-        ),
-        if (_flashAvailable)
-          Positioned(
-            top: 16,
-            right: 16,
-            child: FloatingActionButton.small(
-              heroTag: 'doc-torch',
-              onPressed: () async {
-                await _controller.setTorch(on: !_torchOn);
-                setState(() => _torchOn = !_torchOn);
-              },
-              child: Icon(_torchOn ? Icons.flash_on : Icons.flash_off),
+    final parsed = _parsed;
+    return SafeArea(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: FilledButton.icon(
+              onPressed: _busy ? null : _captureAndParse,
+              icon: const Icon(Icons.receipt_long),
+              label: Text(_busy ? 'Working…' : 'Capture invoice'),
             ),
           ),
-        Positioned(
-          top: 16,
-          left: 16,
-          child: Card(
-            color: Colors.black.withValues(alpha: 0.55),
-            child: Padding(
-              padding: const EdgeInsets.symmetric(
-                horizontal: 12,
-                vertical: 6,
-              ),
+          if (_error != null)
+            Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16),
               child: Text(
-                'state: ${_state.name}',
-                style: const TextStyle(color: Colors.white),
+                _error!,
+                style: TextStyle(color: Theme.of(context).colorScheme.error),
               ),
             ),
-          ),
-        ),
-      ],
+          if (parsed != null)
+            Expanded(
+              child: SingleChildScrollView(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.stretch,
+                  children: [
+                    if (_imagePath != null && File(_imagePath!).existsSync())
+                      ConstrainedBox(
+                        constraints: const BoxConstraints(maxHeight: 220),
+                        child: Image.file(
+                          File(_imagePath!),
+                          fit: BoxFit.contain,
+                        ),
+                      ),
+                    const SizedBox(height: 12),
+                    _kvRow('Vendor', parsed.vendor),
+                    _kvRow('Date', parsed.date),
+                    _kvRow('Invoice #', parsed.invoiceNumber),
+                    _kvRow('Currency', parsed.currency),
+                    _kvRow('Total', parsed.total?.toStringAsFixed(2)),
+                    _kvRow('Tax', parsed.tax?.toStringAsFixed(2)),
+                    const SizedBox(height: 12),
+                    Text(
+                      'Line items (${parsed.lineItems.length})',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    for (final item in parsed.lineItems)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(vertical: 2),
+                        child: Text(
+                          '${item.quantity != null ? '${item.quantity}× ' : ''}'
+                          '${item.description} — ${item.amount.toStringAsFixed(2)}',
+                        ),
+                      ),
+                    const SizedBox(height: 16),
+                    Text(
+                      'Raw OCR',
+                      style: Theme.of(context).textTheme.titleSmall,
+                    ),
+                    const SizedBox(height: 4),
+                    Container(
+                      padding: const EdgeInsets.all(8),
+                      decoration: BoxDecoration(
+                        color: Theme.of(context)
+                            .colorScheme
+                            .surfaceContainerHighest,
+                        borderRadius: BorderRadius.circular(6),
+                      ),
+                      child: SelectableText(
+                        parsed.rawText,
+                        style: const TextStyle(
+                          fontFamily: 'monospace',
+                          fontSize: 12,
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+            ),
+        ],
+      ),
     );
   }
+
+  static Widget _kvRow(String label, String? value) => Padding(
+        padding: const EdgeInsets.symmetric(vertical: 2),
+        child: Row(
+          children: [
+            SizedBox(
+              width: 100,
+              child: Text(
+                label,
+                style: const TextStyle(fontWeight: FontWeight.w600),
+              ),
+            ),
+            Expanded(child: Text(value ?? '—')),
+          ],
+        ),
+      );
 }

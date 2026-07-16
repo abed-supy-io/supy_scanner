@@ -6,6 +6,16 @@ on:
   push:
     branches: [main]
 
+# Cancel superseded runs on the same PR / branch — saves runner minutes
+# without losing coverage on the latest push.
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+# Least-privilege default. Jobs that need more must opt in explicitly.
+permissions:
+  contents: read
+
 env:
   FLUTTER_VERSION: '3.22.3'
 
@@ -13,10 +23,11 @@ jobs:
   analyze-and-test:
     name: analyze + format + test
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.9.1
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
@@ -29,6 +40,10 @@ jobs:
         working-directory: example
         run: flutter pub get
 
+      - name: flutter pub get (compat)
+        working-directory: compat/supy_scanner_scanbot_compat
+        run: flutter pub get
+
       - name: dart format --set-exit-if-changed
         run: dart format --set-exit-if-changed lib test example/lib
 
@@ -37,6 +52,12 @@ jobs:
 
       - name: flutter test (with coverage)
         run: flutter test --reporter expanded --coverage
+
+      # Pins the Scanbot-compat shim to retailer call sites + API signature
+      # snapshot. Without this step `dx-compat-shim-retailer-pin` has no teeth.
+      - name: flutter test (compat shim — retailer pin + API snapshot)
+        working-directory: compat/supy_scanner_scanbot_compat
+        run: flutter test --reporter expanded
 
       # Gate at 70% — 6pp below the 2026-06-14 baseline of 76.34%. Ratchet up
       # in follow-up PRs as new code lands with tests.
@@ -53,7 +74,7 @@ jobs:
 
       - name: upload dart coverage
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: dart-coverage-lcov
           path: coverage/lcov.info
@@ -63,15 +84,16 @@ jobs:
     name: build example (android)
     runs-on: ubuntu-latest
     needs: analyze-and-test
+    timeout-minutes: 25
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4.8.0
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.9.1
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
@@ -89,10 +111,11 @@ jobs:
     name: build example (ios)
     runs-on: macos-14
     needs: analyze-and-test
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.9.1
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
@@ -110,15 +133,16 @@ jobs:
     name: android unit tests (jvm)
     runs-on: ubuntu-latest
     needs: analyze-and-test
+    timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
-      - uses: actions/setup-java@v4
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4.8.0
         with:
           distribution: temurin
           java-version: '17'
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.9.1
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
@@ -143,7 +167,7 @@ jobs:
 
       - name: upload test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: android-test-reports
           path: |
@@ -155,7 +179,7 @@ jobs:
       # wire `koverVerify` with a real `minBound` in android/build.gradle.
       - name: upload kover coverage report
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: android-kover-coverage
           path: |
@@ -166,10 +190,11 @@ jobs:
     name: ios unit tests (xctest)
     runs-on: macos-14
     needs: analyze-and-test
+    timeout-minutes: 40
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
 
-      - uses: subosito/flutter-action@v2
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.9.1
         with:
           flutter-version: ${{ env.FLUTTER_VERSION }}
           channel: stable
@@ -183,8 +208,8 @@ jobs:
         run: flutter pub get
 
       # Build (config-only) generates ios/Flutter/Generated.xcconfig and runs
-      # `pod install`, which creates the auto-generated `supy_scanner-Unit-Tests`
-      # scheme for our podspec test_spec.
+      # `pod install`. Tests run under the Runner-hosted RunnerTests target so
+      # Flutter.framework is correctly embedded and @testable import succeeds.
       - name: flutter build ios (config + pods)
         working-directory: example
         run: flutter build ios --config-only --no-codesign
@@ -193,13 +218,13 @@ jobs:
         working-directory: example/ios
         run: pod install
 
-      - name: xcodebuild test (supy_scanner-Unit-Tests)
+      - name: xcodebuild test (Runner-hosted RunnerTests)
         working-directory: example/ios
         run: |
           set -o pipefail
           xcodebuild test \
             -workspace Runner.xcworkspace \
-            -scheme supy_scanner-Unit-Tests \
+            -scheme Runner \
             -destination 'platform=iOS Simulator,name=iPhone 15,OS=latest' \
             -resultBundlePath TestResults.xcresult \
             -enableCodeCoverage YES \
@@ -219,7 +244,7 @@ jobs:
 
       - name: upload xcresult
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: ios-test-xcresult
           path: example/ios/TestResults.xcresult
@@ -227,8 +252,225 @@ jobs:
 
       - name: upload ios coverage json
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
         with:
           name: ios-coverage-json
           path: example/ios/ios-coverage.json
+          if-no-files-found: ignore
+
+  perfgate-unit:
+    name: perfgate — comparator unit tests
+    runs-on: ubuntu-latest
+    needs: analyze-and-test
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - uses: dart-lang/setup-dart@0a8a0fc875eb934c15d08629302413c671d3f672  # v1.6.5
+        with:
+          sdk: '3.4.0'
+
+      - name: dart pub get (perfgate)
+        working-directory: tools/perfgate
+        run: dart pub get
+
+      - name: dart test (baseline_compare)
+        working-directory: tools/perfgate
+        run: dart test --reporter expanded
+
+  # perfgate-emulator runs the integration bench against the LOW-tier Android
+  # emulator profile and diffs against tools/perfgate/baselines/low/. Non-
+  # blocking on first PR (`continue-on-error: true`); flip to required once
+  # the baselines settle. Tracks V1-S2-07.
+  perfgate-emulator:
+    name: perfgate — android emulator (low tier)
+    runs-on: ubuntu-latest
+    needs: [analyze-and-test, perfgate-unit]
+    timeout-minutes: 45
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.9.1
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: flutter pub get (library)
+        run: flutter pub get
+
+      - name: flutter pub get (example)
+        working-directory: example
+        run: flutter pub get
+
+      - name: scaffold example/android wrapper
+        working-directory: example
+        run: flutter create --platforms=android --project-name supy_scanner_example .
+
+      - name: enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' \
+            | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+
+      - name: run integration bench on android emulator
+        uses: reactivecircus/android-emulator-runner@e89f39f1abbbd05b1113a29cf4db69e7540cae5a  # v2.x
+        with:
+          api-level: 31
+          target: google_apis
+          arch: x86_64
+          profile: pixel_4
+          ram-size: 4096M
+          script: |
+            cd example
+            flutter test integration_test/perf_bench_test.dart \
+              --device-id emulator-5554 2>&1 | tee ../bench.log
+
+      - name: run perfgate against captured log
+        run: dart tools/perfgate/run.dart --log bench.log
+
+      - name: upload bench log + report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: perfgate-low
+          path: |
+            bench.log
+            tools/perfgate/report.json
+          if-no-files-found: warn
+
+  # enhance-bench-low runs the host-side `bench_enhance` binary
+  # (`native/enhance/bench_enhance.cpp`) under the LOW tier profile
+  # (1280 px long edge × 50 iterations per mode) and diffs against
+  # `tools/perfgate/baselines/low/enhance_*.json`. Tracks DIE6.
+  #
+  # The MID and HIGH tiers are intentionally deferred until the
+  # `infra-device-runner-matrix` P3 ticket lands a real-device runner pool —
+  # the perfgate budget is meaningless without representative silicon. The
+  # numbers we'd produce on `ubuntu-latest` for those tiers would just bake
+  # in CI hardware noise as the gate.
+  #
+  # Non-blocking on first PR (`continue-on-error: true`) until baselines
+  # settle, mirroring the perfgate-emulator policy.
+  enhance-bench-low:
+    name: perfgate — enhance bench (low tier)
+    runs-on: ubuntu-latest
+    needs: [analyze-and-test, perfgate-unit]
+    timeout-minutes: 15
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - uses: dart-lang/setup-dart@0a8a0fc875eb934c15d08629302413c671d3f672  # v1.6.5
+        with:
+          sdk: '3.4.0'
+
+      - name: install build deps
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y cmake build-essential
+
+      - name: run enhance bench (low)
+        run: |
+          dart tools/perfgate/enhance/run_enhance_bench.dart \
+            --tier low --iter 50 --log enhance-bench.log
+
+      - name: apply perfgate gate
+        run: dart tools/perfgate/run.dart --log enhance-bench.log --tier low
+
+      - name: upload enhance bench log + report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: perfgate-enhance-low
+          path: |
+            enhance-bench.log
+            tools/perfgate/report.json
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Canary jobs — non-blocking. These do NOT gate PR merge; they surface
+  # upstream breakage (Flutter stable channel, JDK 21) before it lands in the
+  # pinned floor. If a canary fails twice in a row on `main`, open a follow-up
+  # ticket; do not silently ignore.
+  # ---------------------------------------------------------------------------
+
+  analyze-and-test-stable-canary:
+    name: canary — flutter stable channel
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.9.1
+        with:
+          channel: stable
+          cache: true
+
+      - name: flutter --version
+        run: flutter --version
+
+      - name: flutter pub get (library)
+        run: flutter pub get
+
+      - name: flutter pub get (example)
+        working-directory: example
+        run: flutter pub get
+
+      - name: dart analyze
+        run: dart analyze --fatal-infos
+
+      - name: flutter test
+        run: flutter test --reporter expanded
+
+  android-native-test-jdk21-canary:
+    name: canary — android unit tests (jdk 21)
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+
+      - uses: actions/setup-java@c1e323688fd81a25caa38c78aa6df2d33d3e20d9  # v4.8.0
+        with:
+          distribution: temurin
+          java-version: '21'
+
+      - uses: subosito/flutter-action@1a449444c387b1966244ae4d4f8c696479add0b2  # v2.9.1
+        with:
+          flutter-version: ${{ env.FLUTTER_VERSION }}
+          channel: stable
+          cache: true
+
+      - name: flutter pub get (library)
+        run: flutter pub get
+
+      - name: flutter pub get (example)
+        working-directory: example
+        run: flutter pub get
+
+      - name: scaffold example/android wrapper
+        working-directory: example
+        run: flutter create --platforms=android --project-name supy_scanner_example .
+
+      - name: gradle test (plugin :supy_scanner, jdk 21)
+        working-directory: example/android
+        run: ./gradlew :supy_scanner:testDebugUnitTest --stacktrace
+
+      - name: upload test reports (jdk 21 canary)
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: android-test-reports-jdk21
+          path: |
+            example/build/supy_scanner/reports/tests/
+            example/build/supy_scanner/test-results/
           if-no-files-found: ignore

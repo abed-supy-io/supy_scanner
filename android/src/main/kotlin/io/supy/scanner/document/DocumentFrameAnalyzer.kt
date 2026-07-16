@@ -1,11 +1,13 @@
 package io.supy.scanner.document
 
 import android.annotation.SuppressLint
+import androidx.annotation.WorkerThread
 import androidx.camera.core.ExperimentalGetImage
 import androidx.camera.core.ImageAnalysis
 import androidx.camera.core.ImageProxy
 import io.supy.scanner.nativecore.SupyNativeCore
 import kotlin.math.max
+import kotlin.math.sqrt
 
 /**
  * One frame's worth of measurements emitted to the Dart state machine.
@@ -25,32 +27,71 @@ data class DocumentFrameMetrics(
     val clipsEdge: Boolean,
     val interiorVariance: Double = 0.0,
     val quadStability: Double = 0.0,
+    val glareRatio: Double = 0.0,
+    val cornerVelocity: Double = 0.0,
+    // Length 4 (TL/TR/BR/BL) when per-corner signal available; empty otherwise.
+    val perCornerStability: List<Double> = emptyList(),
+    // C++-computed opaque pre-capture quality estimate in [0,1]. Null if the
+    // native classifier didn't run on this frame.
+    val liveQualityScore: Double? = null,
 ) {
-    fun toMap(): Map<String, Any?> = mapOf(
-        "quad" to quad,
-        "coverageRatio" to coverageRatio,
-        "tiltDegrees" to tiltDegrees,
-        "meanLuma" to meanLuma,
-        "blurScore" to blurScore,
-        "clipsEdge" to clipsEdge,
-        "interiorVariance" to interiorVariance,
-        "quadStability" to quadStability,
-    )
+    /**
+     * Signed quad-centroid offset from preview center, per axis, in half-extent
+     * fractions: `(centroid - 0.5) * 2`. Positive X = right of center; positive
+     * Y = below center. `(0, 0)` when there's no complete 4-corner quad.
+     */
+    val centerOffset: Pair<Double, Double>
+        get() {
+            if (quad.size != 4) return 0.0 to 0.0
+            var cx = 0.0
+            var cy = 0.0
+            for (p in quad) {
+                cx += p["x"] ?: 0.0
+                cy += p["y"] ?: 0.0
+            }
+            cx /= 4.0
+            cy /= 4.0
+            return ((cx - 0.5) * 2.0) to ((cy - 0.5) * 2.0)
+        }
+
+    fun toMap(): Map<String, Any?> {
+        val (offsetX, offsetY) = centerOffset
+        return mapOf(
+            "quad" to quad,
+            "coverageRatio" to coverageRatio,
+            "tiltDegrees" to tiltDegrees,
+            "meanLuma" to meanLuma,
+            "blurScore" to blurScore,
+            "clipsEdge" to clipsEdge,
+            "interiorVariance" to interiorVariance,
+            "quadStability" to quadStability,
+            "glareRatio" to glareRatio,
+            "cornerVelocity" to cornerVelocity,
+            "perCornerStability" to perCornerStability,
+            "liveQualityScore" to liveQualityScore,
+            "centerOffsetX" to offsetX,
+            "centerOffsetY" to offsetY,
+        )
+    }
 }
 
 // Rolling-window corner-drift tracker; mirrors iOS QuadStabilityTracker.
 internal class QuadStabilityTracker(private val windowSize: Int = 6) {
     private val history: ArrayDeque<FloatArray> = ArrayDeque()
+    // Per-corner drift, TL/TR/BR/BL — populated by stability(). length 0 when no
+    // history has been ingested yet, so callers can detect "no per-corner signal".
+    private var perCorner: DoubleArray = DoubleArray(0)
 
     fun push(corners: FloatArray): Double {
-        if (corners.size != 8) { history.clear(); return 0.0 }
+        if (corners.size != 8) { history.clear(); perCorner = DoubleArray(0); return 0.0 }
         history.addLast(corners.copyOf())
         while (history.size > windowSize) history.removeFirst()
         return stability()
     }
 
     fun stability(): Double {
-        if (history.size < 2) return 0.0
+        if (history.size < 2) { perCorner = DoubleArray(0); return 0.0 }
+        val corners = DoubleArray(4)
         var maxDrift = 0.0
         for (corner in 0 until 4) {
             var minX = Double.POSITIVE_INFINITY
@@ -66,12 +107,17 @@ internal class QuadStabilityTracker(private val windowSize: Int = 6) {
                 if (y > maxY) maxY = y
             }
             val drift = kotlin.math.max(maxX - minX, maxY - minY)
+            corners[corner] = (1.0 - drift / 0.1).coerceIn(0.0, 1.0)
             if (drift > maxDrift) maxDrift = drift
         }
+        perCorner = corners
         return (1.0 - maxDrift / 0.1).coerceIn(0.0, 1.0)
     }
 
-    fun reset() { history.clear() }
+    /** Latest per-corner stability (TL/TR/BR/BL). Empty when no signal yet. */
+    fun perCornerStability(): DoubleArray = perCorner
+
+    fun reset() { history.clear(); perCorner = DoubleArray(0) }
 }
 
 /**
@@ -92,9 +138,25 @@ class DocumentFrameAnalyzer(
 
     private val nativeAvailable: Boolean = SupyNativeCore.ensureLoaded()
     private val stabilityTracker = QuadStabilityTracker()
+    // Previous-frame corners in normalized coords, used to compute cornerVelocity.
+    // Null between detection runs (no document last frame).
+    private var prevCorners: FloatArray? = null
+
+    // Last detected quad in normalized TL,TR,BR,BL coords (8 floats), retained so
+    // captureAndRectify can rectify the full-res still against it. @Volatile: read
+    // on the platform/main thread, written on the analyzer thread. Null when no
+    // document was detected on the most recent frame.
+    @Volatile private var lastQuad: FloatArray? = null
+
+    /**
+     * The most recently detected document quad as normalized TL,TR,BR,BL corners
+     * (eight floats), or null if the last frame had no document. Thread-safe.
+     */
+    fun lastDetectedQuad(): FloatArray? = lastQuad?.copyOf()
 
     @SuppressLint("UnsafeOptInUsageError")
     @OptIn(ExperimentalGetImage::class)
+    @WorkerThread
     override fun analyze(image: ImageProxy) {
         try {
             val yPlane = image.planes.getOrNull(0)
@@ -115,6 +177,8 @@ class DocumentFrameAnalyzer(
             val native = if (nativeAvailable && pixelStride == 1) {
                 SupyNativeCore.detectQuad(buf, w, h, rowStride)
             } else null
+
+            lastQuad = native?.corners?.takeIf { it.size == 8 }?.copyOf()
 
             val quad: List<Map<String, Double>> = if (native != null) {
                 val c = native.corners
@@ -139,6 +203,25 @@ class DocumentFrameAnalyzer(
                 0.0
             }
 
+            val perCornerArr = stabilityTracker.perCornerStability()
+            val perCorner: List<Double> = if (perCornerArr.size == 4) {
+                listOf(perCornerArr[0], perCornerArr[1], perCornerArr[2], perCornerArr[3])
+            } else emptyList()
+
+            val glare = if (native != null) {
+                computeGlareRatio(buf, w, h, rowStride, pixelStride, native.corners)
+            } else 0.0
+
+            val velocity = if (native != null) {
+                val prev = prevCorners
+                val v = if (prev != null) cornerVelocity(prev, native.corners) else 0.0
+                prevCorners = native.corners.copyOf()
+                v
+            } else {
+                prevCorners = null
+                0.0
+            }
+
             val luma = computeLumaMetrics(image)
             onMetrics(
                 DocumentFrameMetrics(
@@ -150,9 +233,15 @@ class DocumentFrameAnalyzer(
                     clipsEdge = clipsEdge,
                     interiorVariance = interior,
                     quadStability = stability,
+                    glareRatio = glare,
+                    cornerVelocity = velocity,
+                    perCornerStability = perCorner,
                 )
             )
         } catch (t: Throwable) {
+            prevCorners = null
+            lastQuad = null
+            stabilityTracker.reset()
             onMetrics(DocumentFrameMetrics(emptyList(), 0.0, 0.0, 0.0, 0.0, false, 0.0, 0.0))
         } finally {
             image.close()
@@ -237,6 +326,70 @@ class DocumentFrameAnalyzer(
         if (n == 0) return 0.0
         val mean = sumLap / n
         return kotlin.math.max(0.0, sumLap2 / n - mean * mean)
+    }
+
+    // Fraction of sampled pixels inside the quad bbox whose luma > 245. Matches
+    // the iOS implementation. Sampled to ~96 px on the long edge so cost is flat.
+    private fun computeGlareRatio(
+        buffer: java.nio.ByteBuffer,
+        width: Int,
+        height: Int,
+        rowStride: Int,
+        pixelStride: Int,
+        corners: FloatArray,
+    ): Double {
+        if (corners.size != 8) return 0.0
+        val xs = intArrayOf(
+            (corners[0] * width).toInt(), (corners[2] * width).toInt(),
+            (corners[4] * width).toInt(), (corners[6] * width).toInt(),
+        )
+        val ys = intArrayOf(
+            (corners[1] * height).toInt(), (corners[3] * height).toInt(),
+            (corners[5] * height).toInt(), (corners[7] * height).toInt(),
+        )
+        val xMin = max(0, xs.min())
+        val yMin = max(0, ys.min())
+        val xMax = kotlin.math.min(width - 1, xs.max())
+        val yMax = kotlin.math.min(height - 1, ys.max())
+        if (xMax - xMin < 4 || yMax - yMin < 4) return 0.0
+
+        val target = 96
+        val longEdge = max(xMax - xMin, yMax - yMin)
+        val step = max(1, longEdge / target)
+        val cap = buffer.capacity()
+        var bright = 0
+        var n = 0
+        var yy = yMin
+        while (yy <= yMax) {
+            val rowBase = yy * rowStride
+            var xx = xMin
+            while (xx <= xMax) {
+                val idx = rowBase + xx * pixelStride
+                if (idx in 0 until cap) {
+                    val v = buffer.get(idx).toInt() and 0xFF
+                    if (v > 245) bright += 1
+                    n += 1
+                }
+                xx += step
+            }
+            yy += step
+        }
+        return if (n > 0) bright.toDouble() / n.toDouble() else 0.0
+    }
+
+    // L2 norm of the per-corner displacement divided by sqrt(2) so a frame-diag
+    // jump maps to 1.0. Inputs are normalized [0..1] coords; matches the iOS
+    // formula in DocumentDetector.swift.
+    private fun cornerVelocity(prev: FloatArray, curr: FloatArray): Double {
+        if (prev.size != 8 || curr.size != 8) return 0.0
+        var sumSq = 0.0
+        for (i in 0 until 4) {
+            val dx = (curr[i * 2] - prev[i * 2]).toDouble()
+            val dy = (curr[i * 2 + 1] - prev[i * 2 + 1]).toDouble()
+            sumSq += dx * dx + dy * dy
+        }
+        // Average displacement length per corner, normalised by the unit diagonal.
+        return sqrt(sumSq / 4.0) / sqrt(2.0)
     }
 
     private data class LumaMetrics(val meanLuma: Double, val blurScore: Double)

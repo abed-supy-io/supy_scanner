@@ -5,7 +5,6 @@
 // that throws MissingPluginException without a real plugin host, so that
 // branch is gated behind `runOnDevice` and skipped in headless CI.
 
-import 'package:flutter/material.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:integration_test/integration_test.dart';
 import 'package:supy_scanner_example/demo/supy_demo_single_barcode.dart';
