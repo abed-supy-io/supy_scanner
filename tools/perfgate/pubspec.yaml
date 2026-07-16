@@ -1,0 +1,10 @@
+name: supy_scanner_perfgate
+description: CI perf-regression gate for supy_scanner integration benchmarks.
+publish_to: none
+version: 0.1.0
+
+environment:
+  sdk: ">=3.4.0 <4.0.0"
+
+dev_dependencies:
+  test: ^1.25.0

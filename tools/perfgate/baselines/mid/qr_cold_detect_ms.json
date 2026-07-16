@@ -1,0 +1,8 @@
+{
+  "metric": "qr_cold_detect_ms",
+  "runs": 50,
+  "min": 126,
+  "max": 616,
+  "p50": 210,
+  "p95": 560
+}

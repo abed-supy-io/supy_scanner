@@ -1,0 +1,8 @@
+{
+  "metric": "preview_cold_start_ms",
+  "runs": 20,
+  "min": 60,
+  "max": 220,
+  "p50": 100,
+  "p95": 200
+}
