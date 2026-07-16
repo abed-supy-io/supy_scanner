@@ -103,7 +103,7 @@ dependencies {
     implementation "androidx.camera:camera-lifecycle:$cameraxVersion"
     implementation "androidx.camera:camera-view:$cameraxVersion"
 
-    implementation 'androidx.lifecycle:lifecycle-common:2.7.0'
+    implementation 'androidx.lifecycle:lifecycle-common:2.11.0'
 
     // ML Kit Barcode — on-device, no network, no license cost.
     implementation 'com.google.mlkit:barcode-scanning:17.3.0'
