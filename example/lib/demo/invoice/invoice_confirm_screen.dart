@@ -43,8 +43,9 @@ class InvoiceConfirmScreen extends StatefulWidget {
 }
 
 class _InvoiceConfirmScreenState extends State<InvoiceConfirmScreen> {
-  late final List<SupyDocumentPage> _pages =
-      List<SupyDocumentPage>.of(widget.pages);
+  late final List<SupyDocumentPage> _pages = List<SupyDocumentPage>.of(
+    widget.pages,
+  );
   _Supplier? _supplier;
   bool _uploading = false;
   bool _uploaded = false;
@@ -98,13 +99,16 @@ class _InvoiceConfirmScreenState extends State<InvoiceConfirmScreen> {
       child: Scaffold(
         appBar: AppBar(
           title: const Text('Confirm invoice'),
-          leading: _uploaded
-              ? null
-              : IconButton(
-                  icon: const Icon(Icons.close),
-                  onPressed: () =>
-                      Navigator.of(context).pop(InvoiceConfirmOutcome.cancelled),
-                ),
+          leading:
+              _uploaded
+                  ? null
+                  : IconButton(
+                    icon: const Icon(Icons.close),
+                    onPressed:
+                        () => Navigator.of(
+                          context,
+                        ).pop(InvoiceConfirmOutcome.cancelled),
+                  ),
           automaticallyImplyLeading: false,
         ),
         body: _uploaded ? _buildUploaded() : _buildReview(),
@@ -146,8 +150,9 @@ class _InvoiceConfirmScreenState extends State<InvoiceConfirmScreen> {
             ),
             const SizedBox(height: 32),
             FilledButton(
-              onPressed: () =>
-                  Navigator.of(context).pop(InvoiceConfirmOutcome.uploaded),
+              onPressed:
+                  () =>
+                      Navigator.of(context).pop(InvoiceConfirmOutcome.uploaded),
               child: const Text('Done'),
             ),
           ],
@@ -166,11 +171,7 @@ class _InvoiceConfirmScreenState extends State<InvoiceConfirmScreen> {
             children: [
               _PageCountHeader(count: _pages.length),
               const SizedBox(height: 16),
-              _PageGrid(
-                pages: _pages,
-                onEdit: _editPage,
-                onAdd: _addPage,
-              ),
+              _PageGrid(pages: _pages, onEdit: _editPage, onAdd: _addPage),
               const SizedBox(height: 24),
               const Text(
                 'Supplier',
@@ -254,11 +255,7 @@ class _PageGrid extends StatelessWidget {
       childAspectRatio: 0.72,
       children: [
         for (var i = 0; i < pages.length; i++)
-          _PageTile(
-            page: pages[i],
-            index: i,
-            onTap: () => onEdit(i),
-          ),
+          _PageTile(page: pages[i], index: i, onTap: () => onEdit(i)),
         _AddPageTile(onTap: onAdd),
       ],
     );
@@ -293,15 +290,16 @@ class _PageTile extends StatelessWidget {
           crossAxisAlignment: CrossAxisAlignment.stretch,
           children: [
             Expanded(
-              child: file.existsSync()
-                  ? Image.file(file, fit: BoxFit.cover)
-                  : Container(
-                      color: SupyBrand.surfaceAlt,
-                      child: const Icon(
-                        Icons.image_not_supported_outlined,
-                        color: SupyBrand.onSurfaceMuted,
+              child:
+                  file.existsSync()
+                      ? Image.file(file, fit: BoxFit.cover)
+                      : Container(
+                        color: SupyBrand.surfaceAlt,
+                        child: const Icon(
+                          Icons.image_not_supported_outlined,
+                          color: SupyBrand.onSurfaceMuted,
+                        ),
                       ),
-                    ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(vertical: 6),
@@ -434,16 +432,17 @@ class _BottomBar extends StatelessWidget {
           Expanded(
             child: FilledButton(
               onPressed: canUpload ? onUpload : null,
-              child: uploading
-                  ? const SizedBox(
-                      height: 20,
-                      width: 20,
-                      child: CircularProgressIndicator(
-                        strokeWidth: 2,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Text('Upload invoice'),
+              child:
+                  uploading
+                      ? const SizedBox(
+                        height: 20,
+                        width: 20,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 2,
+                          color: Colors.white,
+                        ),
+                      )
+                      : const Text('Upload invoice'),
             ),
           ),
         ],

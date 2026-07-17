@@ -7,8 +7,7 @@ library supy_scanner;
 export 'src/channel/supy_document_event_channel.dart';
 export 'src/channel/supy_event_channel.dart';
 export 'src/channel/supy_scanner_channel.dart';
-export 'src/document/supy_document_scanner.dart'
-    show SupyDocumentScanner;
+export 'src/document/supy_document_scanner.dart' show SupyDocumentScanner;
 export 'src/document/supy_document_state_machine.dart'
     show SupyDocumentStateMachine;
 export 'src/enhance/supy_document_enhance_mode.dart'
@@ -77,7 +76,6 @@ export 'src/widgets/supy_find_and_pick_accumulator.dart'
 export 'src/widgets/supy_find_and_pick_sheet.dart' show SupyFindAndPickSheet;
 export 'src/widgets/supy_multiple_scan_accumulator.dart'
     show SupyMultipleScanAccumulator, SupyMultipleScanItem;
-export 'src/widgets/supy_multiple_scan_sheet.dart'
-    show SupyMultipleScanSheet;
+export 'src/widgets/supy_multiple_scan_sheet.dart' show SupyMultipleScanSheet;
 export 'src/widgets/supy_single_scan_confirmation_sheet.dart'
     show SupySingleScanConfirmationSheet;

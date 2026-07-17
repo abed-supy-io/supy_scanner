@@ -228,34 +228,36 @@ class _CaptureBar extends StatelessWidget {
                 shape: BoxShape.circle,
                 border: Border.all(color: Colors.white, width: 4),
               ),
-              child: capturing
-                  ? const Padding(
-                      padding: EdgeInsets.all(20),
-                      child: CircularProgressIndicator(
-                        strokeWidth: 3,
-                        color: Colors.white,
-                      ),
-                    )
-                  : const Icon(Icons.camera_alt, color: Colors.white),
+              child:
+                  capturing
+                      ? const Padding(
+                        padding: EdgeInsets.all(20),
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          color: Colors.white,
+                        ),
+                      )
+                      : const Icon(Icons.camera_alt, color: Colors.white),
             ),
           ),
           const Spacer(),
           // Done — the finish button the raw SDK flow is missing.
           SizedBox(
             width: 56,
-            child: singlePage
-                ? const SizedBox.shrink()
-                : TextButton(
-                    onPressed: pageCount > 0 ? onDone : null,
-                    style: TextButton.styleFrom(
-                      foregroundColor: Colors.white,
-                      disabledForegroundColor: Colors.white38,
+            child:
+                singlePage
+                    ? const SizedBox.shrink()
+                    : TextButton(
+                      onPressed: pageCount > 0 ? onDone : null,
+                      style: TextButton.styleFrom(
+                        foregroundColor: Colors.white,
+                        disabledForegroundColor: Colors.white38,
+                      ),
+                      child: const Text(
+                        'Done',
+                        style: TextStyle(fontWeight: FontWeight.w700),
+                      ),
                     ),
-                    child: const Text(
-                      'Done',
-                      style: TextStyle(fontWeight: FontWeight.w700),
-                    ),
-                  ),
           ),
         ],
       ),

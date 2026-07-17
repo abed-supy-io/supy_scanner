@@ -67,8 +67,9 @@ void main() {
     expect(sent!['locale'], 'en');
   });
 
-  testWidgets('startMultiPage derives ar locale from ambient Localizations',
-      (tester) async {
+  testWidgets('startMultiPage derives ar locale from ambient Localizations', (
+    tester,
+  ) async {
     Map<Object?, Object?>? sent;
     messenger.setMockMethodCallHandler(channel, (call) async {
       sent = call.arguments as Map<Object?, Object?>;

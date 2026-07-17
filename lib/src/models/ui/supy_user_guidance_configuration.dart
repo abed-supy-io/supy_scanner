@@ -44,12 +44,12 @@ class SupyUserGuidanceConfiguration {
 
   @override
   int get hashCode => Object.hash(
-        visible,
-        titleText,
-        titleColor,
-        backgroundFillColor,
-        fontSize,
-      );
+    visible,
+    titleText,
+    titleColor,
+    backgroundFillColor,
+    fontSize,
+  );
 
   @override
   String toString() =>

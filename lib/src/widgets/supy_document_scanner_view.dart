@@ -69,10 +69,7 @@ class _SupyDocumentCountdownRingState extends State<SupyDocumentCountdownRing>
       animation: _controller,
       builder: (context, _) {
         return CustomPaint(
-          painter: _RingPainter(
-            value: _controller.value,
-            color: widget.color,
-          ),
+          painter: _RingPainter(value: _controller.value, color: widget.color),
         );
       },
     );
@@ -89,11 +86,12 @@ class _RingPainter extends CustomPainter {
   void paint(Canvas canvas, Size size) {
     final center = size.center(Offset.zero);
     final radius = math.min(size.width, size.height) / 2 - 6;
-    final paint = Paint()
-      ..color = color
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = 5
-      ..strokeCap = StrokeCap.round;
+    final paint =
+        Paint()
+          ..color = color
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = 5
+          ..strokeCap = StrokeCap.round;
 
     // Background track
     canvas.drawCircle(
@@ -187,8 +185,9 @@ class SupyDocumentScannerView extends StatefulWidget {
 
 class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
     with TickerProviderStateMixin {
-  late final SupyDocumentStateMachine _stateMachine =
-      SupyDocumentStateMachine(configuration: widget.guidance);
+  late final SupyDocumentStateMachine _stateMachine = SupyDocumentStateMachine(
+    configuration: widget.guidance,
+  );
 
   StreamSubscription<SupyDocumentEvent>? _eventSub;
   SupyDocumentGuidanceFrame _frame = const SupyDocumentGuidanceFrame(
@@ -496,9 +495,10 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
     final state = _effectiveState;
     // For `offCenter` prefer the resolved directional copy over the generic
     // "Center the document" so the user knows which way to move.
-    final text = state == SupyDocumentFrameState.offCenter
-        ? widget.guidance.hints.nudgeText(_nudge)
-        : widget.guidance.hintFor(state);
+    final text =
+        state == SupyDocumentFrameState.offCenter
+            ? widget.guidance.hints.nudgeText(_nudge)
+            : widget.guidance.hintFor(state);
     return Positioned(
       left: 16,
       right: 16,
@@ -649,10 +649,7 @@ class _DocumentGuidancePainter extends CustomPainter {
   }
 
   void _paintScrimFull(Canvas canvas, Size size) {
-    canvas.drawRect(
-      Offset.zero & size,
-      Paint()..color = scrimColor,
-    );
+    canvas.drawRect(Offset.zero & size, Paint()..color = scrimColor);
   }
 
   /// Growing L-shaped reticles at four image corners when no quad detected.
@@ -660,11 +657,12 @@ class _DocumentGuidancePainter extends CustomPainter {
     // pulseValue 0→1→0; reticle arm length pulses between 16 and 28 px
     final armLen = 16.0 + 12.0 * pulseValue;
     final alpha = 0.55 + 0.45 * pulseValue; // 0.55 .. 1.0
-    final paint = Paint()
-      ..color = warningColor.withValues(alpha: alpha)
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = _strokeWidth
-      ..strokeCap = StrokeCap.square;
+    final paint =
+        Paint()
+          ..color = warningColor.withValues(alpha: alpha)
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _strokeWidth
+          ..strokeCap = StrokeCap.square;
 
     const margin = 28.0;
     final corners = <Offset>[
@@ -686,11 +684,12 @@ class _DocumentGuidancePainter extends CustomPainter {
 
   /// Four L-shaped corner brackets along the detected quad edges.
   void _paintCornerBrackets(Canvas canvas, List<Offset> pts) {
-    final paint = Paint()
-      ..color = bracketColor
-      ..style = PaintingStyle.stroke
-      ..strokeWidth = _strokeWidth
-      ..strokeCap = StrokeCap.square;
+    final paint =
+        Paint()
+          ..color = bracketColor
+          ..style = PaintingStyle.stroke
+          ..strokeWidth = _strokeWidth
+          ..strokeCap = StrokeCap.square;
 
     // pts: TL(0), TR(1), BR(2), BL(3) — or whatever winding native sends.
     // Draw brackets at each corner: two arms along the adjacent edges.
@@ -751,13 +750,14 @@ class _HintCard extends StatelessWidget {
         duration: const Duration(milliseconds: 180),
         switchInCurve: Curves.easeOut,
         switchOutCurve: Curves.easeIn,
-        transitionBuilder: (child, animation) => FadeTransition(
-          opacity: animation,
-          child: ScaleTransition(
-            scale: Tween<double>(begin: 0.96, end: 1.0).animate(animation),
-            child: child,
-          ),
-        ),
+        transitionBuilder:
+            (child, animation) => FadeTransition(
+              opacity: animation,
+              child: ScaleTransition(
+                scale: Tween<double>(begin: 0.96, end: 1.0).animate(animation),
+                child: child,
+              ),
+            ),
         // Key on text+icon so the switcher animates whenever either changes
         // (e.g. the directional arrow flipping while the copy is unchanged).
         child: DecoratedBox(
@@ -766,7 +766,11 @@ class _HintCard extends StatelessWidget {
             color: Colors.black.withValues(alpha: 0.55),
             borderRadius: BorderRadius.circular(24),
             boxShadow: const [
-              BoxShadow(color: Colors.black26, blurRadius: 8, offset: Offset(0, 2)),
+              BoxShadow(
+                color: Colors.black26,
+                blurRadius: 8,
+                offset: Offset(0, 2),
+              ),
             ],
           ),
           child: Padding(

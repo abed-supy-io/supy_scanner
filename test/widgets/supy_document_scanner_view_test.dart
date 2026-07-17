@@ -58,16 +58,16 @@ void main() {
       });
     });
 
-    testWidgets('falls back to placeholder on unsupported desktop platforms',
-        (tester) async {
+    testWidgets('falls back to placeholder on unsupported desktop platforms', (
+      tester,
+    ) async {
       await _onDesktop(() async {
         await tester.pumpWidget(host(const SupyDocumentScannerView()));
         expect(find.textContaining('not yet supported'), findsOneWidget);
       });
     });
 
-    testWidgets('rebuild with new guidance replaces hint copy',
-        (tester) async {
+    testWidgets('rebuild with new guidance replaces hint copy', (tester) async {
       await _onDesktop(() async {
         await tester.pumpWidget(host(const SupyDocumentScannerView()));
         expect(find.text('Searching for document…'), findsOneWidget);
@@ -76,9 +76,7 @@ void main() {
           host(
             const SupyDocumentScannerView(
               guidance: SupyDocumentGuidanceConfiguration(
-                hints: SupyDocumentGuidanceHints(
-                  noDocument: 'NEEDS DOC',
-                ),
+                hints: SupyDocumentGuidanceHints(noDocument: 'NEEDS DOC'),
               ),
             ),
           ),
@@ -91,8 +89,9 @@ void main() {
       });
     });
 
-    testWidgets('disposes cleanly without an attached controller',
-        (tester) async {
+    testWidgets('disposes cleanly without an attached controller', (
+      tester,
+    ) async {
       await _onDesktop(() async {
         await tester.pumpWidget(host(const SupyDocumentScannerView()));
         await tester.pumpWidget(host(const SizedBox()));
@@ -102,34 +101,36 @@ void main() {
   });
 
   group('SupyDocumentScannerView capture-phase overlay', () {
-    testWidgets('controller.setCapturePhase(capturing) overlays Capturing… hint',
-        (tester) async {
-      await _onDesktop(() async {
-        final controller = SupyDocumentScannerController();
-        addTearDown(controller.dispose);
+    testWidgets(
+      'controller.setCapturePhase(capturing) overlays Capturing… hint',
+      (tester) async {
+        await _onDesktop(() async {
+          final controller = SupyDocumentScannerController();
+          addTearDown(controller.dispose);
 
-        await tester.pumpWidget(
-          host(SupyDocumentScannerView(controller: controller)),
-        );
-        expect(find.text('Searching for document…'), findsOneWidget);
+          await tester.pumpWidget(
+            host(SupyDocumentScannerView(controller: controller)),
+          );
+          expect(find.text('Searching for document…'), findsOneWidget);
 
-        controller.setCapturePhase(SupyDocumentCapturePhase.capturing);
-        // Advance past the AnimatedSwitcher cross-fade (180ms).
-        // Avoid pumpAndSettle — the pulse controller repeats forever.
-        await tester.pump(const Duration(milliseconds: 200));
-        expect(find.text('Capturing…'), findsOneWidget);
+          controller.setCapturePhase(SupyDocumentCapturePhase.capturing);
+          // Advance past the AnimatedSwitcher cross-fade (180ms).
+          // Avoid pumpAndSettle — the pulse controller repeats forever.
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(find.text('Capturing…'), findsOneWidget);
 
-        controller.setCapturePhase(SupyDocumentCapturePhase.captured);
-        await tester.pump(const Duration(milliseconds: 200));
-        expect(find.text('Captured!'), findsOneWidget);
+          controller.setCapturePhase(SupyDocumentCapturePhase.captured);
+          await tester.pump(const Duration(milliseconds: 200));
+          expect(find.text('Captured!'), findsOneWidget);
 
-        controller.setCapturePhase(SupyDocumentCapturePhase.idle);
-        await tester.pump(const Duration(milliseconds: 200));
-        // findsWidgets: at least one — may be two during cross-fade if
-        // AnimatedSwitcher hasn't fully cleared the exit-animation copy.
-        expect(find.text('Searching for document…'), findsWidgets);
-      });
-    });
+          controller.setCapturePhase(SupyDocumentCapturePhase.idle);
+          await tester.pump(const Duration(milliseconds: 200));
+          // findsWidgets: at least one — may be two during cross-fade if
+          // AnimatedSwitcher hasn't fully cleared the exit-animation copy.
+          expect(find.text('Searching for document…'), findsWidgets);
+        });
+      },
+    );
 
     testWidgets('capturing/captured paint with readyColor', (tester) async {
       await _onDesktop(() async {
@@ -140,10 +141,7 @@ void main() {
         addTearDown(controller.dispose);
 
         await tester.pumpWidget(
-          host(SupyDocumentScannerView(
-            controller: controller,
-            guidance: cfg,
-          ),),
+          host(SupyDocumentScannerView(controller: controller, guidance: cfg)),
         );
 
         controller.setCapturePhase(SupyDocumentCapturePhase.capturing);
@@ -158,8 +156,9 @@ void main() {
   });
 
   group('SupyDocumentScannerView color routing via guidance', () {
-    testWidgets('hint card shows noDocument text while no document',
-        (tester) async {
+    testWidgets('hint card shows noDocument text while no document', (
+      tester,
+    ) async {
       await _onDesktop(() async {
         const cfg = SupyDocumentGuidanceConfiguration(
           notReadyColor: Color(0xFFAABBCC),

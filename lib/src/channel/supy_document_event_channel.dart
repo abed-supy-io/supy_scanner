@@ -61,7 +61,10 @@ sealed class SupyDocumentEvent {
 /// One frame's worth of measurements from the native detector.
 class SupyDocumentFrameMetricsEvent extends SupyDocumentEvent {
   /// Creates a metrics event.
-  const SupyDocumentFrameMetricsEvent({required this.metrics, this.nativeState});
+  const SupyDocumentFrameMetricsEvent({
+    required this.metrics,
+    this.nativeState,
+  });
 
   /// The metrics payload to feed into the state machine.
   final SupyDocumentFrameMetrics metrics;

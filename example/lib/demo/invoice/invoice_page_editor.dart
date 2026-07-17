@@ -13,7 +13,7 @@ class InvoicePageEditResult {
 
   /// The user edited (rotated / re-scanned) the page; carries the new page.
   const InvoicePageEditResult.updated(SupyDocumentPage page)
-      : this._(page: page);
+    : this._(page: page);
 
   /// The user removed the page.
   const InvoicePageEditResult.removed() : this._(removed: true);
@@ -31,11 +31,7 @@ class InvoicePageEditResult {
 /// "re-crop" is a re-scan; rotate re-encodes the JPEG on-device; remove drops
 /// the page. No paid SDK, no network — all on-device.
 class InvoicePageEditor extends StatefulWidget {
-  const InvoicePageEditor({
-    super.key,
-    required this.page,
-    required this.index,
-  });
+  const InvoicePageEditor({super.key, required this.page, required this.index});
 
   final SupyDocumentPage page;
   final int index;
@@ -101,8 +97,9 @@ class _InvoicePageEditorState extends State<InvoicePageEditor> {
 
   void _snack(String message) {
     if (!mounted) return;
-    ScaffoldMessenger.of(context)
-        .showSnackBar(SnackBar(content: Text(message)));
+    ScaffoldMessenger.of(
+      context,
+    ).showSnackBar(SnackBar(content: Text(message)));
   }
 
   @override
@@ -130,16 +127,17 @@ class _InvoicePageEditorState extends State<InvoicePageEditor> {
                 color: SupyBrand.surfaceAlt,
                 padding: const EdgeInsets.all(20),
                 alignment: Alignment.center,
-                child: _file.existsSync()
-                    ? ClipRRect(
-                        borderRadius: BorderRadius.circular(12),
-                        child: Image.file(_file, fit: BoxFit.contain),
-                      )
-                    : const Icon(
-                        Icons.image_not_supported_outlined,
-                        color: SupyBrand.onSurfaceMuted,
-                        size: 48,
-                      ),
+                child:
+                    _file.existsSync()
+                        ? ClipRRect(
+                          borderRadius: BorderRadius.circular(12),
+                          child: Image.file(_file, fit: BoxFit.contain),
+                        )
+                        : const Icon(
+                          Icons.image_not_supported_outlined,
+                          color: SupyBrand.onSurfaceMuted,
+                          size: 48,
+                        ),
               ),
             ),
             if (_page.quality != null)
@@ -215,7 +213,10 @@ class _EditAction extends StatelessWidget {
           padding: const EdgeInsets.symmetric(vertical: 12),
           child: Column(
             children: [
-              Icon(icon, color: onTap == null ? SupyBrand.onSurfaceMuted : color),
+              Icon(
+                icon,
+                color: onTap == null ? SupyBrand.onSurfaceMuted : color,
+              ),
               const SizedBox(height: 6),
               Text(
                 label,

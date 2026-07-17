@@ -17,9 +17,7 @@ class SupyDemoHome extends StatelessWidget {
   final VoidCallback? onOpenDevTabs;
 
   void _push(BuildContext context, Widget page) {
-    Navigator.of(context).push<void>(
-      MaterialPageRoute(builder: (_) => page),
-    );
+    Navigator.of(context).push<void>(MaterialPageRoute(builder: (_) => page));
   }
 
   @override
@@ -53,22 +51,20 @@ class SupyDemoHome extends StatelessWidget {
                 icon: Icons.qr_code_scanner,
                 title: 'Scan Barcode',
                 subtitle: 'One-shot read',
-                onTap: () =>
-                    _push(context, const SupyDemoSingleBarcodePage()),
+                onTap: () => _push(context, const SupyDemoSingleBarcodePage()),
               ),
               _ActionTile(
                 icon: Icons.dynamic_feed,
                 title: 'Batch Count',
                 subtitle: 'Many in one go',
-                onTap: () =>
-                    _push(context, const SupyDemoBatchBarcodePage()),
+                onTap: () => _push(context, const SupyDemoBatchBarcodePage()),
               ),
               _ActionTile(
                 icon: Icons.center_focus_strong,
                 title: 'Live Camera',
                 subtitle: 'Embedded view',
-                onTap: () =>
-                    _push(context, const SupyDemoEmbeddedBarcodePage()),
+                onTap:
+                    () => _push(context, const SupyDemoEmbeddedBarcodePage()),
               ),
               _ActionTile(
                 icon: Icons.document_scanner,
@@ -80,15 +76,13 @@ class SupyDemoHome extends StatelessWidget {
                 icon: Icons.auto_awesome,
                 title: 'Smart Document',
                 subtitle: 'Live guidance + auto-snap',
-                onTap: () =>
-                    _push(context, const SupyDemoSmartDocumentPage()),
+                onTap: () => _push(context, const SupyDemoSmartDocumentPage()),
               ),
               _ActionTile(
                 icon: Icons.receipt_long,
                 title: 'Invoice Capture',
                 subtitle: 'Capture → confirm → upload',
-                onTap: () =>
-                    _push(context, const SupyDemoInvoiceCapture()),
+                onTap: () => _push(context, const SupyDemoInvoiceCapture()),
               ),
             ],
           ),

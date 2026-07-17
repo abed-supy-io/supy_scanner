@@ -9,7 +9,7 @@ import '../models/ui/supy_multiple_scan_use_case_configuration.dart';
 class SupyMultipleScanItem {
   /// Creates an accumulator item.
   const SupyMultipleScanItem({required this.barcode, required this.count})
-      : assert(count >= 1, 'count must be >= 1');
+    : assert(count >= 1, 'count must be >= 1');
 
   /// The decoded barcode (first-seen instance carries the row).
   final SupyBarcode barcode;
@@ -32,8 +32,7 @@ class SupyMultipleScanItem {
   int get hashCode => Object.hash(barcode, count);
 
   @override
-  String toString() =>
-      'SupyMultipleScanItem(${barcode.rawValue} x$count)';
+  String toString() => 'SupyMultipleScanItem(${barcode.rawValue} x$count)';
 }
 
 /// Accumulates barcode detections per the configured [SupyMultipleScanMode].
@@ -89,9 +88,10 @@ class SupyMultipleScanAccumulator extends ChangeNotifier {
     }
     _lastSeen[key] = now;
     final existing = _items[key];
-    _items[key] = existing == null
-        ? SupyMultipleScanItem(barcode: barcode, count: 1)
-        : existing.withCount(existing.count + 1);
+    _items[key] =
+        existing == null
+            ? SupyMultipleScanItem(barcode: barcode, count: 1)
+            : existing.withCount(existing.count + 1);
     notifyListeners();
   }
 

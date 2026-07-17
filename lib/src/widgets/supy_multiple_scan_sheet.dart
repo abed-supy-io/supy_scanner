@@ -54,10 +54,7 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
             return Column(
               mainAxisSize: MainAxisSize.min,
               crossAxisAlignment: CrossAxisAlignment.stretch,
-              children: [
-                _header(items.length),
-                if (_expanded) _body(items),
-              ],
+              children: [_header(items.length), if (_expanded) _body(items)],
             );
           },
         ),
@@ -114,24 +111,26 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
       children: [
         ConstrainedBox(
           constraints: const BoxConstraints(maxHeight: 240),
-          child: items.isEmpty
-              ? Padding(
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
-                  child: Text(
-                    'No items yet',
-                    style: TextStyle(color: cfg.bodyColor, fontSize: 13),
+          child:
+              items.isEmpty
+                  ? Padding(
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
+                    child: Text(
+                      'No items yet',
+                      style: TextStyle(color: cfg.bodyColor, fontSize: 13),
+                    ),
+                  )
+                  : ListView.separated(
+                    shrinkWrap: true,
+                    padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
+                    itemCount: items.length,
+                    separatorBuilder:
+                        (_, __) => Divider(
+                          height: 12,
+                          color: cfg.bodyColor.withValues(alpha: 0.1),
+                        ),
+                    itemBuilder: (_, i) => _row(items[i]),
                   ),
-                )
-              : ListView.separated(
-                  shrinkWrap: true,
-                  padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
-                  itemCount: items.length,
-                  separatorBuilder: (_, __) => Divider(
-                    height: 12,
-                    color: cfg.bodyColor.withValues(alpha: 0.1),
-                  ),
-                  itemBuilder: (_, i) => _row(items[i]),
-                ),
         ),
         Padding(
           padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),

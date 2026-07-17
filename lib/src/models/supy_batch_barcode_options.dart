@@ -36,10 +36,10 @@ class SupyBatchBarcodeScanOptions {
 
   /// Serializes to the channel argument shape.
   Map<String, Object?> toWire() => {
-        'formats': formats.map((f) => f.wireName).toList(),
-        'maxBatchCount': maxBatchCount,
-        'dedupeWindowMs': dedupeWindowMs,
-        'beep': beep,
-        'vibrate': vibrate,
-      };
+    'formats': formats.map((f) => f.wireName).toList(),
+    'maxBatchCount': maxBatchCount,
+    'dedupeWindowMs': dedupeWindowMs,
+    'beep': beep,
+    'vibrate': vibrate,
+  };
 }

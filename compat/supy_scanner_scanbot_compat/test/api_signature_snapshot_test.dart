@@ -71,7 +71,7 @@ List<String> _extractSymbols(String src) {
       .replaceAll(RegExp(r'/\*[\s\S]*?\*/'), '')
       .replaceAll(RegExp(r'//.*'), '');
   final out = <String>[];
-  int i = 0;
+  var i = 0;
   while (i < stripped.length) {
     final classMatch =
         RegExp(r'(?:abstract\s+)?class\s+(\w+)[^{]*\{').matchAsPrefix(
@@ -103,8 +103,8 @@ List<String> _extractSymbols(String src) {
 List<String> _scanClassBody(String className, String body) {
   final out = <String>[];
   final buf = StringBuffer();
-  int depth = 0;
-  int parens = 0;
+  var depth = 0;
+  var parens = 0;
   for (var k = 0; k < body.length; k++) {
     final c = body[k];
     if (c == '{' && parens == 0) {
@@ -120,8 +120,11 @@ List<String> _scanClassBody(String className, String body) {
       continue;
     }
     if (depth == 0) {
-      if (c == '(') parens++;
-      else if (c == ')') parens--;
+      if (c == '(') {
+        parens++;
+      } else if (c == ')') {
+        parens--;
+      }
       if (c == ';' && parens == 0) {
         buf.write(c);
         _emitMember(className, buf.toString(), out);
@@ -197,8 +200,9 @@ int _matchingBrace(String s, int openIdx) {
   var depth = 0;
   for (var k = openIdx; k < s.length; k++) {
     final c = s[k];
-    if (c == '{') depth++;
-    else if (c == '}') {
+    if (c == '{') {
+      depth++;
+    } else if (c == '}') {
       depth--;
       if (depth == 0) return k;
     }
@@ -207,7 +211,7 @@ int _matchingBrace(String s, int openIdx) {
 }
 
 String _findPkgRoot() {
-  Directory d = Directory.current;
+  var d = Directory.current;
   for (var i = 0; i < 5; i++) {
     final pubspec = File('${d.path}/pubspec.yaml');
     if (pubspec.existsSync() &&

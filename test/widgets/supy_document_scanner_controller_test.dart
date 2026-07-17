@@ -44,10 +44,10 @@ void main() {
       expect(page!.uri, 'file:///tmp/page1.jpg');
       expect(page.width, 1200);
       expect(page.height, 1600);
-      expect(
-        phases,
-        [SupyDocumentCapturePhase.capturing, SupyDocumentCapturePhase.captured],
-      );
+      expect(phases, [
+        SupyDocumentCapturePhase.capturing,
+        SupyDocumentCapturePhase.captured,
+      ]);
     });
 
     test('resets to idle and rethrows on native error', () async {

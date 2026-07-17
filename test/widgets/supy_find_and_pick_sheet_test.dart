@@ -3,14 +3,8 @@ import 'package:flutter_test/flutter_test.dart';
 import 'package:supy_scanner/supy_scanner.dart';
 
 void main() {
-  const cola = SupyBarcode(
-    rawValue: '111',
-    format: SupyBarcodeFormat.ean13,
-  );
-  const chips = SupyBarcode(
-    rawValue: '222',
-    format: SupyBarcodeFormat.ean13,
-  );
+  const cola = SupyBarcode(rawValue: '111', format: SupyBarcodeFormat.ean13);
+  const chips = SupyBarcode(rawValue: '222', format: SupyBarcodeFormat.ean13);
 
   SupyFindAndPickUseCaseConfiguration cfg({bool collapsed = false}) {
     return SupyFindAndPickUseCaseConfiguration(
@@ -80,9 +74,7 @@ void main() {
     final acc = SupyFindAndPickAccumulator(config: c);
     var clears = 0;
     acc.offer(cola);
-    await tester.pumpWidget(
-      host(acc: acc, config: c, onClear: () => clears++),
-    );
+    await tester.pumpWidget(host(acc: acc, config: c, onClear: () => clears++));
     await tester.tap(find.text('Reset'));
     expect(clears, 1);
   });

@@ -16,10 +16,10 @@ enum SupyScanRange {
 
   /// Wire-format string sent over the channel.
   String get wireName => switch (this) {
-        SupyScanRange.standard => 'standard',
-        SupyScanRange.close => 'close',
-        SupyScanRange.extended => 'extended',
-      };
+    SupyScanRange.standard => 'standard',
+    SupyScanRange.close => 'close',
+    SupyScanRange.extended => 'extended',
+  };
 }
 
 /// Camera-level configuration applied at preview-start.
@@ -50,10 +50,10 @@ class SupyCameraConfiguration {
 
   /// Serializes to the channel argument shape.
   Map<String, Object?> toWire() => {
-        'initialZoom': initialZoom,
-        'minFocusDistanceLock': minFocusDistanceLock,
-        'scanRange': scanRange.wireName,
-      };
+    'initialZoom': initialZoom,
+    'minFocusDistanceLock': minFocusDistanceLock,
+    'scanRange': scanRange.wireName,
+  };
 
   @override
   bool operator ==(Object other) =>
@@ -64,8 +64,7 @@ class SupyCameraConfiguration {
           other.scanRange == scanRange;
 
   @override
-  int get hashCode =>
-      Object.hash(initialZoom, minFocusDistanceLock, scanRange);
+  int get hashCode => Object.hash(initialZoom, minFocusDistanceLock, scanRange);
 
   @override
   String toString() =>

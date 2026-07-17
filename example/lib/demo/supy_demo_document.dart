@@ -68,19 +68,20 @@ class _SupyDemoDocumentPageState extends State<SupyDemoDocumentPage> {
                 ),
               ),
             Expanded(
-              child: _result == null
-                  ? const Center(
-                      child: Padding(
-                        padding: EdgeInsets.all(32),
-                        child: Text(
-                          'No document captured yet.\n'
-                          'Tap "Capture pages" to start.',
-                          textAlign: TextAlign.center,
-                          style: TextStyle(color: SupyBrand.onSurfaceMuted),
+              child:
+                  _result == null
+                      ? const Center(
+                        child: Padding(
+                          padding: EdgeInsets.all(32),
+                          child: Text(
+                            'No document captured yet.\n'
+                            'Tap "Capture pages" to start.',
+                            textAlign: TextAlign.center,
+                            style: TextStyle(color: SupyBrand.onSurfaceMuted),
+                          ),
                         ),
-                      ),
-                    )
-                  : SupyDocumentReview(data: _result!),
+                      )
+                      : SupyDocumentReview(data: _result!),
             ),
           ],
         ),

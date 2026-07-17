@@ -33,8 +33,9 @@ void main() {
 
     test('default cornered style draws exactly 4 paths (one per corner)', () {
       final canvas = _RecordingCanvas();
-      SupyFinderPainter(config: visibleConfig)
-          .paint(canvas, const Size(400, 300));
+      SupyFinderPainter(
+        config: visibleConfig,
+      ).paint(canvas, const Size(400, 300));
       expect(canvas.drawnPaths, hasLength(4));
     });
 
@@ -88,7 +89,6 @@ void main() {
       // 1:1 ratio → unioned bounds are square (within rounding).
       expect(unioned.width, closeTo(unioned.height, 0.5));
     });
-
   });
 
   group('SupyFinderPainter.shouldRepaint', () {
@@ -127,4 +127,3 @@ void main() {
     });
   });
 }
-

@@ -85,7 +85,7 @@ class CompareResult {
 /// Parses the captured stdout of a perf bench run into structured samples
 /// plus a detected device tier. Unknown / missing tier returns `'unknown'`.
 ({String tier, List<BenchSample> samples}) parseBenchStream(String stdout) {
-  String tier = 'unknown';
+  var tier = 'unknown';
   final samples = <BenchSample>[];
   for (final line in const LineSplitter().convert(stdout)) {
     final tierIdx = line.indexOf('BENCH_TIER ');
@@ -137,7 +137,7 @@ List<CompareResult> compareAgainstBaselines({
         observedP95: s.p95,
         baselineP95: null,
         deltaPct: null,
-      ));
+      ),);
       continue;
     }
     final baseP95 = base.p95;
@@ -148,7 +148,7 @@ List<CompareResult> compareAgainstBaselines({
       observedP95: s.p95,
       baselineP95: baseP95,
       deltaPct: delta,
-    ));
+    ),);
   }
   return results;
 }

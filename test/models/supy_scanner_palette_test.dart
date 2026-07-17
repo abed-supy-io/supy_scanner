@@ -67,21 +67,29 @@ void main() {
       // a typo in operator== leaving a field out.
       final overrides = <String, SupyScannerPalette>{
         'primary': baseline.copyWith(primary: const Color(0xFF111111)),
-        'primaryDisabled': baseline.copyWith(primaryDisabled: const Color(0xFF111111)),
+        'primaryDisabled': baseline.copyWith(
+          primaryDisabled: const Color(0xFF111111),
+        ),
         'onPrimary': baseline.copyWith(onPrimary: const Color(0xFF111111)),
         'secondary': baseline.copyWith(secondary: const Color(0xFF111111)),
-        'secondaryDisabled': baseline.copyWith(secondaryDisabled: const Color(0xFF111111)),
+        'secondaryDisabled': baseline.copyWith(
+          secondaryDisabled: const Color(0xFF111111),
+        ),
         'onSecondary': baseline.copyWith(onSecondary: const Color(0xFF111111)),
         'surface': baseline.copyWith(surface: const Color(0xFF111111)),
         'surfaceLow': baseline.copyWith(surfaceLow: const Color(0xFF111111)),
         'surfaceHigh': baseline.copyWith(surfaceHigh: const Color(0xFF111111)),
         'onSurface': baseline.copyWith(onSurface: const Color(0xFF111111)),
-        'onSurfaceVariant': baseline.copyWith(onSurfaceVariant: const Color(0xFF111111)),
+        'onSurfaceVariant': baseline.copyWith(
+          onSurfaceVariant: const Color(0xFF111111),
+        ),
         'outline': baseline.copyWith(outline: const Color(0xFF111111)),
         'negative': baseline.copyWith(negative: const Color(0xFF111111)),
         'positive': baseline.copyWith(positive: const Color(0xFF111111)),
         'warning': baseline.copyWith(warning: const Color(0xFF111111)),
-        'modalOverlay': baseline.copyWith(modalOverlay: const Color(0xFF111111)),
+        'modalOverlay': baseline.copyWith(
+          modalOverlay: const Color(0xFF111111),
+        ),
       };
       for (final entry in overrides.entries) {
         expect(

@@ -7,8 +7,8 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   const channel = MethodChannel('io.supy.scanner/v1/barcode/42');
-  final messenger = TestDefaultBinaryMessengerBinding
-      .instance.defaultBinaryMessenger;
+  final messenger =
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger;
 
   late SupyBarcodeScannerController controller;
   late List<MethodCall> calls;

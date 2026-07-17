@@ -110,9 +110,7 @@ class _SupyBarcodeScannerViewState extends State<SupyBarcodeScannerView> {
       children: [
         preview,
         if (widget.showFinder)
-          const Positioned.fill(
-            child: IgnorePointer(child: _FinderOverlay()),
-          ),
+          const Positioned.fill(child: IgnorePointer(child: _FinderOverlay())),
         if (widget.header != null)
           Positioned(top: 0, left: 0, right: 0, child: widget.header!),
         if (widget.footer != null)
@@ -184,10 +182,7 @@ class _FinderPainter extends CustomPainter {
 
     canvas.saveLayer(Offset.zero & size, Paint());
     canvas.drawRect(Offset.zero & size, Paint()..color = _scrim);
-    canvas.drawRRect(
-      rrect,
-      Paint()..blendMode = BlendMode.clear,
-    );
+    canvas.drawRRect(rrect, Paint()..blendMode = BlendMode.clear);
     canvas.restore();
 
     canvas.drawRRect(

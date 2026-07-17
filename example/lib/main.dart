@@ -1,4 +1,4 @@
-  import 'dart:async';
+import 'dart:async';
 import 'dart:io';
 
 import 'package:flutter/material.dart';
@@ -43,7 +43,6 @@ class _Home extends StatelessWidget {
             'native core ${probe.version} (abi ${probe.abiVersion})',
           ),
         ),
-        
       );
     } on SupyScanError catch (e) {
       messenger.showSnackBar(
@@ -57,55 +56,57 @@ class _Home extends StatelessWidget {
     return DefaultTabController(
       length: 6,
       child: Builder(
-        builder: (tabContext) => Scaffold(
-          appBar: AppBar(
-            title: const Text('supy_scanner'),
-            actions: [
-              Builder(
-                builder: (innerContext) => IconButton(
-                  tooltip: 'Probe native core (v1.1 debug)',
-                  icon: const Icon(Icons.memory),
-                  onPressed: () => _probeNativeCore(innerContext),
+        builder:
+            (tabContext) => Scaffold(
+              appBar: AppBar(
+                title: const Text('supy_scanner'),
+                actions: [
+                  Builder(
+                    builder:
+                        (innerContext) => IconButton(
+                          tooltip: 'Probe native core (v1.1 debug)',
+                          icon: const Icon(Icons.memory),
+                          onPressed: () => _probeNativeCore(innerContext),
+                        ),
+                  ),
+                  Builder(
+                    builder: (innerContext) {
+                      final hud = SupyDebugHud.of(innerContext);
+                      if (hud == null) return const SizedBox.shrink();
+                      return IconButton(
+                        tooltip: 'Toggle SupyLog HUD',
+                        icon: const Icon(Icons.bug_report_outlined),
+                        onPressed: hud.toggle,
+                      );
+                    },
+                  ),
+                ],
+                bottom: const TabBar(
+                  isScrollable: true,
+                  tabs: [
+                    Tab(text: 'Supy Demo', icon: Icon(Icons.auto_awesome)),
+                    Tab(text: 'Embedded', icon: Icon(Icons.qr_code_scanner)),
+                    Tab(text: 'Gallery', icon: Icon(Icons.dashboard)),
+                    Tab(text: 'Batch', icon: Icon(Icons.dynamic_feed)),
+                    Tab(text: 'Document', icon: Icon(Icons.document_scanner)),
+                    Tab(text: 'Invoice (Lab)', icon: Icon(Icons.receipt_long)),
+                  ],
                 ),
               ),
-              Builder(
-                builder: (innerContext) {
-                  final hud = SupyDebugHud.of(innerContext);
-                  if (hud == null) return const SizedBox.shrink();
-                  return IconButton(
-                    tooltip: 'Toggle SupyLog HUD',
-                    icon: const Icon(Icons.bug_report_outlined),
-                    onPressed: hud.toggle,
-                  );
-                },
+              body: TabBarView(
+                children: [
+                  SupyDemoHome(
+                    onOpenDevTabs:
+                        () => DefaultTabController.of(tabContext).animateTo(1),
+                  ),
+                  const _EmbeddedBarcodeTab(),
+                  const _GalleryTab(),
+                  const _BatchBarcodeTab(),
+                  const _DocumentTab(),
+                  const _InvoiceLabTab(),
+                ],
               ),
-            ],
-            bottom: const TabBar(
-              isScrollable: true,
-              tabs: [
-                Tab(text: 'Supy Demo', icon: Icon(Icons.auto_awesome)),
-                Tab(text: 'Embedded', icon: Icon(Icons.qr_code_scanner)),
-                Tab(text: 'Gallery', icon: Icon(Icons.dashboard)),
-                Tab(text: 'Batch', icon: Icon(Icons.dynamic_feed)),
-                Tab(text: 'Document', icon: Icon(Icons.document_scanner)),
-                Tab(text: 'Invoice (Lab)', icon: Icon(Icons.receipt_long)),
-              ],
             ),
-          ),
-          body: TabBarView(
-            children: [
-              SupyDemoHome(
-                onOpenDevTabs: () =>
-                    DefaultTabController.of(tabContext).animateTo(1),
-              ),
-              const _EmbeddedBarcodeTab(),
-              const _GalleryTab(),
-              const _BatchBarcodeTab(),
-              const _DocumentTab(),
-              const _InvoiceLabTab(),
-            ],
-          ),
-        ),
       ),
     );
   }
@@ -187,9 +188,9 @@ class _GalleryTabState extends State<_GalleryTab> {
   _PaletteChoice _palette = _PaletteChoice.dark;
 
   SupyScannerPalette get _activePalette => switch (_palette) {
-        _PaletteChoice.dark => const SupyScannerPalette.scanbotDark(),
-        _PaletteChoice.light => const SupyScannerPalette.scanbotLight(),
-      };
+    _PaletteChoice.dark => const SupyScannerPalette.scanbotDark(),
+    _PaletteChoice.light => const SupyScannerPalette.scanbotLight(),
+  };
 
   Future<void> _launch(BuildContext context, SupyScanUseCase useCase) async {
     final messenger = ScaffoldMessenger.of(context);
@@ -197,32 +198,34 @@ class _GalleryTabState extends State<_GalleryTab> {
     final palette = _activePalette;
     await navigator.push<void>(
       MaterialPageRoute(
-        builder: (_) => SupyBarcodeScannerScreen(
-          useCase: useCase,
-          palette: palette,
-          onCancel: () => navigator.maybePop(),
-          onSingleScan: (b) {
-            navigator.maybePop();
-            messenger.showSnackBar(
-              SnackBar(content: Text('Single: ${b.rawValue}')),
-            );
-          },
-          onMultipleScan: (items) {
-            navigator.maybePop();
-            messenger.showSnackBar(
-              SnackBar(content: Text('Multi: ${items.length} items')),
-            );
-          },
-          onFindAndPick: (rows) {
-            navigator.maybePop();
-            messenger.showSnackBar(
-              SnackBar(content: Text('FindAndPick: ${rows.length} rows')),
-            );
-          },
-          onError: (e) => messenger.showSnackBar(
-            SnackBar(content: Text('Error: $e')),
-          ),
-        ),
+        builder:
+            (_) => SupyBarcodeScannerScreen(
+              useCase: useCase,
+              palette: palette,
+              onCancel: () => navigator.maybePop(),
+              onSingleScan: (b) {
+                navigator.maybePop();
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Single: ${b.rawValue}')),
+                );
+              },
+              onMultipleScan: (items) {
+                navigator.maybePop();
+                messenger.showSnackBar(
+                  SnackBar(content: Text('Multi: ${items.length} items')),
+                );
+              },
+              onFindAndPick: (rows) {
+                navigator.maybePop();
+                messenger.showSnackBar(
+                  SnackBar(content: Text('FindAndPick: ${rows.length} rows')),
+                );
+              },
+              onError:
+                  (e) => messenger.showSnackBar(
+                    SnackBar(content: Text('Error: $e')),
+                  ),
+            ),
       ),
     );
   }
@@ -268,14 +271,15 @@ class _GalleryTabState extends State<_GalleryTab> {
             title: const Text('Single scan (immediate)'),
             subtitle: const Text('Returns first detection without sheet'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => _launch(
-              context,
-              const SupySingleScanUseCase(
-                config: SupySingleScanUseCaseConfiguration(
-                  confirmationSheetEnabled: false,
+            onTap:
+                () => _launch(
+                  context,
+                  const SupySingleScanUseCase(
+                    config: SupySingleScanUseCaseConfiguration(
+                      confirmationSheetEnabled: false,
+                    ),
+                  ),
                 ),
-              ),
-            ),
           ),
         ),
         Card(
@@ -284,14 +288,15 @@ class _GalleryTabState extends State<_GalleryTab> {
             title: const Text('Multiple scan — counting'),
             subtitle: const Text('Same code increments count'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => _launch(
-              context,
-              const SupyMultipleScanUseCase(
-                config: SupyMultipleScanUseCaseConfiguration(
-                  mode: SupyMultipleScanMode.counting,
+            onTap:
+                () => _launch(
+                  context,
+                  const SupyMultipleScanUseCase(
+                    config: SupyMultipleScanUseCaseConfiguration(
+                      mode: SupyMultipleScanMode.counting,
+                    ),
+                  ),
                 ),
-              ),
-            ),
           ),
         ),
         Card(
@@ -300,14 +305,15 @@ class _GalleryTabState extends State<_GalleryTab> {
             title: const Text('Multiple scan — unique'),
             subtitle: const Text('Deduplicates by raw value'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => _launch(
-              context,
-              const SupyMultipleScanUseCase(
-                config: SupyMultipleScanUseCaseConfiguration(
-                  mode: SupyMultipleScanMode.unique,
+            onTap:
+                () => _launch(
+                  context,
+                  const SupyMultipleScanUseCase(
+                    config: SupyMultipleScanUseCaseConfiguration(
+                      mode: SupyMultipleScanMode.unique,
+                    ),
+                  ),
                 ),
-              ),
-            ),
           ),
         ),
         Card(
@@ -316,25 +322,26 @@ class _GalleryTabState extends State<_GalleryTab> {
             title: const Text('Find and pick'),
             subtitle: const Text('Pick-list with per-row progress'),
             trailing: const Icon(Icons.chevron_right),
-            onTap: () => _launch(
-              context,
-              const SupyFindAndPickUseCase(
-                config: SupyFindAndPickUseCaseConfiguration(
-                  expected: [
-                    SupyExpectedBarcode(
-                      rawValue: '1234567890123',
-                      expectedCount: 2,
-                      label: 'Sample EAN-13',
+            onTap:
+                () => _launch(
+                  context,
+                  const SupyFindAndPickUseCase(
+                    config: SupyFindAndPickUseCaseConfiguration(
+                      expected: [
+                        SupyExpectedBarcode(
+                          rawValue: '1234567890123',
+                          expectedCount: 2,
+                          label: 'Sample EAN-13',
+                        ),
+                        SupyExpectedBarcode(
+                          rawValue: '9876543210',
+                          expectedCount: 1,
+                          label: 'Sample UPC',
+                        ),
+                      ],
                     ),
-                    SupyExpectedBarcode(
-                      rawValue: '9876543210',
-                      expectedCount: 1,
-                      label: 'Sample UPC',
-                    ),
-                  ],
+                  ),
                 ),
-              ),
-            ),
           ),
         ),
       ],
@@ -361,9 +368,7 @@ class _BatchBarcodeTabState extends State<_BatchBarcodeTab> {
     });
     try {
       final result = await SupyScannerChannel.instance.scanBarcodesBatch(
-        SupyBatchBarcodeScanOptions(
-          maxBatchCount: maxBatchCount,
-        ),
+        SupyBatchBarcodeScanOptions(maxBatchCount: maxBatchCount),
       );
       setState(() => _result = result);
     } on SupyScanError catch (e) {
@@ -418,26 +423,27 @@ class _BatchBarcodeTabState extends State<_BatchBarcodeTab> {
           ],
           const SizedBox(height: 8),
           Expanded(
-            child: items.isEmpty
-                ? const Center(
-                    child: Text(
-                      'Tap a button above to start a batch session.\n'
-                      'Same code re-scanned within 800ms is dropped.',
-                      textAlign: TextAlign.center,
+            child:
+                items.isEmpty
+                    ? const Center(
+                      child: Text(
+                        'Tap a button above to start a batch session.\n'
+                        'Same code re-scanned within 800ms is dropped.',
+                        textAlign: TextAlign.center,
+                      ),
+                    )
+                    : ListView.separated(
+                      itemCount: items.length,
+                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      itemBuilder: (_, i) {
+                        final b = items[i];
+                        return ListTile(
+                          leading: CircleAvatar(child: Text('${i + 1}')),
+                          title: Text(b.rawValue),
+                          subtitle: Text(b.format.wireName),
+                        );
+                      },
                     ),
-                  )
-                : ListView.separated(
-                    itemCount: items.length,
-                    separatorBuilder: (_, __) => const Divider(height: 1),
-                    itemBuilder: (_, i) {
-                      final b = items[i];
-                      return ListTile(
-                        leading: CircleAvatar(child: Text('${i + 1}')),
-                        title: Text(b.rawValue),
-                        subtitle: Text(b.format.wireName),
-                      );
-                    },
-                  ),
           ),
         ],
       ),
@@ -511,9 +517,8 @@ class _DocumentTabState extends State<_DocumentTab> {
                   ),
                 ],
                 selected: {_filter},
-                onSelectionChanged: _running
-                    ? null
-                    : (s) => setState(() => _filter = s.first),
+                onSelectionChanged:
+                    _running ? null : (s) => setState(() => _filter = s.first),
               ),
             ),
           ),
@@ -549,44 +554,48 @@ class _DocumentTabState extends State<_DocumentTab> {
           ],
           const SizedBox(height: 8),
           Expanded(
-            child: pages.isEmpty
-                ? const Center(child: Text('No scan yet.'))
-                : ListView(
-                    children: [
-                      SizedBox(
-                        height: 180,
-                        child: ListView.separated(
-                          scrollDirection: Axis.horizontal,
-                          itemCount: pages.length,
-                          separatorBuilder: (_, __) =>
-                              const SizedBox(width: 8),
-                          itemBuilder: (_, i) {
-                            final page = pages[i];
-                            final file = File(Uri.parse(page.uri).toFilePath());
-                            return ClipRRect(
-                              borderRadius: BorderRadius.circular(8),
-                              child: file.existsSync()
-                                  ? Image.file(file, fit: BoxFit.cover)
-                                  : Container(
-                                      width: 120,
-                                      color: Colors.grey.shade300,
-                                      alignment: Alignment.center,
-                                      child: Text('Page ${i + 1}'),
-                                    ),
-                            );
-                          },
-                        ),
-                      ),
-                      const SizedBox(height: 12),
-                      if (_result!.ocrText.isNotEmpty)
-                        Card(
-                          child: Padding(
-                            padding: const EdgeInsets.all(12),
-                            child: Text(_result!.ocrText),
+            child:
+                pages.isEmpty
+                    ? const Center(child: Text('No scan yet.'))
+                    : ListView(
+                      children: [
+                        SizedBox(
+                          height: 180,
+                          child: ListView.separated(
+                            scrollDirection: Axis.horizontal,
+                            itemCount: pages.length,
+                            separatorBuilder:
+                                (_, __) => const SizedBox(width: 8),
+                            itemBuilder: (_, i) {
+                              final page = pages[i];
+                              final file = File(
+                                Uri.parse(page.uri).toFilePath(),
+                              );
+                              return ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child:
+                                    file.existsSync()
+                                        ? Image.file(file, fit: BoxFit.cover)
+                                        : Container(
+                                          width: 120,
+                                          color: Colors.grey.shade300,
+                                          alignment: Alignment.center,
+                                          child: Text('Page ${i + 1}'),
+                                        ),
+                              );
+                            },
                           ),
                         ),
-                    ],
-                  ),
+                        const SizedBox(height: 12),
+                        if (_result!.ocrText.isNotEmpty)
+                          Card(
+                            child: Padding(
+                              padding: const EdgeInsets.all(12),
+                              child: Text(_result!.ocrText),
+                            ),
+                          ),
+                      ],
+                    ),
           ),
         ],
       ),
@@ -717,9 +726,10 @@ class _InvoiceLabTabState extends State<_InvoiceLabTab> {
                     Container(
                       padding: const EdgeInsets.all(8),
                       decoration: BoxDecoration(
-                        color: Theme.of(context)
-                            .colorScheme
-                            .surfaceContainerHighest,
+                        color:
+                            Theme.of(
+                              context,
+                            ).colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(6),
                       ),
                       child: SelectableText(
@@ -740,18 +750,18 @@ class _InvoiceLabTabState extends State<_InvoiceLabTab> {
   }
 
   static Widget _kvRow(String label, String? value) => Padding(
-        padding: const EdgeInsets.symmetric(vertical: 2),
-        child: Row(
-          children: [
-            SizedBox(
-              width: 100,
-              child: Text(
-                label,
-                style: const TextStyle(fontWeight: FontWeight.w600),
-              ),
-            ),
-            Expanded(child: Text(value ?? '—')),
-          ],
+    padding: const EdgeInsets.symmetric(vertical: 2),
+    child: Row(
+      children: [
+        SizedBox(
+          width: 100,
+          child: Text(
+            label,
+            style: const TextStyle(fontWeight: FontWeight.w600),
+          ),
         ),
-      );
+        Expanded(child: Text(value ?? '—')),
+      ],
+    ),
+  );
 }

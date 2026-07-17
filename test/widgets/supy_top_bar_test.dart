@@ -57,11 +57,10 @@ void main() {
     expect(decoration.gradient, isNull);
   });
 
-  testWidgets('gradient mode renders a top-to-bottom LinearGradient',
-      (tester) async {
-    const config = SupyTopBarConfiguration(
-      backgroundColor: Color(0xFF445566),
-    );
+  testWidgets('gradient mode renders a top-to-bottom LinearGradient', (
+    tester,
+  ) async {
+    const config = SupyTopBarConfiguration(backgroundColor: Color(0xFF445566));
     await tester.pumpWidget(host(config));
     final container =
         tester.widgetList<Container>(find.byType(Container)).first;
@@ -74,8 +73,9 @@ void main() {
     expect(gradient.colors.last.a, 0);
   });
 
-  testWidgets('cancel text honors color/fontSize/fontWeight from spec',
-      (tester) async {
+  testWidgets('cancel text honors color/fontSize/fontWeight from spec', (
+    tester,
+  ) async {
     const config = SupyTopBarConfiguration(
       cancelButton: SupyTextStyleSpec(
         text: 'Cancel',

@@ -4,7 +4,7 @@ import 'package:supy_scanner/supy_scanner.dart';
 void main() {
   group('SupyDocumentPage.fromMap', () {
     test('parses minimal v1.0 payload with no quality fields', () {
-      final page = SupyDocumentPage.fromMap(<Object?, Object?>{
+      final page = SupyDocumentPage.fromMap(const <Object?, Object?>{
         'uri': 'file:///tmp/p.jpg',
         'width': 1000,
         'height': 1500,
@@ -17,7 +17,7 @@ void main() {
     });
 
     test('parses v1.1 payload with quality + qualityScore', () {
-      final page = SupyDocumentPage.fromMap(<Object?, Object?>{
+      final page = SupyDocumentPage.fromMap(const <Object?, Object?>{
         'uri': 'file:///tmp/p.jpg',
         'width': 1,
         'height': 1,
@@ -48,7 +48,7 @@ void main() {
     });
 
     test('unknown quality string parses as null (forward-compat)', () {
-      final page = SupyDocumentPage.fromMap(<Object?, Object?>{
+      final page = SupyDocumentPage.fromMap(const <Object?, Object?>{
         'uri': 'x',
         'width': 1,
         'height': 1,
@@ -58,7 +58,7 @@ void main() {
     });
 
     test('qualityScore tolerates int and double inputs', () {
-      final intScore = SupyDocumentPage.fromMap(<Object?, Object?>{
+      final intScore = SupyDocumentPage.fromMap(const <Object?, Object?>{
         'uri': 'x',
         'width': 1,
         'height': 1,

@@ -50,8 +50,9 @@ void main() {
     expect(text.textAlign, TextAlign.center);
   });
 
-  testWidgets('container uses fill color and pill-shaped border radius',
-      (tester) async {
+  testWidgets('container uses fill color and pill-shaped border radius', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       host(
         const SupyUserGuidanceConfiguration(

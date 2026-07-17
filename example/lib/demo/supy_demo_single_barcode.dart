@@ -20,22 +20,23 @@ class _SupyDemoSingleBarcodePageState extends State<SupyDemoSingleBarcodePage> {
     final navigator = Navigator.of(context);
     await navigator.push<void>(
       MaterialPageRoute(
-        builder: (_) => SupyBarcodeScannerScreen(
-          useCase: const SupySingleScanUseCase(),
-          palette: SupyBrand.palette,
-          onCancel: () => navigator.maybePop(),
-          onSingleScan: (b) {
-            navigator.maybePop();
-            setState(() {
-              _last = b;
-              _error = null;
-            });
-          },
-          onError: (e) {
-            navigator.maybePop();
-            setState(() => _error = e.toString());
-          },
-        ),
+        builder:
+            (_) => SupyBarcodeScannerScreen(
+              useCase: const SupySingleScanUseCase(),
+              palette: SupyBrand.palette,
+              onCancel: () => navigator.maybePop(),
+              onSingleScan: (b) {
+                navigator.maybePop();
+                setState(() {
+                  _last = b;
+                  _error = null;
+                });
+              },
+              onError: (e) {
+                navigator.maybePop();
+                setState(() => _error = e.toString());
+              },
+            ),
       ),
     );
   }

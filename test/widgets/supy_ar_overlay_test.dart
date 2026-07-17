@@ -38,8 +38,9 @@ void main() {
     expect(find.byType(CustomPaint), findsNothing);
   });
 
-  testWidgets('renders CustomPaint when at least one box present',
-      (tester) async {
+  testWidgets('renders CustomPaint when at least one box present', (
+    tester,
+  ) async {
     await tester.pumpWidget(
       host(
         barcodes: const [

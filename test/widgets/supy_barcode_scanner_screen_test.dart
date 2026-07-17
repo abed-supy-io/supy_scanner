@@ -81,9 +81,8 @@ void main() {
     // Note: SupyBarcodeScannerView embeds a native PlatformView; under
     // `flutter test` the platform side is absent, so we verify the screen
     // builds without throwing and the variant-driven scaffolding lands.
-    Widget host(SupyScanUseCase useCase) => MaterialApp(
-          home: SupyBarcodeScannerScreen(useCase: useCase),
-        );
+    Widget host(SupyScanUseCase useCase) =>
+        MaterialApp(home: SupyBarcodeScannerScreen(useCase: useCase));
 
     testWidgets('builds with single-scan use case', (tester) async {
       await tester.pumpWidget(host(const SupySingleScanUseCase()));
@@ -93,15 +92,17 @@ void main() {
       expect(find.byType(SupySingleScanConfirmationSheet), findsNothing);
     });
 
-    testWidgets('builds with multi-scan use case + shows sheet',
-        (tester) async {
+    testWidgets('builds with multi-scan use case + shows sheet', (
+      tester,
+    ) async {
       await tester.pumpWidget(host(const SupyMultipleScanUseCase()));
       expect(find.byType(SupyMultipleScanSheet), findsOneWidget);
       expect(find.byType(SupyFindAndPickSheet), findsNothing);
     });
 
-    testWidgets('builds with find-and-pick use case + shows sheet',
-        (tester) async {
+    testWidgets('builds with find-and-pick use case + shows sheet', (
+      tester,
+    ) async {
       await tester.pumpWidget(
         host(
           const SupyFindAndPickUseCase(
@@ -115,16 +116,16 @@ void main() {
       expect(find.byType(SupyMultipleScanSheet), findsNothing);
     });
 
-    testWidgets('owns and disposes its controller when none supplied',
-        (tester) async {
+    testWidgets('owns and disposes its controller when none supplied', (
+      tester,
+    ) async {
       await tester.pumpWidget(host(const SupySingleScanUseCase()));
       // Remove the screen — should not throw on dispose.
       await tester.pumpWidget(const MaterialApp(home: SizedBox()));
       expect(tester.takeException(), isNull);
     });
 
-    testWidgets('does not dispose externally-owned controller',
-        (tester) async {
+    testWidgets('does not dispose externally-owned controller', (tester) async {
       final controller = SupyBarcodeScannerController();
       await tester.pumpWidget(
         MaterialApp(

@@ -38,8 +38,10 @@ class _SupyDocumentReviewState extends State<SupyDocumentReview> {
             const Spacer(),
             if (ocr.isNotEmpty)
               Container(
-                padding:
-                    const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                padding: const EdgeInsets.symmetric(
+                  horizontal: 10,
+                  vertical: 4,
+                ),
                 decoration: BoxDecoration(
                   color: SupyBrand.accentSoft,
                   borderRadius: BorderRadius.circular(999),
@@ -152,8 +154,7 @@ class _PageThumb extends StatelessWidget {
             left: 8,
             top: 8,
             child: Container(
-              padding:
-                  const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
               decoration: BoxDecoration(
                 color: SupyBrand.navy,
                 borderRadius: BorderRadius.circular(999),

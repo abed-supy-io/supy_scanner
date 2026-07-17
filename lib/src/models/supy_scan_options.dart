@@ -41,12 +41,12 @@ class SupyBarcodeScanOptions {
 
   /// Serializes to the channel argument shape.
   Map<String, Object?> toWire() => {
-        'formats': formats.map((f) => f.wireName).toList(),
-        'useScanWindow': useScanWindow,
-        'findBarcodeAtCenter': findBarcodeAtCenter,
-        'useNativeCore': useNativeCore,
-        'camera': camera.toWire(),
-      };
+    'formats': formats.map((f) => f.wireName).toList(),
+    'useScanWindow': useScanWindow,
+    'findBarcodeAtCenter': findBarcodeAtCenter,
+    'useNativeCore': useNativeCore,
+    'camera': camera.toWire(),
+  };
 }
 
 /// Per-page image encoding for the document scanner. v1.1 / Sprint 7.
@@ -199,8 +199,8 @@ class SupyDocumentScanOptions {
         isInvoice && outputFormat == SupyDocumentOutputFormat.jpg
             ? SupyDocumentOutputFormat.pdf
             : outputFormat;
-    final effectiveEnhanceMode = enhanceMode ??
-        (isInvoice ? SupyDocumentEnhanceMode.balanced : null);
+    final effectiveEnhanceMode =
+        enhanceMode ?? (isInvoice ? SupyDocumentEnhanceMode.balanced : null);
     final effectiveMinPageQuality =
         isInvoice && minPageQuality == SupyDocumentPageQuality.poor
             ? SupyDocumentPageQuality.ok

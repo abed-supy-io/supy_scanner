@@ -91,22 +91,23 @@ class SupyMultipleScanUseCaseConfiguration {
 
   @override
   int get hashCode => Object.hash(
-        mode,
-        countingRepeatDelay,
-        sheetTitle,
-        initiallyCollapsed,
-        submitButtonText,
-        clearButtonText,
-        sheetBackgroundColor,
-        titleColor,
-        bodyColor,
-        submitButtonBackgroundColor,
-        submitButtonForegroundColor,
-        clearButtonForegroundColor,
-      );
+    mode,
+    countingRepeatDelay,
+    sheetTitle,
+    initiallyCollapsed,
+    submitButtonText,
+    clearButtonText,
+    sheetBackgroundColor,
+    titleColor,
+    bodyColor,
+    submitButtonBackgroundColor,
+    submitButtonForegroundColor,
+    clearButtonForegroundColor,
+  );
 
   @override
-  String toString() => 'SupyMultipleScanUseCaseConfiguration('
+  String toString() =>
+      'SupyMultipleScanUseCaseConfiguration('
       'mode: ${mode.name}, '
       'countingRepeatDelay: ${countingRepeatDelay.inMilliseconds}ms)';
 }

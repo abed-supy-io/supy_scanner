@@ -26,10 +26,10 @@ class SupyDocumentStateMachine {
   SupyDocumentStateMachine({
     SupyDocumentGuidanceConfiguration configuration =
         const SupyDocumentGuidanceConfiguration(),
-  })  : _configuration = configuration,
-        _smoother = SupyDocumentMetricsSmoother(
-          alpha: configuration.smoothingAlpha,
-        );
+  }) : _configuration = configuration,
+       _smoother = SupyDocumentMetricsSmoother(
+         alpha: configuration.smoothingAlpha,
+       );
 
   SupyDocumentGuidanceConfiguration _configuration;
   SupyDocumentMetricsSmoother _smoother;
@@ -85,9 +85,9 @@ class SupyDocumentStateMachine {
     // overlay must reflect immediately.
     final isTerminalTransition =
         next == SupyDocumentFrameState.noDocument ||
-            _state == SupyDocumentFrameState.noDocument ||
-            next == SupyDocumentFrameState.ready ||
-            _state == SupyDocumentFrameState.ready;
+        _state == SupyDocumentFrameState.noDocument ||
+        next == SupyDocumentFrameState.ready ||
+        _state == SupyDocumentFrameState.ready;
     // Higher priority (lower index) preempts immediately; otherwise hold
     // until min-dwell satisfied so we don't ping-pong out of a hint the user
     // hasn't had time to read.
@@ -146,9 +146,10 @@ class SupyDocumentStateMachine {
     // the threshold by `exitMargin` so the prompt doesn't flicker as the user
     // nudges it back across the band. Mirrors the C++ classifier (priority 10).
     if (c.centerGuidanceEnabled && c.maxCenterOffset > 0.0) {
-      final centerCeiling = _state == SupyDocumentFrameState.offCenter
-          ? c.maxCenterOffset * (1.0 + c.exitMargin)
-          : c.maxCenterOffset;
+      final centerCeiling =
+          _state == SupyDocumentFrameState.offCenter
+              ? c.maxCenterOffset * (1.0 + c.exitMargin)
+              : c.maxCenterOffset;
       if (m.centerOffsetX.abs() > centerCeiling ||
           m.centerOffsetY.abs() > centerCeiling) {
         _goodStreak = 0;
@@ -159,18 +160,20 @@ class SupyDocumentStateMachine {
     // All hard failures pass — but require quad stability before promoting
     // to `ready`. While holding in `holdSteady`, relax the floor by
     // `exitMargin` so we don't bounce out on a micro-jitter.
-    final stabilityFloor = _state == SupyDocumentFrameState.holdSteady
-        ? c.readyStabilityFloor * (1.0 - c.exitMargin)
-        : c.readyStabilityFloor;
+    final stabilityFloor =
+        _state == SupyDocumentFrameState.holdSteady
+            ? c.readyStabilityFloor * (1.0 - c.exitMargin)
+            : c.readyStabilityFloor;
     if (m.quadStability < stabilityFloor) {
       _goodStreak = 0;
       return SupyDocumentFrameState.holdSteady;
     }
 
     _goodStreak += 1;
-    final framesNeeded = _state == SupyDocumentFrameState.holdSteady
-        ? c.holdSteadyFrames
-        : c.readyStableFrames;
+    final framesNeeded =
+        _state == SupyDocumentFrameState.holdSteady
+            ? c.holdSteadyFrames
+            : c.readyStableFrames;
     if (_goodStreak >= framesNeeded) {
       return SupyDocumentFrameState.ready;
     }
@@ -204,9 +207,10 @@ class SupyDocumentStateMachine {
     // through the finger is meaningless, tilt is computed off a corrupted
     // corner). Surface this and stop.
     if (m.perCornerStability.length == 4) {
-      final occlusionFloor = _state == SupyDocumentFrameState.occluded
-          ? c.minPerCornerStability * (1.0 - c.exitMargin)
-          : c.minPerCornerStability;
+      final occlusionFloor =
+          _state == SupyDocumentFrameState.occluded
+              ? c.minPerCornerStability * (1.0 - c.exitMargin)
+              : c.minPerCornerStability;
       var anyBelow = false;
       for (final s in m.perCornerStability) {
         if (s < occlusionFloor) {
@@ -217,14 +221,16 @@ class SupyDocumentStateMachine {
       if (anyBelow) return SupyDocumentFrameState.occluded;
     }
 
-    final minLuma = _state == SupyDocumentFrameState.tooDark
-        ? c.minMeanLuma * loose
-        : c.minMeanLuma;
+    final minLuma =
+        _state == SupyDocumentFrameState.tooDark
+            ? c.minMeanLuma * loose
+            : c.minMeanLuma;
     if (m.meanLuma < minLuma) return SupyDocumentFrameState.tooDark;
 
-    final maxGlare = _state == SupyDocumentFrameState.glare
-        ? c.maxGlareRatio * (1.0 + c.glareExitMargin)
-        : c.maxGlareRatio;
+    final maxGlare =
+        _state == SupyDocumentFrameState.glare
+            ? c.maxGlareRatio * (1.0 + c.glareExitMargin)
+            : c.maxGlareRatio;
     if (m.glareRatio > maxGlare) return SupyDocumentFrameState.glare;
 
     if (m.clipsEdge) {
@@ -234,29 +240,34 @@ class SupyDocumentStateMachine {
       if (c.edgeClipBlocking) return SupyDocumentFrameState.edgeClipped;
       return SupyDocumentFrameState.tooClose;
     }
-    final maxCov = _state == SupyDocumentFrameState.tooClose
-        ? c.maxCoverageRatio * tight
-        : c.maxCoverageRatio;
+    final maxCov =
+        _state == SupyDocumentFrameState.tooClose
+            ? c.maxCoverageRatio * tight
+            : c.maxCoverageRatio;
     if (m.coverageRatio > maxCov) return SupyDocumentFrameState.tooClose;
 
-    final minCov = _state == SupyDocumentFrameState.tooFar
-        ? c.minCoverageRatio * loose
-        : c.minCoverageRatio;
+    final minCov =
+        _state == SupyDocumentFrameState.tooFar
+            ? c.minCoverageRatio * loose
+            : c.minCoverageRatio;
     if (m.coverageRatio < minCov) return SupyDocumentFrameState.tooFar;
 
-    final maxTilt = _state == SupyDocumentFrameState.tooSkewed
-        ? c.maxTiltDegrees * tight
-        : c.maxTiltDegrees;
+    final maxTilt =
+        _state == SupyDocumentFrameState.tooSkewed
+            ? c.maxTiltDegrees * tight
+            : c.maxTiltDegrees;
     if (m.tiltDegrees > maxTilt) return SupyDocumentFrameState.tooSkewed;
 
-    final minBlur = _state == SupyDocumentFrameState.blurry
-        ? c.minBlurScore * loose
-        : c.minBlurScore;
+    final minBlur =
+        _state == SupyDocumentFrameState.blurry
+            ? c.minBlurScore * loose
+            : c.minBlurScore;
     if (m.blurScore < minBlur) return SupyDocumentFrameState.blurry;
 
-    final maxVel = _state == SupyDocumentFrameState.handShake
-        ? c.maxCornerVelocity * (1.0 + c.exitMargin)
-        : c.maxCornerVelocity;
+    final maxVel =
+        _state == SupyDocumentFrameState.handShake
+            ? c.maxCornerVelocity * (1.0 + c.exitMargin)
+            : c.maxCornerVelocity;
     if (m.cornerVelocity > maxVel) return SupyDocumentFrameState.handShake;
     return null;
   }

@@ -7,10 +7,8 @@ import '../models/ui/supy_find_and_pick_use_case_configuration.dart';
 @immutable
 class SupyFindAndPickRow {
   /// Creates a progress row.
-  const SupyFindAndPickRow({
-    required this.expected,
-    required this.foundCount,
-  }) : assert(foundCount >= 0, 'foundCount must be >= 0');
+  const SupyFindAndPickRow({required this.expected, required this.foundCount})
+    : assert(foundCount >= 0, 'foundCount must be >= 0');
 
   /// The pick-list entry this row tracks.
   final SupyExpectedBarcode expected;
@@ -50,11 +48,11 @@ class SupyFindAndPickRow {
 class SupyFindAndPickAccumulator extends ChangeNotifier {
   /// Creates a find-and-pick accumulator.
   SupyFindAndPickAccumulator({required this.config})
-      : _rows = {
-          for (final e in config.expected)
-            e.rawValue: SupyFindAndPickRow(expected: e, foundCount: 0),
-        },
-        _order = config.expected.map((e) => e.rawValue).toList(growable: false);
+    : _rows = {
+        for (final e in config.expected)
+          e.rawValue: SupyFindAndPickRow(expected: e, foundCount: 0),
+      },
+      _order = config.expected.map((e) => e.rawValue).toList(growable: false);
 
   /// Active configuration.
   final SupyFindAndPickUseCaseConfiguration config;
@@ -101,8 +99,7 @@ class SupyFindAndPickAccumulator extends ChangeNotifier {
 
   /// Resets all rows to zero and clears unexpected detections.
   void clear() {
-    if (_unexpected.isEmpty &&
-        _rows.values.every((r) => r.foundCount == 0)) {
+    if (_unexpected.isEmpty && _rows.values.every((r) => r.foundCount == 0)) {
       return;
     }
     for (final k in _order) {

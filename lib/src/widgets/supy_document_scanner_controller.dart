@@ -239,17 +239,16 @@ class SupyDocumentScannerController extends ChangeNotifier {
       throw StateError('captureUnsupported: controller not attached');
     }
     try {
-      final result = await channel
-          .invokeMapMethod<Object?, Object?>('captureAndRectify');
+      final result = await channel.invokeMapMethod<Object?, Object?>(
+        'captureAndRectify',
+      );
       if (result == null) {
         throw StateError('captureUnsupported: native returned null');
       }
       return SupyDocumentCapture.fromMap(result);
     } on PlatformException catch (e) {
       if (e.code == 'UNIMPLEMENTED' || e.code == 'captureUnsupported') {
-        throw StateError(
-          'captureUnsupported: ${e.message ?? e.code}',
-        );
+        throw StateError('captureUnsupported: ${e.message ?? e.code}');
       }
       rethrow;
     }
@@ -268,17 +267,16 @@ class SupyDocumentScannerController extends ChangeNotifier {
       throw StateError('captureUnsupported: controller not attached');
     }
     try {
-      final result =
-          await channel.invokeMapMethod<Object?, Object?>('captureFullFrame');
+      final result = await channel.invokeMapMethod<Object?, Object?>(
+        'captureFullFrame',
+      );
       if (result == null) {
         throw StateError('captureUnsupported: native returned null');
       }
       return SupyDocumentCapture.fromMap(result);
     } on PlatformException catch (e) {
       if (e.code == 'UNIMPLEMENTED' || e.code == 'captureUnsupported') {
-        throw StateError(
-          'captureUnsupported: ${e.message ?? e.code}',
-        );
+        throw StateError('captureUnsupported: ${e.message ?? e.code}');
       }
       rethrow;
     }

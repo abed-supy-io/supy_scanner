@@ -76,11 +76,7 @@ void main() {
     });
 
     test('equality includes pdfUri', () {
-      const page = SupyDocumentPage(
-        uri: 'file:///p.jpg',
-        width: 1,
-        height: 1,
-      );
+      const page = SupyDocumentPage(uri: 'file:///p.jpg', width: 1, height: 1);
       const a = SupyDocumentData(
         pages: [page],
         ocrText: '',

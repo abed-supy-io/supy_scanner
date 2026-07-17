@@ -85,7 +85,9 @@ class _SupyDemoSmartDocumentPageState extends State<SupyDemoSmartDocumentPage> {
             ),
             IconButton(
               tooltip: _showHud ? 'Hide metrics HUD' : 'Show metrics HUD',
-              icon: Icon(_showHud ? Icons.bug_report : Icons.bug_report_outlined),
+              icon: Icon(
+                _showHud ? Icons.bug_report : Icons.bug_report_outlined,
+              ),
               onPressed: () => setState(() => _showHud = !_showHud),
             ),
           ],

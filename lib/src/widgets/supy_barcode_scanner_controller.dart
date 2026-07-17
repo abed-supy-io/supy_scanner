@@ -87,12 +87,9 @@ class SupyBarcodeScannerController extends ChangeNotifier {
   Future<void> setFormats(List<SupyBarcodeFormat> formats) async {
     final channel = _channel;
     if (channel == null) return;
-    await channel.invokeMethod<void>(
-      'setFormats',
-      <String, Object?>{
-        'formats': formats.map((f) => f.wireName).toList(growable: false),
-      },
-    );
+    await channel.invokeMethod<void>('setFormats', <String, Object?>{
+      'formats': formats.map((f) => f.wireName).toList(growable: false),
+    });
   }
 
   /// Sets the camera zoom factor. `1.0` = no zoom; values are clamped by the

@@ -94,18 +94,21 @@ void main() {
 
     test('filter serializes grayscale/blackAndWhite/original', () {
       expect(
-        const SupyDocumentScanOptions(filter: SupyDocumentFilter.grayscale)
-            .toWire()['filter'],
+        const SupyDocumentScanOptions(
+          filter: SupyDocumentFilter.grayscale,
+        ).toWire()['filter'],
         'grayscale',
       );
       expect(
-        const SupyDocumentScanOptions(filter: SupyDocumentFilter.blackAndWhite)
-            .toWire()['filter'],
+        const SupyDocumentScanOptions(
+          filter: SupyDocumentFilter.blackAndWhite,
+        ).toWire()['filter'],
         'blackAndWhite',
       );
       expect(
-        const SupyDocumentScanOptions(filter: SupyDocumentFilter.original)
-            .toWire()['filter'],
+        const SupyDocumentScanOptions(
+          filter: SupyDocumentFilter.original,
+        ).toWire()['filter'],
         'original',
       );
     });

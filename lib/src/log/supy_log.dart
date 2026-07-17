@@ -142,36 +142,23 @@ class SupyLog {
 
   /// Emit a [SupyLogLevel.debug] record.
   static void debug(String tag, String message) => _sink.emit(
-        SupyLogRecord(
-          level: SupyLogLevel.debug,
-          tag: tag,
-          message: message,
-        ),
-      );
+    SupyLogRecord(level: SupyLogLevel.debug, tag: tag, message: message),
+  );
 
   /// Emit a [SupyLogLevel.info] record.
   static void info(String tag, String message) => _sink.emit(
-        SupyLogRecord(
-          level: SupyLogLevel.info,
-          tag: tag,
-          message: message,
-        ),
-      );
+    SupyLogRecord(level: SupyLogLevel.info, tag: tag, message: message),
+  );
 
   /// Emit a [SupyLogLevel.warn] record with an optional cause.
-  static void warn(
-    String tag,
-    String message, {
-    Object? error,
-  }) =>
-      _sink.emit(
-        SupyLogRecord(
-          level: SupyLogLevel.warn,
-          tag: tag,
-          message: message,
-          error: error,
-        ),
-      );
+  static void warn(String tag, String message, {Object? error}) => _sink.emit(
+    SupyLogRecord(
+      level: SupyLogLevel.warn,
+      tag: tag,
+      message: message,
+      error: error,
+    ),
+  );
 
   /// Emit a [SupyLogLevel.error] record with an optional cause + stack trace.
   static void error(
@@ -179,16 +166,15 @@ class SupyLog {
     String message, {
     Object? error,
     StackTrace? stackTrace,
-  }) =>
-      _sink.emit(
-        SupyLogRecord(
-          level: SupyLogLevel.error,
-          tag: tag,
-          message: message,
-          error: error,
-          stackTrace: stackTrace,
-        ),
-      );
+  }) => _sink.emit(
+    SupyLogRecord(
+      level: SupyLogLevel.error,
+      tag: tag,
+      message: message,
+      error: error,
+      stackTrace: stackTrace,
+    ),
+  );
 
   /// Resets the sink to [SupyDebugPrintLogSink]. Test-only.
   @visibleForTesting

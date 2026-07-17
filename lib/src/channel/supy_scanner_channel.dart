@@ -17,10 +17,9 @@ const String kSupyScannerChannelVersion = 'v1';
 /// error translation live in one place.
 class SupyScannerChannel {
   SupyScannerChannel._({MethodChannel? methodChannel})
-      : _methodChannel = methodChannel ??
-            const MethodChannel(
-              'io.supy.scanner/$kSupyScannerChannelVersion',
-            );
+    : _methodChannel =
+          methodChannel ??
+          const MethodChannel('io.supy.scanner/$kSupyScannerChannelVersion');
 
   /// Factory for tests — inject a mock [MethodChannel].
   @visibleForTesting
@@ -179,10 +178,10 @@ class SupyScannerChannel {
   }
 
   static SupyScanError _wrap(PlatformException e) => SupyScanError(
-        code: SupyScanErrorCode.fromWire(e.code),
-        message: e.message ?? 'PlatformException without message',
-        details: e.details,
-      );
+    code: SupyScanErrorCode.fromWire(e.code),
+    message: e.message ?? 'PlatformException without message',
+    details: e.details,
+  );
 }
 
 /// Result of a [SupyScannerChannel.nativeCoreProbe] call — exposes the
@@ -232,10 +231,13 @@ class SupyNativeCoreProbe {
 enum SupyDeviceTier {
   /// High-end devices (recent flagships).
   high,
+
   /// Mid-range devices — the default fallback.
   mid,
+
   /// Low-RAM or older devices.
   low,
+
   /// Tier could not be determined.
   unknown;
 
@@ -258,11 +260,14 @@ enum SupyDeviceTier {
 enum SupyCameraPermissionStatus {
   /// Camera access has been granted by the user.
   granted,
+
   /// The user has denied camera access for the current session.
   denied,
+
   /// The user has permanently denied camera access; the host app must
   /// route them to system settings to recover.
   permanentlyDenied,
+
   /// Status could not be determined (typically simulators or unsupported
   /// platforms).
   unknown;

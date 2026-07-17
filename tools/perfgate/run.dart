@@ -125,7 +125,7 @@ Future<Map<String, BenchSample>> _loadBaselines(Directory dir) async {
 }
 
 Directory _repoRoot() {
-  Directory d = Directory.current;
+  var d = Directory.current;
   for (var i = 0; i < 6; i++) {
     if (File('${d.path}/pubspec.yaml').existsSync() &&
         File('${d.path}/pubspec.yaml').readAsStringSync().contains(

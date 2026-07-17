@@ -28,9 +28,9 @@ enum SupyDocumentFilter {
 
   /// Wire-format value sent on the method channel.
   String get wireName => switch (this) {
-        SupyDocumentFilter.color => 'color',
-        SupyDocumentFilter.grayscale => 'grayscale',
-        SupyDocumentFilter.blackAndWhite => 'blackAndWhite',
-        SupyDocumentFilter.original => 'original',
-      };
+    SupyDocumentFilter.color => 'color',
+    SupyDocumentFilter.grayscale => 'grayscale',
+    SupyDocumentFilter.blackAndWhite => 'blackAndWhite',
+    SupyDocumentFilter.original => 'original',
+  };
 }

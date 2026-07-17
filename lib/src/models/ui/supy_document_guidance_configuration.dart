@@ -56,12 +56,12 @@ class SupyDocumentGuidanceConfiguration {
   ///   generic defaults — invoices are harder to hold steady.
   static const SupyDocumentGuidanceConfiguration invoice =
       SupyDocumentGuidanceConfiguration(
-    maxCoverageRatio: 0.85,
-    interiorVarianceFloor: 8.0,
-    edgeClipBlocking: true,
-    readyStableFrames: 6,
-    holdSteadyFrames: 7,
-  );
+        maxCoverageRatio: 0.85,
+        interiorVarianceFloor: 8.0,
+        edgeClipBlocking: true,
+        readyStableFrames: 6,
+        holdSteadyFrames: 7,
+      );
 
   /// Minimum quad area / preview area before a document is "close enough".
   final double minCoverageRatio;
@@ -203,26 +203,26 @@ class SupyDocumentGuidanceConfiguration {
   /// classifier gates off-center detection on `maxCenterOffset > 0`, so a
   /// negative value cleanly turns the feature off without a 20th float.
   List<double> toConfigFloatArray() => <double>[
-        minCoverageRatio,
-        maxCoverageRatio,
-        maxTiltDegrees,
-        minMeanLuma,
-        minBlurScore,
-        readyStabilityFloor,
-        interiorVarianceFloor,
-        exitMargin,
-        smoothingAlpha,
-        readyStableFrames.toDouble(),
-        holdSteadyFrames.toDouble(),
-        lostDocumentGraceFrames.toDouble(),
-        minDwellFrames.toDouble(),
-        maxGlareRatio,
-        glareExitMargin,
-        maxCornerVelocity,
-        minPerCornerStability,
-        edgeClipBlocking ? 1.0 : 0.0,
-        centerGuidanceEnabled ? maxCenterOffset : -1.0,
-      ];
+    minCoverageRatio,
+    maxCoverageRatio,
+    maxTiltDegrees,
+    minMeanLuma,
+    minBlurScore,
+    readyStabilityFloor,
+    interiorVarianceFloor,
+    exitMargin,
+    smoothingAlpha,
+    readyStableFrames.toDouble(),
+    holdSteadyFrames.toDouble(),
+    lostDocumentGraceFrames.toDouble(),
+    minDwellFrames.toDouble(),
+    maxGlareRatio,
+    glareExitMargin,
+    maxCornerVelocity,
+    minPerCornerStability,
+    edgeClipBlocking ? 1.0 : 0.0,
+    centerGuidanceEnabled ? maxCenterOffset : -1.0,
+  ];
 
   /// Returns the hint text to show for [state].
   String hintFor(SupyDocumentFrameState state) => hints.textFor(state);
@@ -289,38 +289,39 @@ class SupyDocumentGuidanceConfiguration {
 
   @override
   int get hashCode => Object.hashAll([
-        minCoverageRatio,
-        maxCoverageRatio,
-        maxTiltDegrees,
-        minMeanLuma,
-        minBlurScore,
-        readyStableFrames,
-        lostDocumentGraceFrames,
-        exitMargin,
-        minDwellFrames,
-        smoothingAlpha,
-        readyStabilityFloor,
-        interiorVarianceFloor,
-        holdSteadyFrames,
-        maxGlareRatio,
-        glareExitMargin,
-        maxCornerVelocity,
-        minPerCornerStability,
-        edgeClipBlocking,
-        centerGuidanceEnabled,
-        maxCenterOffset,
-        autoCapture,
-        autoCaptureDelay,
-        allowUnrectifiedFallback,
-        warningColor,
-        notReadyColor,
-        readyColor,
-        scrimColor,
-        hints,
-      ]);
+    minCoverageRatio,
+    maxCoverageRatio,
+    maxTiltDegrees,
+    minMeanLuma,
+    minBlurScore,
+    readyStableFrames,
+    lostDocumentGraceFrames,
+    exitMargin,
+    minDwellFrames,
+    smoothingAlpha,
+    readyStabilityFloor,
+    interiorVarianceFloor,
+    holdSteadyFrames,
+    maxGlareRatio,
+    glareExitMargin,
+    maxCornerVelocity,
+    minPerCornerStability,
+    edgeClipBlocking,
+    centerGuidanceEnabled,
+    maxCenterOffset,
+    autoCapture,
+    autoCaptureDelay,
+    allowUnrectifiedFallback,
+    warningColor,
+    notReadyColor,
+    readyColor,
+    scrimColor,
+    hints,
+  ]);
 
   @override
-  String toString() => 'SupyDocumentGuidanceConfiguration('
+  String toString() =>
+      'SupyDocumentGuidanceConfiguration('
       'coverage: $minCoverageRatio..$maxCoverageRatio, '
       'tilt≤$maxTiltDegrees°, luma≥$minMeanLuma, '
       'blur≥$minBlurScore, stable=$readyStableFrames, '
@@ -494,24 +495,24 @@ class SupyDocumentGuidanceHints {
 
   @override
   int get hashCode => Object.hashAll([
-        noDocument,
-        tooDark,
-        tooClose,
-        tooFar,
-        tooSkewed,
-        blurry,
-        glare,
-        occluded,
-        handShake,
-        edgeClipped,
-        holdSteady,
-        ready,
-        capturing,
-        captured,
-        centerDocument,
-        moveLeft,
-        moveRight,
-        moveUp,
-        moveDown,
-      ]);
+    noDocument,
+    tooDark,
+    tooClose,
+    tooFar,
+    tooSkewed,
+    blurry,
+    glare,
+    occluded,
+    handShake,
+    edgeClipped,
+    holdSteady,
+    ready,
+    capturing,
+    captured,
+    centerDocument,
+    moveLeft,
+    moveRight,
+    moveUp,
+    moveDown,
+  ]);
 }

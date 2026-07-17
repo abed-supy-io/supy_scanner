@@ -60,11 +60,7 @@ void main() {
     test('SupyNullLogSink swallows everything', () {
       const sink = SupyNullLogSink();
       sink.emit(
-        const SupyLogRecord(
-          level: SupyLogLevel.error,
-          tag: 't',
-          message: 'm',
-        ),
+        const SupyLogRecord(level: SupyLogLevel.error, tag: 't', message: 'm'),
       );
       // no expectation — must not throw.
     });
