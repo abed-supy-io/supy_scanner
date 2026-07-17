@@ -223,7 +223,7 @@ enum InvoiceParser {
   /// `1,234.56` `1234.56` `1234,56` `1 234.56`. Captures decimals;
   /// integer-only matches are allowed but ranked below.
   private static let amountRegex = try! NSRegularExpression(
-    pattern: #"(?:\d{1,3}(?:[,\s\u{00A0}]\d{3})+|\d+)(?:[.,]\d{2})?"#,
+    pattern: #"(?:\d{1,3}(?:[,\s\u00A0]\d{3})+|\d+)(?:[.,]\d{2})?"#,
     options: []
   )
 
