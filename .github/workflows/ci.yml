@@ -431,7 +431,12 @@ jobs:
         working-directory: example
         run: flutter pub get
 
-      # Same reason as the pinned job: root analyze walks into tools/perfgate.
+      # Same reason as the pinned job: root analyze walks into every
+      # subpackage, so compat and perfgate deps must be resolved first.
+      - name: flutter pub get (compat)
+        working-directory: compat/supy_scanner_scanbot_compat
+        run: flutter pub get
+
       - name: dart pub get (perfgate)
         working-directory: tools/perfgate
         run: dart pub get
