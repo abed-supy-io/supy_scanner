@@ -335,9 +335,7 @@ jobs:
           profile: pixel_4
           ram-size: 4096M
           script: |
-            cd example
-            flutter test integration_test/perf_bench_test.dart \
-              --device-id emulator-5554 2>&1 | tee ../bench.log
+            cd example && flutter test integration_test/perf_bench_test.dart --device-id emulator-5554 2>&1 | tee "$GITHUB_WORKSPACE/bench.log"
 
       - name: run perfgate against captured log
         run: dart tools/perfgate/run.dart --log bench.log
