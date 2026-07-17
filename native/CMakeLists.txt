@@ -187,4 +187,8 @@ if(SUPY_BUILD_TOOLS)
   target_link_libraries(bench_detect PRIVATE supy_scanner_core)
   target_include_directories(bench_detect PRIVATE ${CMAKE_CURRENT_SOURCE_DIR})
   target_compile_options(bench_detect PRIVATE -O3 -Wall -Wextra -Wpedantic -Werror)
+
+  add_executable(bench_pipeline bench/bench_pipeline.cpp)
+  target_link_libraries(bench_pipeline PRIVATE supy_scanner_core)
+  target_compile_options(bench_pipeline PRIVATE -O3 -Wall -Wextra -Wpedantic -Werror)
 endif()
