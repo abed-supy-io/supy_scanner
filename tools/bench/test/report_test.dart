@@ -91,4 +91,68 @@ void main() {
     expect(md, contains('Δ vs scanbot'));
     expect(md, contains('## Per-lighting'));
   });
+
+  test('aggregate does not emit scanbot_dpi even when scanbot has non-null dpi', () {
+    final results = [
+      scene('a', 'good',
+          detected: true,
+          iou: 0.9,
+          ours: OutputMetrics(
+              sharpness: 100, uniformity: 0.9, dpi: 300, cer: 0.1),
+          scanbot: OutputMetrics(
+              sharpness: 80, uniformity: 0.8, dpi: 280, cer: 0.2)),
+    ];
+    final s = aggregate(results);
+    expect(s.metrics.containsKey('ours_dpi'), isTrue);
+    expect(s.metrics.containsKey('scanbot_dpi'), isFalse);
+    expect(s.metrics['ours_dpi'], closeTo(300, 1e-9));
+  });
+
+  test('gate emits result for zero baseline with lower-is-better metric when observed > 0',
+      () {
+    final base = BenchSummary(
+        scenes: 1, metrics: {'false_positive_rate': 0.0}, perLighting: {});
+    final observed = BenchSummary(
+        scenes: 1, metrics: {'false_positive_rate': 0.05}, perLighting: {});
+    final results = gate(observed, base);
+    expect(results.length, 1);
+    final r = results.single;
+    expect(r.metric, 'false_positive_rate');
+    expect(r.observed, 0.05);
+    expect(r.baseline, 0.0);
+    expect(r.deltaPct, 100.0); // Finite sentinel for undefined percentage
+    expect(r.regressed, isTrue); // Lower-is-better with observed > 0
+  });
+
+  test('gate emits result for zero baseline with lower-is-better metric when observed == 0',
+      () {
+    final base = BenchSummary(
+        scenes: 1, metrics: {'false_positive_rate': 0.0}, perLighting: {});
+    final observed = BenchSummary(
+        scenes: 1, metrics: {'false_positive_rate': 0.0}, perLighting: {});
+    final results = gate(observed, base);
+    expect(results.length, 1);
+    final r = results.single;
+    expect(r.metric, 'false_positive_rate');
+    expect(r.observed, 0.0);
+    expect(r.baseline, 0.0);
+    expect(r.deltaPct, 0.0);
+    expect(r.regressed, isFalse); // No regression when staying at 0
+  });
+
+  test('gate emits result for zero baseline with higher-is-better metric when observed > 0',
+      () {
+    final base =
+        BenchSummary(scenes: 1, metrics: {'detect_rate': 0.0}, perLighting: {});
+    final observed = BenchSummary(
+        scenes: 1, metrics: {'detect_rate': 0.5}, perLighting: {});
+    final results = gate(observed, base);
+    expect(results.length, 1);
+    final r = results.single;
+    expect(r.metric, 'detect_rate');
+    expect(r.observed, 0.5);
+    expect(r.baseline, 0.0);
+    expect(r.deltaPct, 100.0);
+    expect(r.regressed, isFalse); // Higher-is-better: improvement from 0
+  });
 }

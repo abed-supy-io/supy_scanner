@@ -98,7 +98,7 @@ Map<String, double> _outputMetrics(
 
   put('sharpness', (o) => o.sharpness);
   put('uniformity', (o) => o.uniformity);
-  put('dpi', (o) => o.dpi);
+  if (prefix == 'ours') put('dpi', (o) => o.dpi);
   put('cer', (o) => o.cer);
   return m;
 }
@@ -149,10 +149,15 @@ List<GateResult> gate(BenchSummary observed, BenchSummary baseline,
   for (final entry in observed.metrics.entries) {
     if (!_gated(entry.key)) continue;
     final base = baseline.metrics[entry.key];
-    if (base == null || base == 0) continue;
-    final deltaPct = (entry.value - base) / base * 100.0;
-    final worsePct =
-        kLowerIsBetter.contains(entry.key) ? deltaPct : -deltaPct;
+    if (base == null) continue;
+    // When baseline is exactly 0.0, still emit GateResult: percentage change is undefined,
+    // so we use 100.0 as a finite sentinel when observed > 0, and 0.0 when observed == 0.
+    final deltaPct = base == 0
+        ? (entry.value == 0 ? 0.0 : 100.0)
+        : (entry.value - base) / base * 100.0;
+    final worsePct = base == 0
+        ? (kLowerIsBetter.contains(entry.key) && entry.value > 0 ? 100.0 : -100.0)
+        : (kLowerIsBetter.contains(entry.key) ? deltaPct : -deltaPct);
     results.add(GateResult(
       metric: entry.key,
       observed: entry.value,
