@@ -16,6 +16,7 @@ import 'dart:typed_data';
 import 'package:image/image.dart' as img;
 
 import 'lib/corpus.dart';
+import 'lib/harness_io.dart';
 import 'lib/metrics.dart';
 import 'lib/quad_iou.dart';
 import 'lib/report.dart';
@@ -51,14 +52,37 @@ Map<String, String> _parseArgs(List<String> argv) {
   return args;
 }
 
+/// Starts [exe], converting a failure to even launch the process (missing
+/// binary, not on PATH, etc.) into a [HarnessException] instead of letting
+/// the raw [ProcessException] escape as an uncaught error.
+Future<Process> _startProcess(String exe, List<String> args,
+    {String? workingDirectory, ProcessStartMode mode = ProcessStartMode.normal}) async {
+  try {
+    return await Process.start(exe, args,
+        workingDirectory: workingDirectory, mode: mode);
+  } on ProcessException catch (e) {
+    throw HarnessException('[bench] failed to launch $exe: ${e.message}');
+  }
+}
+
+/// Runs [exe] to completion, converting a launch failure into a
+/// [HarnessException] (see [_startProcess]).
+Future<ProcessResult> _runProcess(String exe, List<String> args,
+    {String? workingDirectory}) async {
+  try {
+    return await Process.run(exe, args, workingDirectory: workingDirectory);
+  } on ProcessException catch (e) {
+    throw HarnessException('[bench] failed to launch $exe: ${e.message}');
+  }
+}
+
 Future<void> _buildTools(String root, {required bool ocr}) async {
   Future<void> run(String exe, List<String> cmd) async {
     stdout.writeln('[bench] $exe ${cmd.join(' ')}');
-    final proc = await Process.start(exe, cmd, workingDirectory: root,
+    final proc = await _startProcess(exe, cmd, workingDirectory: root,
         mode: ProcessStartMode.inheritStdio);
     if (await proc.exitCode != 0) {
-      stderr.writeln('[bench] $exe failed');
-      exit(2);
+      throw HarnessException('[bench] $exe failed');
     }
   }
 
@@ -75,18 +99,6 @@ Future<void> _buildTools(String root, {required bool ocr}) async {
       '-O', '-o', '$_buildDir/vision_ocr', 'tools/bench/ocr/vision_ocr.swift',
     ]);
   }
-}
-
-Map<String, Object?> _parseJsonLine(String output, String tag) {
-  for (final line in const LineSplitter().convert(output)) {
-    final idx = line.indexOf('$tag ');
-    if (idx < 0) continue;
-    final start = line.indexOf('{', idx);
-    if (start < 0) continue;
-    return jsonDecode(line.substring(start)) as Map<String, Object?>;
-  }
-  stderr.writeln('[bench] no $tag line in harness output:\n$output');
-  exit(2);
 }
 
 Uint8List _lumaOf(img.Image frame) {
@@ -108,17 +120,16 @@ class _Harness {
       img.Image frame, String sceneId) async {
     final grayPath = '${scratch.path}/$sceneId.gray';
     File(grayPath).writeAsBytesSync(_lumaOf(frame));
-    final result = await Process.run('$root/$_buildDir/bench_detect', [
+    final result = await _runProcess('$root/$_buildDir/bench_detect', [
       '--gray', grayPath,
       '--width', '${frame.width}',
       '--height', '${frame.height}',
     ]);
     if (result.exitCode != 0) {
-      stderr.writeln('[bench] bench_detect failed on $sceneId:\n'
+      throw HarnessException('[bench] bench_detect failed on $sceneId:\n'
           '${result.stderr}');
-      exit(2);
     }
-    final json = _parseJsonLine(result.stdout as String, 'DSQ_DETECT');
+    final json = parseJsonLine(result.stdout as String, 'DSQ_DETECT');
     if (json['detected'] != true) return (detected: false, quad: null);
     final quad =
         (json['quad'] as List).map((v) => (v as num).toDouble()).toList();
@@ -132,7 +143,7 @@ class _Harness {
     final rgba = frame.convert(numChannels: 4);
     File(rgbaPath)
         .writeAsBytesSync(rgba.getBytes(order: img.ChannelOrder.rgba));
-    final result = await Process.run('$root/$_buildDir/bench_pipeline', [
+    final result = await _runProcess('$root/$_buildDir/bench_pipeline', [
       '--rgba', rgbaPath,
       '--width', '${frame.width}',
       '--height', '${frame.height}',
@@ -145,7 +156,7 @@ class _Harness {
           '${result.stderr}');
       return null;
     }
-    final info = _parseJsonLine(result.stdout as String, 'DSQ_PIPELINE');
+    final info = parseJsonLine(result.stdout as String, 'DSQ_PIPELINE');
     final w = info['outWidth'] as int;
     final h = info['outHeight'] as int;
     final bytes = File(outPath).readAsBytesSync();
@@ -158,7 +169,13 @@ class _Harness {
   Future<String?> ocr(String imagePath) async {
     final bin = File('$root/$_buildDir/vision_ocr');
     if (!bin.existsSync()) return null;
-    final result = await Process.run(bin.path, [imagePath]);
+    final ProcessResult result;
+    try {
+      result = await Process.run(bin.path, [imagePath]);
+    } on ProcessException catch (e) {
+      stderr.writeln('[bench] vision_ocr failed to launch: ${e.message}');
+      return null;
+    }
     if (result.exitCode != 0) {
       stderr.writeln('[bench] vision_ocr failed on $imagePath:\n'
           '${result.stderr}');
@@ -192,7 +209,28 @@ Future<OutputMetrics> _measurePage(
   );
 }
 
+/// Entry point. Delegates to [_runBench] and enforces the driver's
+/// exit-code contract (0 clean, 1 gate regression, 2 harness/infra error)
+/// at a single point: any [HarnessException] — or a raw [ProcessException]
+/// / [FormatException] that still escapes a call site we didn't wrap —
+/// is reported to stderr and mapped to exit 2 instead of a raw stack
+/// trace + exit 255.
 Future<void> main(List<String> argv) async {
+  try {
+    await _runBench(argv);
+  } on HarnessException catch (e) {
+    stderr.writeln(e.message);
+    exit(2);
+  } on ProcessException catch (e) {
+    stderr.writeln('[bench] process error: ${e.message}');
+    exit(2);
+  } on FormatException catch (e) {
+    stderr.writeln('[bench] malformed data: $e');
+    exit(2);
+  }
+}
+
+Future<void> _runBench(List<String> argv) async {
   final args = _parseArgs(argv);
   final suite = args['suite'] ?? 'all';
   if (!{'all', 'detect', 'output'}.contains(suite)) {
@@ -225,9 +263,9 @@ Future<void> main(List<String> argv) async {
     for (final scene in scenes) {
       final frame = img.decodePng(scene.frameFile.readAsBytesSync());
       if (frame == null) {
-        stderr.writeln('[bench] cannot decode ${scene.frameFile.path} — '
+        throw HarnessException(
+            '[bench] cannot decode ${scene.frameFile.path} — '
             'is Git LFS hydrated? (git lfs pull)');
-        exit(2);
       }
 
       bool? detected;
