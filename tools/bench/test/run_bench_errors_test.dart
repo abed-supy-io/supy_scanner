@@ -81,6 +81,39 @@ void main() {
       }
     }
 
+    test('missing corpus directory → exit 2, [bench] message, no stack trace',
+        () async {
+      // Mirror tools/bench so `dart run` resolves package:image.
+      final mirrorBench = Directory('${mirrorRoot.path}/tools/bench');
+      copyDir(Directory(Directory.current.path), mirrorBench);
+      // Don't carry over report/baselines — irrelevant to this test.
+      for (final stale in ['report', 'baselines']) {
+        final d = Directory('${mirrorBench.path}/$stale');
+        if (d.existsSync()) d.deleteSync(recursive: true);
+      }
+
+      // Deliberately do NOT create the corpus directory.
+
+      final result = await Process.run(
+        Platform.resolvedExecutable,
+        [
+          'run',
+          '${mirrorBench.path}/run_bench.dart',
+          '--suite', 'detect',
+          '--skip-build',
+          '--skip-ocr',
+          '--corpus', 'does/not/exist',
+        ],
+      );
+
+      expect(result.exitCode, 2,
+          reason: 'stdout: ${result.stdout}\nstderr: ${result.stderr}');
+      expect(result.stderr, contains('[bench]'));
+      expect(result.stderr, contains('no corpus'));
+      expect(result.stderr, isNot(contains('Unhandled exception')));
+      expect(result.stderr, isNot(contains('#0      ')));
+    }, timeout: const Timeout(Duration(minutes: 2)));
+
     test('missing build binary → exit 2, harness message, no scratch leak',
         () async {
       final realBenchDir = Directory('${Directory.current.path}/../../bench');

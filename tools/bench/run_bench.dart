@@ -224,6 +224,9 @@ Future<void> main(List<String> argv) async {
   } on ProcessException catch (e) {
     stderr.writeln('[bench] process error: ${e.message}');
     exit(2);
+  } on FileSystemException catch (e) {
+    stderr.writeln('[bench] filesystem error: ${e.message}');
+    exit(2);
   } on FormatException catch (e) {
     stderr.writeln('[bench] malformed data: $e');
     exit(2);
@@ -239,6 +242,10 @@ Future<void> _runBench(List<String> argv) async {
   }
   final root = _repoRoot().path;
   final corpusDir = Directory('$root/${args['corpus'] ?? 'bench/corpus'}');
+  if (!corpusDir.existsSync()) {
+    stderr.writeln('[bench] no corpus at ${corpusDir.path}');
+    exit(2);
+  }
   final skipOcr = args.containsKey('skip-ocr') || !Platform.isMacOS;
 
   final scenes = loadCorpus(corpusDir);
