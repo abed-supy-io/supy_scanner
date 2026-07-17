@@ -44,6 +44,17 @@ jobs:
         working-directory: compat/supy_scanner_scanbot_compat
         run: flutter pub get
 
+      # The nested tool packages have their own pubspecs; the repo-root
+      # `dart analyze --fatal-infos` below resolves their package: imports
+      # only if each has run pub get.
+      - name: dart pub get (tools/perfgate)
+        working-directory: tools/perfgate
+        run: dart pub get
+
+      - name: dart pub get (tools/bench)
+        working-directory: tools/bench
+        run: dart pub get
+
       - name: dart format --set-exit-if-changed
         run: dart format --set-exit-if-changed lib test example/lib
 
@@ -469,6 +480,14 @@ jobs:
       - name: flutter pub get (example)
         working-directory: example
         run: flutter pub get
+
+      - name: dart pub get (tools/perfgate)
+        working-directory: tools/perfgate
+        run: dart pub get
+
+      - name: dart pub get (tools/bench)
+        working-directory: tools/bench
+        run: dart pub get
 
       - name: dart analyze
         run: dart analyze --fatal-infos
