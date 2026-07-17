@@ -417,7 +417,7 @@ jobs:
 
       - uses: dart-lang/setup-dart@0a8a0fc875eb934c15d08629302413c671d3f672  # v1.6.5
         with:
-          sdk: '3.4.0'
+          sdk: '3.11.0'
 
       - name: dart pub get (tools/bench)
         working-directory: tools/bench
