@@ -44,6 +44,12 @@ jobs:
         working-directory: compat/supy_scanner_scanbot_compat
         run: flutter pub get
 
+      # tools/perfgate is its own package; the root analyze below walks into
+      # it, so its deps must be resolved first or analysis fails on URIs.
+      - name: dart pub get (perfgate)
+        working-directory: tools/perfgate
+        run: dart pub get
+
       - name: dart format --set-exit-if-changed
         run: dart format --set-exit-if-changed lib test example/lib
 
@@ -329,9 +335,7 @@ jobs:
           profile: pixel_4
           ram-size: 4096M
           script: |
-            cd example
-            flutter test integration_test/perf_bench_test.dart \
-              --device-id emulator-5554 2>&1 | tee ../bench.log
+            cd example && flutter test integration_test/perf_bench_test.dart --device-id emulator-5554 2>&1 | tee "$GITHUB_WORKSPACE/bench.log"
 
       - name: run perfgate against captured log
         run: dart tools/perfgate/run.dart --log bench.log
@@ -424,6 +428,16 @@ jobs:
       - name: flutter pub get (example)
         working-directory: example
         run: flutter pub get
+
+      # Same reason as the pinned job: root analyze walks into every
+      # subpackage, so compat and perfgate deps must be resolved first.
+      - name: flutter pub get (compat)
+        working-directory: compat/supy_scanner_scanbot_compat
+        run: flutter pub get
+
+      - name: dart pub get (perfgate)
+        working-directory: tools/perfgate
+        run: dart pub get
 
       - name: dart analyze
         run: dart analyze --fatal-infos
