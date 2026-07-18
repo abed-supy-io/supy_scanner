@@ -223,7 +223,7 @@ enum InvoiceParser {
   /// `1,234.56` `1234.56` `1234,56` `1 234.56`. Captures decimals;
   /// integer-only matches are allowed but ranked below.
   private static let amountRegex = try! NSRegularExpression(
-    pattern: #"(?:\d{1,3}(?:[,\s\u{00A0}]\d{3})+|\d+)(?:[.,]\d{2})?"#,
+    pattern: #"(?:\d{1,3}(?:[,\s\u00A0]\d{3})+|\d+)(?:[.,]\d{2})?"#,
     options: []
   )
 
@@ -232,15 +232,22 @@ enum InvoiceParser {
     // largest numeric on the line below (right-aligned label/value layout).
     for (i, l) in lines.enumerated() {
       let lowered = l.text.lowercased()
-      guard keywords.contains(where: { lowered.contains($0) }) else { continue }
+      // Word-boundary match so "total" doesn't fire on "subtotal" and return
+      // the subtotal in place of the real grand total.
+      guard keywords.contains(where: { keywordMatches(lowered, $0) }) else { continue }
       // Strip keyword to avoid catching digits inside it (e.g. "VAT 14%").
       var scratch = l.text.lowercased()
       for kw in keywords { scratch = scratch.replacingOccurrences(of: kw, with: " ") }
       // Drop percent-suffixed numbers — those are tax rates, not amounts.
-      let candidates = matches(amountRegex, in: scratch).filter { !isPercentage($0, in: scratch) }
+      let allMatches = matches(amountRegex, in: scratch)
+      let candidates = allMatches.filter { !isPercentage($0, in: scratch) }
       if let best = candidates.compactMap({ parseAmount($0) }).max() {
         return best
       }
+      // The keyword line carried a number, but it was a rate ("VAT 5%") — the
+      // amount isn't here. Don't fall through to the next row, or we'd grab an
+      // unrelated value (e.g. the TOTAL below). Keep scanning other keyword rows.
+      if !allMatches.isEmpty { continue }
       if i + 1 < lines.count {
         let next = lines[i + 1].text
         if let best = matches(amountRegex, in: next).compactMap({ parseAmount($0) }).max() {
@@ -249,6 +256,13 @@ enum InvoiceParser {
       }
     }
     return nil
+  }
+
+  /// Whole-word keyword test. `"subtotal"` must not satisfy the `"total"`
+  /// keyword; `"amount due"` (with the embedded space) still matches literally.
+  private static func keywordMatches(_ lowered: String, _ keyword: String) -> Bool {
+    let pattern = "\\b" + NSRegularExpression.escapedPattern(for: keyword) + "\\b"
+    return lowered.range(of: pattern, options: .regularExpression) != nil
   }
 
   private static func isPercentage(_ match: String, in text: String) -> Bool {
