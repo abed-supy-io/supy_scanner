@@ -113,7 +113,7 @@ class _SupyDemoBatchBarcodePageState extends State<SupyDemoBatchBarcodePage> {
                           child: ListView.separated(
                             itemCount: items.length,
                             separatorBuilder:
-                                (_, __) => const Divider(
+                                (_, _) => const Divider(
                                   height: 1,
                                   color: Color(0x140F1E3A),
                                 ),

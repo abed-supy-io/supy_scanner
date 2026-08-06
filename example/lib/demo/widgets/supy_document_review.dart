@@ -63,7 +63,7 @@ class _SupyDocumentReviewState extends State<SupyDocumentReview> {
           child: ListView.separated(
             scrollDirection: Axis.horizontal,
             itemCount: pages.length,
-            separatorBuilder: (_, __) => const SizedBox(width: 12),
+            separatorBuilder: (_, _) => const SizedBox(width: 12),
             itemBuilder: (_, i) => _PageThumb(page: pages[i], index: i),
           ),
         ),

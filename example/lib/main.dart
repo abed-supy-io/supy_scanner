@@ -434,7 +434,7 @@ class _BatchBarcodeTabState extends State<_BatchBarcodeTab> {
                     )
                     : ListView.separated(
                       itemCount: items.length,
-                      separatorBuilder: (_, __) => const Divider(height: 1),
+                      separatorBuilder: (_, _) => const Divider(height: 1),
                       itemBuilder: (_, i) {
                         final b = items[i];
                         return ListTile(
@@ -565,7 +565,7 @@ class _DocumentTabState extends State<_DocumentTab> {
                             scrollDirection: Axis.horizontal,
                             itemCount: pages.length,
                             separatorBuilder:
-                                (_, __) => const SizedBox(width: 8),
+                                (_, _) => const SizedBox(width: 8),
                             itemBuilder: (_, i) {
                               final page = pages[i];
                               final file = File(

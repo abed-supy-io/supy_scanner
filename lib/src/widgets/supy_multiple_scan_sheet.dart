@@ -125,7 +125,7 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 12),
                     itemCount: items.length,
                     separatorBuilder:
-                        (_, __) => Divider(
+                        (_, _) => Divider(
                           height: 12,
                           color: cfg.bodyColor.withValues(alpha: 0.1),
                         ),
