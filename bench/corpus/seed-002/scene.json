@@ -1,0 +1,18 @@
+{
+  "id": "seed-002",
+  "docType": "receipt",
+  "background": "plain",
+  "lighting": "dim",
+  "quad": [
+    0.2,
+    0.2,
+    0.8,
+    0.2,
+    0.8,
+    0.8,
+    0.2,
+    0.8
+  ],
+  "physicalWidthMm": 152.4,
+  "physicalHeightMm": 114.3
+}

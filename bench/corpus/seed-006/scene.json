@@ -1,0 +1,18 @@
+{
+  "id": "seed-006",
+  "docType": "menu",
+  "background": "plain",
+  "lighting": "glare",
+  "quad": [
+    0.2,
+    0.2,
+    0.8,
+    0.2,
+    0.8,
+    0.8,
+    0.2,
+    0.8
+  ],
+  "physicalWidthMm": 152.4,
+  "physicalHeightMm": 114.3
+}

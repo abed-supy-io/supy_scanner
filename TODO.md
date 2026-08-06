@@ -367,3 +367,24 @@ Spec: `docs/superpowers/specs/2026-07-03-supy-document-scanner-replaces-scanbot-
 
 ### Sprint 4 — Proof & Scanbot removal (plan at sprint boundary)
 - [ ] CSU-S4 Side-by-side bench vs Scanbot, QA walkthrough, retailer pilot, Scanbot removal
+
+## DSQ — Document Scan Quality program (spec: docs/superpowers/specs/2026-07-16-doc-scan-quality-design.md)
+
+### DSQ0 — bench harness + corpus (plan: docs/superpowers/plans/2026-07-16-dsq0-bench-harness.md)
+- [x] DSQ0-01 corpus schema, LFS rules, loader/validator (`tools/bench/lib/corpus.dart`)
+- [x] DSQ0-02 quad IoU (`tools/bench/lib/quad_iou.dart`)
+- [x] DSQ0-03 output metrics: sharpness/uniformity/DPI/CER (`tools/bench/lib/metrics.dart`)
+- [x] DSQ0-04 synthetic seed corpus ×6 (`tools/bench/gen_seed_corpus.dart`)
+- [x] DSQ0-05 bench_detect host harness (`native/bench/bench_detect.cpp`)
+- [x] DSQ0-06 bench_pipeline host harness (`native/bench/bench_pipeline.cpp`)
+- [x] DSQ0-07 Vision OCR CLI (`tools/bench/ocr/vision_ocr.swift`)
+- [x] DSQ0-08 aggregation + report + ±2% gate (`tools/bench/lib/report.dart`)
+- [x] DSQ0-09 run_bench driver (`tools/bench/run_bench.dart`)
+- [x] DSQ0-10 dsq-bench CI job (macos-14, non-blocking until baselines pin)
+- [ ] DSQ0-11 real corpus ~120 scenes + Scanbot outputs (USER-OWNED, see bench/corpus/CAPTURE_GUIDE.md)
+- [ ] DSQ0-12 pin scanbot.json baseline after DSQ0-11
+
+### DSQ1–DSQ4
+Planned per-phase; each phase gets its own implementation plan once the
+previous phase's bench results are in. DSQ1 requires a TODO decisions-log
+entry for the embedded-iOS `enhanceMode` default flip (spec §DSQ1).

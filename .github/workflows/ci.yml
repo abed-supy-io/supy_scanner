@@ -44,10 +44,15 @@ jobs:
         working-directory: compat/supy_scanner_scanbot_compat
         run: flutter pub get
 
-      # tools/perfgate is its own package; the root analyze below walks into
-      # it, so its deps must be resolved first or analysis fails on URIs.
-      - name: dart pub get (perfgate)
+      # The nested tool packages have their own pubspecs; the repo-root
+      # `dart analyze --fatal-infos` below resolves their package: imports
+      # only if each has run pub get.
+      - name: dart pub get (tools/perfgate)
         working-directory: tools/perfgate
+        run: dart pub get
+
+      - name: dart pub get (tools/bench)
+        working-directory: tools/bench
         run: dart pub get
 
       - name: dart format --set-exit-if-changed
@@ -399,6 +404,51 @@ jobs:
             tools/perfgate/report.json
           if-no-files-found: warn
 
+  # dsq-bench runs the DSQ0 host bench over bench/corpus: unit tests for the
+  # bench libs, then the full detect + pipeline-replay + Vision-OCR run, and
+  # uploads bench_report.md. macOS runner because the CER lane needs
+  # Vision.framework. Tracks DSQ0
+  # (docs/superpowers/specs/2026-07-16-doc-scan-quality-design.md).
+  #
+  # Non-blocking (continue-on-error) until the real corpus + pinned baselines
+  # land — mirrors the enhance-bench-low / perfgate-emulator policy. Flip to
+  # blocking with `--gate prev` when DSQ1 pins its first baseline.
+  dsq-bench:
+    name: dsq bench (host replay)
+    runs-on: macos-14
+    needs: [analyze-and-test]
+    timeout-minutes: 30
+    continue-on-error: true
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5  # v4.3.1
+        with:
+          lfs: true
+
+      - uses: dart-lang/setup-dart@0a8a0fc875eb934c15d08629302413c671d3f672  # v1.6.5
+        with:
+          sdk: '3.11.0'
+
+      - name: dart pub get (tools/bench)
+        working-directory: tools/bench
+        run: dart pub get
+
+      - name: dart test (tools/bench)
+        working-directory: tools/bench
+        run: dart test
+
+      - name: validate corpus
+        run: dart tools/bench/validate_corpus.dart
+
+      - name: run dsq bench (detect + output + OCR)
+        run: dart tools/bench/run_bench.dart --suite all
+
+      - name: upload bench report
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02  # v4.6.2
+        with:
+          name: dsq-bench-report
+          path: tools/bench/report/
+
   # ---------------------------------------------------------------------------
   # Canary jobs — non-blocking. These do NOT gate PR merge; they surface
   # upstream breakage (Flutter stable channel, JDK 21) before it lands in the
@@ -430,13 +480,17 @@ jobs:
         run: flutter pub get
 
       # Same reason as the pinned job: root analyze walks into every
-      # subpackage, so compat and perfgate deps must be resolved first.
+      # subpackage, so compat, perfgate and bench deps must be resolved first.
       - name: flutter pub get (compat)
         working-directory: compat/supy_scanner_scanbot_compat
         run: flutter pub get
 
-      - name: dart pub get (perfgate)
+      - name: dart pub get (tools/perfgate)
         working-directory: tools/perfgate
+        run: dart pub get
+
+      - name: dart pub get (tools/bench)
+        working-directory: tools/bench
         run: dart pub get
 
       - name: dart analyze
