@@ -2,7 +2,7 @@
 ///
 /// Provides native-backed barcode and document scanning with drop-in
 /// Scanbot-compatible APIs. See `docs/MIGRATION.md` for the migration cookbook.
-library supy_scanner;
+library;
 
 export 'src/channel/supy_document_event_channel.dart';
 export 'src/channel/supy_event_channel.dart';

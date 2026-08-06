@@ -6,7 +6,7 @@
 /// `package:scanbot_sdk/scanbot_sdk.dart` and the retailer's local
 /// `scanbot/scanbot_index.dart` import for this package and keep
 /// compiling.
-library supy_scanner_scanbot_compat;
+library;
 
 export 'src/barcode_item.dart';
 export 'src/barcode_scanbot_view.dart';
