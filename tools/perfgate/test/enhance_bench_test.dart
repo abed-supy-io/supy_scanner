@@ -1,5 +1,5 @@
 // Parser coverage for the DIE6 enhance bench output. The host C++ binary
-// (`native/enhance/bench_enhance.cpp --json --tier ...`) emits one
+// (`core/enhance/bench_enhance.cpp --json --tier ...`) emits one
 // `BENCH_TIER` line followed by one `BENCH_RESULT` per `SupyDocumentEnhanceMode`.
 // This test pins the metric naming and shape so a stray rename on either side
 // fails CI before baselines drift.

@@ -261,7 +261,7 @@ Run on Pixel 6a + iPhone 13:
 
 ### Sprint 4 Phase A — Perspective warp + Android `captureAndRectify` (2026-06-26)
 
-Verifies the hand-rolled OpenCV-free native warp (`native/document/perspective_warp.cpp` → `supy_core_warp`) and the now-implemented Android `captureAndRectify`. Run on **one low-end Android (Moto G Power class) + one iPhone (SE2/12)**:
+Verifies the hand-rolled OpenCV-free native warp (`core/document/perspective_warp.cpp` → `supy_core_warp`) and the now-implemented Android `captureAndRectify`. Run on **one low-end Android (Moto G Power class) + one iPhone (SE2/12)**:
 
 - [ ] Invoice shot at ~30° tilt on the low-end Android → captured page is **flat and rectangular** (not a skewed phone-photo), geometry visually matching the iOS output for the same shot.
 - [ ] Page edges in the rectified output align with the detected quad — no black wedges, no doubled/torn edges from a degenerate homography.
@@ -287,7 +287,7 @@ Verifies the now-real `SUPY_ENHANCE_MAX` stack (specular clamp + top-hat flatten
 
 ### Phase FQS — Frame Quality Score (2026-06-17)
 
-Verifies the Swift Laplacian → C++ scorer port (`native/quality/frame_scorer.cpp`). Behavior must match the pre-FQS build — these scenarios pin the guidance classifier transitions, not the raw numbers (which are now identical to Android by construction).
+Verifies the Swift Laplacian → C++ scorer port (`core/quality/frame_scorer.cpp`). Behavior must match the pre-FQS build — these scenarios pin the guidance classifier transitions, not the raw numbers (which are now identical to Android by construction).
 
 Run on iPhone 13 (iOS half is what landed; Android FQS4 is a follow-up):
 

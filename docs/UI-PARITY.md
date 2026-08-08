@@ -99,7 +99,7 @@ Guidance FSM (`SupyDocumentStateMachine` in Dart) consumes `frame_metrics` from 
 
 ## 6. Scanbot-compat shim status
 
-`compat/supy_scanner_scanbot_compat/` is an import-only shim:
+`flutter/supy_scanner_scanbot_compat/` is an import-only shim:
 
 | Compat surface | Routes to | Branded? |
 |---|---|---|

@@ -288,7 +288,7 @@ void main() {
     //
     // Exit-margin un-latching (widening the threshold while in-state so a
     // marginal frame clears the hint) lives on the native/iOS path and the C++
-    // classifier — see `native/document/document_guidance_classifier_test.cpp`.
+    // classifier — see `core/document/document_guidance_classifier_test.cpp`.
     // The Dart FSM does NOT un-latch via exit margin: `_holdingState()` re-applies
     // the prior failure label until `_goodStreak` reaches `readyStableFrames`.
     // This is one of the three documented Dart-FSM hysteresis quirks (ARCHITECTURE.md,

@@ -1,6 +1,6 @@
 // Perfgate enhance bench driver (DIE6).
 //
-// Builds `native/enhance/bench_enhance.cpp` via CMake with -DSUPY_BUILD_TOOLS=ON
+// Builds `core/enhance/bench_enhance.cpp` via CMake with -DSUPY_BUILD_TOOLS=ON
 // and runs it with `--json --tier <tier>`. The binary's stdout already matches
 // the `BENCH_TIER {...}` / `BENCH_RESULT {...}` line protocol consumed by
 // `tools/perfgate/lib/baseline_compare.dart` — this driver just forwards it.
@@ -114,7 +114,7 @@ Map<String, String> _parseArgs(List<String> argv) {
 Directory _repoRoot() {
   var d = Directory.current;
   for (var i = 0; i < 6; i++) {
-    final pubspec = File('${d.path}/pubspec.yaml');
+    final pubspec = File('${d.path}/flutter/supy_scanner/pubspec.yaml');
     if (pubspec.existsSync() &&
         pubspec.readAsStringSync().contains('name: supy_scanner\n')) {
       return d;

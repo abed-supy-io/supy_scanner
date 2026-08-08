@@ -100,7 +100,7 @@ enum SupyDocumentNudge {
 /// receivers MUST map by this list rather than by `SupyDocumentFrameState.values`
 /// so that adding a UI-only state (`capturing`, `captured`) on the Dart side
 /// cannot accidentally shift the wire numbering. Order MUST match the C++
-/// `FrameState` declaration in `native/document/document_guidance_classifier.h`.
+/// `FrameState` declaration in `core/document/document_guidance_classifier.h`.
 const List<SupyDocumentFrameState> kSupyDocumentFrameStateWireIndex = [
   SupyDocumentFrameState.noDocument,
   SupyDocumentFrameState.tooDark,

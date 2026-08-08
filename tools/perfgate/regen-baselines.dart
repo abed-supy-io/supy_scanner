@@ -80,7 +80,7 @@ Future<int> main(List<String> argv) async {
 Directory _repoRoot() {
   var d = Directory.current;
   for (var i = 0; i < 6; i++) {
-    final p = File('${d.path}/pubspec.yaml');
+    final p = File('${d.path}/flutter/supy_scanner/pubspec.yaml');
     if (p.existsSync() &&
         p.readAsStringSync().contains('name: supy_scanner\n')) {
       return d;

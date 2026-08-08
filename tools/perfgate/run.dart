@@ -37,7 +37,7 @@ Future<int> _run(List<String> argv) async {
   } else if (args.containsKey('log')) {
     benchStdout = await File(args['log']!).readAsString();
   } else {
-    final exampleDir = Directory('${repoRoot.path}/example');
+    final exampleDir = Directory('${repoRoot.path}/flutter/supy_scanner/example');
     stdout.writeln('[perfgate] running flutter integration bench '
         'in ${exampleDir.path}');
     final proc = await Process.start(
@@ -127,8 +127,8 @@ Future<Map<String, BenchSample>> _loadBaselines(Directory dir) async {
 Directory _repoRoot() {
   var d = Directory.current;
   for (var i = 0; i < 6; i++) {
-    if (File('${d.path}/pubspec.yaml').existsSync() &&
-        File('${d.path}/pubspec.yaml').readAsStringSync().contains(
+    if (File('${d.path}/flutter/supy_scanner/pubspec.yaml').existsSync() &&
+        File('${d.path}/flutter/supy_scanner/pubspec.yaml').readAsStringSync().contains(
               'name: supy_scanner\n',
             )) {
       return d;

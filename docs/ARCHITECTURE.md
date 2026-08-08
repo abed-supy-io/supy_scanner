@@ -31,7 +31,7 @@ native plugins
    ├─ Android  io.supy.scanner.*  (CameraX + ML Kit, LifecycleCameraController)
    └─ iOS      SupyScanner        (AVFoundation + Vision)
         │
-        └─ shared C++ core (native/, zxing-cpp)  ── SUPY_CORE_ABI_VERSION 5
+        └─ shared C++ core (core/, zxing-cpp)  ── SUPY_CORE_ABI_VERSION 5
 ```
 
 Rules that constrain everything below (see `CLAUDE.md`):

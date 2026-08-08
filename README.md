@@ -103,7 +103,7 @@ BarcodeScanbotView(controller: c, onBarcodeDetected: (List<BarcodeItem> bs) asyn
 final pages = await invoiceScannerService.scanWithCamera(context); // List<File>
 ```
 
-The compat shim `supy_scanner_scanbot_compat` preserves these exact signatures so the cutover is an import-only change. See [`compat/supy_scanner_scanbot_compat/`](compat/supy_scanner_scanbot_compat/) and [`docs/MIGRATION.md`](docs/MIGRATION.md).
+The compat shim `supy_scanner_scanbot_compat` preserves these exact signatures so the cutover is an import-only change. See [`flutter/supy_scanner_scanbot_compat/`](flutter/supy_scanner_scanbot_compat/) and [`docs/MIGRATION.md`](docs/MIGRATION.md).
 
 ## Documentation
 

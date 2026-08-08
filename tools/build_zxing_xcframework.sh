@@ -2,12 +2,12 @@
 # tools/build_zxing_xcframework.sh
 #
 # Builds a fat static xcframework for zxing-cpp (pinned to the tag in
-# native/CMakeLists.txt) covering `iphoneos` + `iphonesimulator` (arm64
+# core/CMakeLists.txt) covering `iphoneos` + `iphonesimulator` (arm64
 # device + arm64/x86_64 simulator slices). Output:
 #
-#   ios/Vendor/ZXing.xcframework
+#   flutter/supy_scanner/ios/Vendor/ZXing.xcframework
 #
-# Consumed by ios/supy_scanner.podspec via `s.vendored_frameworks` (gated
+# Consumed by flutter/supy_scanner/ios/supy_scanner.podspec via `s.vendored_frameworks` (gated
 # on the framework existing on disk — see the podspec for the gate logic).
 #
 # This script is the V1-S2-02 execution side of the decision logged in
@@ -22,7 +22,7 @@
 #
 # Idempotency: re-runs short-circuit if the xcframework exists AND the
 # stamp file under build/ios-zxing/.stamp matches the pinned zxing-cpp
-# tag from native/CMakeLists.txt. Pass --force to rebuild unconditionally.
+# tag from core/CMakeLists.txt. Pass --force to rebuild unconditionally.
 
 set -euo pipefail
 
@@ -30,7 +30,10 @@ set -euo pipefail
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
 NATIVE_DIR="${REPO_ROOT}/core"
-OUT_DIR="${REPO_ROOT}/ios/Vendor"
+# The plugin (and its ios/ tree) moved under flutter/supy_scanner/ in the
+# monorepo restructure; core/ and tools/ stayed at the repo root. The
+# xcframework must land where the podspec (#{__dir__}/Vendor) looks for it.
+OUT_DIR="${REPO_ROOT}/flutter/supy_scanner/ios/Vendor"
 BUILD_ROOT="${REPO_ROOT}/build/ios-zxing"
 XCF_PATH="${OUT_DIR}/ZXing.xcframework"
 STAMP="${BUILD_ROOT}/.stamp"
@@ -66,7 +69,7 @@ for bin in cmake xcrun xcodebuild; do
   fi
 done
 
-# Extract the pinned tag from native/CMakeLists.txt so the script and CMake
+# Extract the pinned tag from core/CMakeLists.txt so the script and CMake
 # can't drift. Single source of truth is the FetchContent_Declare GIT_TAG.
 ZXING_TAG="$(awk '
   /FetchContent_Declare\(\s*$/      { in_decl = 1 }

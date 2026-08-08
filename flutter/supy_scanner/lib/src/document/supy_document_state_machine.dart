@@ -275,7 +275,7 @@ class SupyDocumentStateMachine {
   /// Priority ordering for min-dwell preemption: smaller = more urgent.
   /// Matches the order in which [_firstFailure] surfaces issues — and must
   /// stay byte-identical to the C++ `priority()` table in
-  /// `native/document/document_guidance_classifier.cpp`. A drift here vs.
+  /// `core/document/document_guidance_classifier.cpp`. A drift here vs.
   /// there causes the launcher path (C++-driven) and the PlatformView path
   /// (Dart-driven) to surface different hints on the same frame stream.
   static int _priority(SupyDocumentFrameState s) {
