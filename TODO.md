@@ -126,6 +126,14 @@ Run this first. Produce `docs/refactor/00-inventory.md` and stop for review befo
 This is the ground truth the rest of the plan is reconciled against. Paths are
 repo-relative. Counts are approximate and meant for orientation, not as gates.
 
+> **Note (post-restructure):** this section is the discovery snapshot taken
+> *before* the monorepo restructure. The first restructure pass has since moved
+> `native/` -> `core/` and the Flutter plugin -> `flutter/supy_scanner/` (plus
+> `compat/` -> `flutter/`, and the two sub-projects into `licensing/` +
+> `website/`). The paths in the tables below are the pre-move locations, kept as
+> the reconciliation baseline; for the current on-disk layout and what was
+> deferred, see section 5.5.4. Deltas 1 and 4 below are now resolved.
+
 ### Top-level components
 
 | Component | Path | What it is | Maps to target | Disposition |
@@ -156,10 +164,10 @@ repo-relative. Counts are approximate and meant for orientation, not as gates.
 
 ### Reconciliation deltas the mapping table must resolve
 
-1. **Core header name.** The real primary header is `native/include/supy_scanner.h` (plus `supy_scanner_temporal.h`, `supy_scanner_enhance.h`, `supy_scanner_binarize.h`). The spec in section 4.2 calls it `core/include/supy_scanner.h`. Pick one; do not maintain both. Recommendation: keep the existing `supy_scanner.h` and update section 4.2 to match, rather than rename a shipping contract.
+1. **Core header name.** ~~The real primary header is `native/include/supy_scanner.h`...~~ **RESOLVED (5.5.4):** the header kept its `supy_scanner.h` name and moved to `core/include/supy_scanner.h` (the name section 5.5.2 shows); all `#include`s, the JNI `.cpp`, the `.mm` bridge, and CMake were updated to match. Section 4.2 defines only the ABI body and names no path, so nothing there needed changing. The sibling headers (`supy_scanner_temporal.h`, `supy_scanner_enhance.h`, `supy_scanner_binarize.h`) moved with it.
 2. **Binding mechanism.** The plan (Phase 3) assumes `ffigen` + a worker isolate + an Unleash-gated `LegacyScannerAdapter`. The repo instead crosses to native through platform-channel `nativecore/` bridges. Treat Phase 3 as **already satisfied by a different mechanism**; do not re-plumb to FFI without a logged decision.
 3. **No in-repo legacy vendor path.** There is no Scanbot/Docutain code in the scan path to strangle, so Phase 5 ("flip the flag, delete legacy") has no in-repo target. The compat shim is a separate consumer-facing surface, not a legacy engine.
-4. **Layout.** `native/` (not `core/`), Flutter plugin at repo root (not `flutter/`), corpus at `bench/corpus/` (not `conformance/corpus/`). See the reconciled section 5.5.
+4. **Layout.** ~~`native/` (not `core/`), Flutter plugin at repo root (not `flutter/`)...~~ **RESOLVED (5.5.4):** `native/` -> `core/` and the plugin -> `flutter/supy_scanner/` have moved, and the sub-projects folded into `licensing/` + `website/`. Still outstanding: corpus `bench/corpus/` -> `conformance/corpus/` (deferred, deviation 2) and the standalone `android/` + `ios/` SDK split (deferred, deviation 1). See section 5.5.4.
 5. **New scope.** `supy-licensing-backend/` and `supy-scanner-website/` are real, shipping sub-projects that the target tree never named. They are folded into the restructure in 5.5.
 
 ## 2.1 Inventory the current implementation
@@ -293,7 +301,7 @@ test -f docs/refactor/02-baseline.md
 
 ## Phase 1: Monorepo skeleton and native build
 
-**Status (2026-08-08): PARTIAL.** The native core is already built: `native/` compiles `supy_scanner_core` via `native/CMakeLists.txt`, with the contract header at `native/include/supy_scanner.h` (not `core/include/supy_scanner.h`). What is NOT done: the monorepo skeleton relocation (core stays in `native/`, Flutter plugin at repo root), the three standalone sample apps, the `assert-no-flutter` CI gate, and the trimmed-OpenCV build (the core is first-party, so the OpenCV step may not apply as written). Reconcile the header name per section 2.0 delta 1 before treating this phase as its own contract.
+**Status (2026-08-08): SKELETON DONE; sample apps + gate outstanding.** The monorepo skeleton relocation landed on branch `refactor/monorepo-restructure` (see section 5.5.4): the core moved `native/` -> `core/`, the contract header was reconciled to `core/include/supy_scanner.h` (section 2.0 delta 1 closed), the Flutter plugin moved to `flutter/supy_scanner/`, and every coupled build edge (CMake, Gradle, podspec, SPM, tools, CI, dependabot, `.gitignore`) was rewired in the same pass. The relocated `core/` builds on the host (CMake configure + build green, optional deps off) and both moved Dart packages pass `flutter analyze`. What is still NOT done: the three standalone sample apps and the `assert-no-flutter` CI gate (both gated on the Phase 6/7 native-SDK split, which is gated on Q9), and the trimmed-OpenCV build (the core is first-party, so that step does not apply as written). The `android/` and `ios/` dirs also still live inside `flutter/supy_scanner/` rather than as standalone top-level SDKs; see section 5.5.4 deviation 1.
 
 **Do:**
 1. Create the target tree (section 5.5). Do not move existing code yet.
@@ -318,7 +326,7 @@ The last check is load-bearing. It locks the "no Flutter on the classpath" const
 
 ## Phase 2: Core detection and rectification
 
-**Status (2026-08-08): LARGELY DONE in `native/`.** Detection, corner ordering, and rectification are implemented: `native/document/{edge_detector,guidance_classifier,perspective_warp}` plus live scoring in `native/quality/frame_scorer`, each with a GoogleTest suite. Remaining: prove the IoU/SSIM gate against the grown corpus and the Phase 0 baseline.
+**Status (2026-08-08): LARGELY DONE in `core/`.** Detection, corner ordering, and rectification are implemented: `core/document/{edge_detector,guidance_classifier,perspective_warp}` plus live scoring in `core/quality/frame_scorer`, each with a GoogleTest suite. (Relocated from `native/` in the section 5.5.4 restructure.) Remaining: prove the IoU/SSIM gate against the grown corpus and the Phase 0 baseline.
 
 **Do:** implement pipeline stages 0 through 4 (section 4.3 to 4.7): decode-once, classical detector with LSD fallback, corner ordering, homography with aspect-ratio recovery, anti-aliased warp, resolution policy, JPEG encode.
 
@@ -351,7 +359,7 @@ Both adapters must satisfy the identical port test suite.
 
 ## Phase 4: Core enhancement
 
-**Status (2026-08-08): LARGELY DONE in `native/`.** The enhancement stack lives in `native/enhance/` (illumination, morphology, tophat, CLAHE, tone, unsharp, plus `binarize`) with Sauvola in `native/halide/sauvola_2d_generator.cpp`, covered by `native/enhance/enhance_test` and benched by `native/enhance/bench_enhance`. Remaining: hold the CER-improvement and per-op latency gates against the grown corpus.
+**Status (2026-08-08): LARGELY DONE in `core/`.** The enhancement stack lives in `core/enhance/` (illumination, morphology, tophat, CLAHE, tone, unsharp, plus `binarize`) with Sauvola in `core/halide/sauvola_2d_generator.cpp`, covered by `core/enhance/enhance_test` and benched by `core/enhance/bench_enhance`. (Relocated from `native/` in the section 5.5.4 restructure.) Remaining: hold the CER-improvement and per-op latency gates against the grown corpus.
 
 **Do:** stages 5 through 11 (section 4.8 to 4.14): deskew, orientation, illumination (morphological and guided filter), background whitening with colour preservation, tone-curve contrast, denoise, unsharp with halo control, Sauvola via integral images.
 
@@ -384,7 +392,7 @@ Do not run this phase until Phase 4's gate is green in production telemetry, not
 
 ## Phase 6: Android native SDK
 
-**Status (2026-08-08): NOT STARTED (gated on Q9).** Today Android ships as a single Flutter-plugin module (`android/src/main/kotlin/io/supy/scanner/`) with JNI to the core, not the modular `scanner-core`/`scanner-camera`/`scanner-ui`/`scanner-mlkit`/`scanner-ocr`/`scanner-bom` product split. No standalone AAR is published. Do this phase only if a native (non-Flutter) Android consumer is confirmed.
+**Status (2026-08-08): NOT STARTED (gated on Q9).** Today Android ships as a single Flutter-plugin module (`flutter/supy_scanner/android/src/main/kotlin/io/supy/scanner/`) with JNI to the core, not the modular `scanner-core`/`scanner-camera`/`scanner-ui`/`scanner-mlkit`/`scanner-ocr`/`scanner-bom` product split. No standalone AAR is published. Do this phase only if a native (non-Flutter) Android consumer is confirmed.
 
 **Blocked by:** open question Q9. If no native Android consumer exists, skip Phase 6 and Phase 7 entirely and record the decision.
 
@@ -400,7 +408,7 @@ Do not run this phase until Phase 4's gate is green in production telemetry, not
 
 ## Phase 7: iOS native SDK
 
-**Status (2026-08-08): PARTIAL / NOT STARTED (gated on Q9).** A Swift Package already exists at `ios/supy_scanner/Package.swift` and the binding is real (`ios/Classes/`, module `SupyScanner`), but not as the modular, independently consumable multi-product SDK (`SupyScanner{Core,Capture,UI,OCR}`) with a `binaryTarget` xcframework. Same Q9 gate as Phase 6.
+**Status (2026-08-08): PARTIAL / NOT STARTED (gated on Q9).** A Swift Package already exists at `flutter/supy_scanner/ios/supy_scanner/Package.swift` and the binding is real (`flutter/supy_scanner/ios/Classes/`, module `SupyScanner`), but not as the modular, independently consumable multi-product SDK (`SupyScanner{Core,Capture,UI,OCR}`) with a `binaryTarget` xcframework. Same Q9 gate as Phase 6.
 
 **Do:** Swift wrapper with async/await, module split, AVFoundation capture, `VisionDetector`, SPM `binaryTarget` plus CocoaPods podspec. The Flutter podspec declares `s.dependency 'SupyScannerCore'` and never vendors the framework (section 5.3.2). Dart FFI uses `DynamicLibrary.process()` on iOS because the framework is static.
 
@@ -412,7 +420,7 @@ swift test && xcodebuild test -scheme SupyScannerCore
 
 ## Phase 8: Design tokens and UI config
 
-**Status (2026-08-08): PARTIAL.** The UI-config surface exists as `Supy*` Dart types (`SupyCameraConfiguration`, `SupyScannerPalette`, `SupyScannerStrings`, per-use-case configs) exported from `lib/`. What is NOT done: the single-source `design/tokens.json` + `design/ui-config.schema.json` + `design/strings/{en,ar}.arb` with codegen to all three platforms, and the no-literals lint gate.
+**Status (2026-08-08): PARTIAL.** The UI-config surface exists as `Supy*` Dart types (`SupyCameraConfiguration`, `SupyScannerPalette`, `SupyScannerStrings`, per-use-case configs) exported from `flutter/supy_scanner/lib/`. What is NOT done: the single-source `design/tokens.json` + `design/ui-config.schema.json` + `design/strings/{en,ar}.arb` with codegen to all three platforms, and the no-literals lint gate. (`design/` was not created in the section 5.5.4 restructure pass; deviation 3.)
 
 **Do:**
 1. `design/tokens.json` per section 6.2. Generate `SupyScannerTokens.{kt,swift,dart}`.
@@ -428,7 +436,7 @@ swift test && xcodebuild test -scheme SupyScannerCore
 
 ## Phase 9: Branded UI
 
-**Status (2026-08-08): PARTIAL.** Branded embedded Flutter widgets already exist in `lib/` (barcode/document scanner views + screens, find-and-pick, multiple-scan, text-pattern). The gap is routing, not rebuild: the facade/compat path still sends document + batch flows to the native full-screen UIs. The UI plan is re-route to the embedded widgets, then add the cross-platform diff harness. See the UI-parity memory.
+**Status (2026-08-08): PARTIAL.** Branded embedded Flutter widgets already exist in `flutter/supy_scanner/lib/` (barcode/document scanner views + screens, find-and-pick, multiple-scan, text-pattern). The gap is routing, not rebuild: the facade/compat path still sends document + batch flows to the native full-screen UIs. The UI plan is re-route to the embedded widgets, then add the cross-platform diff harness. See the UI-parity memory.
 
 **Do:** the five screens and six states (section 6.5), on whichever platforms Q9 resolved to. Build Flutter first (fastest iteration, where design review happens), then transcribe to Compose and SwiftUI.
 
