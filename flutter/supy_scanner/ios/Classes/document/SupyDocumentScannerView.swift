@@ -3,6 +3,13 @@ import CoreImage
 import Flutter
 import UIKit
 
+// Under Swift Package Manager the Obj-C bridge (`SupyNativeCoreBridge`, used by
+// the capture quality scorer) is its own module; under CocoaPods it lands in
+// this same umbrella module and needs no import. Mirrors `SupyNativeCore.swift`.
+#if SWIFT_PACKAGE
+import supy_scanner_objc
+#endif
+
 /// PlatformView hosting an `AVCaptureSession` preview for embedded document
 /// scanning with live edge-guidance.
 ///
@@ -64,6 +71,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   ) {
     self.container = PreviewContainerView(frame: frame)
     self.container.backgroundColor = .black
+    // Pin the preview to portrait for the whole view's lifetime. The analyzer,
+    // emitted `sourceAspectRatio`, and overlay crop math are all fixed-portrait;
+    // without this lock `layoutSubviews` would re-rotate the preview to follow
+    // the device and drift the drawn quad off the real document edges.
+    self.container.lockedVideoOrientation = .portrait
 
     let prefix = "io.supy.scanner/v1/document"
     self.methodChannel = FlutterMethodChannel(
@@ -671,7 +683,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     // scaled it); the quad stays normalized so it is resolution-independent.
     let widthPx = Int(enhanced.size.width * enhanced.scale)
     let heightPx = Int(enhanced.size.height * enhanced.scale)
-    let payload: [String: Any] = [
+    var payload: [String: Any] = [
       "path": url.path,
       "widthPx": widthPx,
       "heightPx": heightPx,
@@ -686,6 +698,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       "width": widthPx,
       "height": heightPx,
     ]
+    Self.attachQualityScore(of: enhanced, to: &payload)
     DispatchQueue.main.async { result(payload) }
   }
 
@@ -740,7 +753,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     }
     let widthPx = Int(image.size.width * image.scale)
     let heightPx = Int(image.size.height * image.scale)
-    let payload: [String: Any] = [
+    var payload: [String: Any] = [
       "path": url.path,
       "widthPx": widthPx,
       "heightPx": heightPx,
@@ -748,7 +761,35 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       "width": widthPx,
       "height": heightPx,
     ]
+    Self.attachQualityScore(of: image, to: &payload)
     DispatchQueue.main.async { result(payload) }
+  }
+
+  /// Scores `image` with the shared native page scorer and adds the wire
+  /// `quality` bucket + raw `qualityScore` to `payload` (both additive keys
+  /// `SupyDocumentPage.fromMap` already decodes). Silent no-op if the scorer
+  /// returns nil, so a scoring miss never blocks a capture.
+  private static func attachQualityScore(
+    of image: UIImage, to payload: inout [String: Any]
+  ) {
+    guard let score = SupyNativeCoreBridge.scoreImage(image) else { return }
+    if let wire = qualityBucketWire(Int(score.bucket)) {
+      payload["quality"] = wire
+    }
+    payload["qualityScore"] = Double(score.qualityScore)
+  }
+
+  /// Maps the native scorer's 0–4 bucket ordinal onto the wire string
+  /// `SupyDocumentPageQuality` decodes. Mirrors the import path's mapping.
+  private static func qualityBucketWire(_ bucket: Int) -> String? {
+    switch bucket {
+    case 0: return "veryPoor"
+    case 1: return "poor"
+    case 2: return "ok"
+    case 3: return "good"
+    case 4: return "excellent"
+    default: return nil
+    }
   }
 
   // MARK: - FlutterStreamHandler

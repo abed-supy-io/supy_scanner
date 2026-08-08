@@ -4,6 +4,7 @@ import 'catalog_entry.dart';
 import 'demos/ar_overlay_demo.dart';
 import 'demos/barcode_parsers_demo.dart';
 import 'demos/batch_scan_demo.dart';
+import 'demos/branded_document_demo.dart';
 import 'demos/decode_image_demo.dart';
 import 'demos/document_scan_demo.dart';
 import 'demos/embedded_scanner_demo.dart';
@@ -108,6 +109,17 @@ final List<CatalogEntry> kCatalogEntries = [
         'hints, a guidance state machine, and manual capture fallback.',
     apiSummary: 'SupyDocumentScannerView + SupyDocumentGuidanceConfiguration',
     builder: (_) => const SmartDocumentDemo(),
+  ),
+  CatalogEntry(
+    category: CatalogCategory.document,
+    icon: Icons.fullscreen,
+    title: 'Branded document scanner',
+    description:
+        'The full-screen, Scanbot-parity document session: solid brand bars, a '
+        'live green/red edge overlay, an in-bar auto-capture toggle, gallery '
+        'import, and a multi-page review grid.',
+    apiSummary: 'SupyDocumentScannerScreen(onComplete:, onCancel:)',
+    builder: (_) => const BrandedDocumentDemo(),
   ),
 
   // ---- OCR & Text ------------------------------------------------------

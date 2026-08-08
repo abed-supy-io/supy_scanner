@@ -724,6 +724,14 @@ final class SupyBarcodeScannerView: NSObject, FlutterPlatformView,
 final class PreviewContainerView: UIView {
   private weak var previewLayer: AVCaptureVideoPreviewLayer?
 
+  /// When set, `layoutSubviews` pins the preview connection to this orientation
+  /// instead of following the device/interface orientation. The document
+  /// scanner needs this: its analyzer, emitted `sourceAspectRatio`, and overlay
+  /// crop math are all fixed-portrait, so a preview that rotates with the device
+  /// would slide the drawn quad off the real document edges. `nil` (the default)
+  /// keeps the barcode view's device-following behavior.
+  var lockedVideoOrientation: AVCaptureVideoOrientation?
+
   func attach(previewLayer: AVCaptureVideoPreviewLayer) {
     previewLayer.frame = bounds
     layer.addSublayer(previewLayer)
@@ -739,7 +747,8 @@ final class PreviewContainerView: UIView {
     previewLayer.frame = bounds
     if let connection = previewLayer.connection,
        connection.isVideoOrientationSupported {
-      connection.videoOrientation = Self.currentVideoOrientation()
+      connection.videoOrientation =
+        lockedVideoOrientation ?? Self.currentVideoOrientation()
     }
     CATransaction.commit()
   }

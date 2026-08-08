@@ -435,7 +435,13 @@ final class DocumentDetector: NSObject,
     req.minimumAspectRatio = Float(minAspectRatio)
     req.maximumAspectRatio = Float(maxAspectRatio)
     req.minimumSize = Float(minBoundingArea)
-    req.maximumObservations = 1
+    // Let Vision return several already-gated rectangles instead of only its
+    // single top-ranked one, then pick the largest by area (above). With a cap
+    // of 1, a distractor that outranks the page (a table edge, a sub-panel)
+    // wins and the real document is never even a candidate — the classic
+    // "edge won't lock onto the page" failure. The confidence / aspect / size
+    // gates already prune junk, so widening the field only adds valid choices.
+    req.maximumObservations = 8
     req.quadratureTolerance = 30
     return req
   }

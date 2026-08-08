@@ -11,6 +11,12 @@ import 'package:supy_scanner/supy_scanner.dart';
 /// spins up a native PlatformView (or re-attaches the controller to a real
 /// channel). `debugDefaultTargetPlatformOverride` is checked by the framework's
 /// invariant pass, which runs BEFORE `addTearDown`, so we restore it inline.
+///
+/// The session is a two-stage flow: a branded viewfinder (solid brand bars, a
+/// white shutter, an auto-capture toggle, and a page-stack thumbnail with a
+/// count badge) and a page-review grid (thumbnails, delete, "Export as PDF"
+/// finish). Multi accumulates in the viewfinder and the page-stack thumbnail
+/// opens review; Single / Receipt advance to review after one capture.
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
@@ -60,6 +66,7 @@ void main() {
     required ValueChanged<List<SupyDocumentPage>> onComplete,
     VoidCallback? onCancel,
     int maxPages = 0,
+    SupyDocumentScanMode mode = SupyDocumentScanMode.multi,
   }) {
     return MaterialApp(
       home: SupyDocumentScannerScreen(
@@ -67,6 +74,7 @@ void main() {
         onComplete: onComplete,
         onCancel: onCancel,
         maxPages: maxPages,
+        mode: mode,
       ),
     );
   }
@@ -79,9 +87,18 @@ void main() {
     await tester.pump(const Duration(milliseconds: 10));
   }
 
-  testWidgets('accumulates captures into ordered pages and completes on Done', (
-    tester,
-  ) async {
+  // Opens the review grid from the viewfinder by tapping the page-stack
+  // thumbnail. Its label follows English singular/plural agreement ("1 page").
+  Future<void> openReview(WidgetTester tester, int pages) async {
+    final label = '$pages ${pages == 1 ? 'page' : 'pages'}';
+    await tester.tap(find.bySemanticsLabel(label));
+    await tester.pump();
+  }
+
+  Finder exportButton() => find.widgetWithText(FilledButton, 'Export as PDF');
+
+  testWidgets('multi: accumulates ordered pages; badge opens review; export '
+      'returns them', (tester) async {
     await onDesktop(() async {
       wireCaptures();
       final controller = attachedController();
@@ -92,10 +109,15 @@ void main() {
         host(controller: controller, onComplete: (p) => completed = p),
       );
 
+      // Multi stays in the viewfinder between shots — no review yet.
       await tapShutter(tester);
       await tapShutter(tester);
+      expect(exportButton(), findsNothing);
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Done'));
+      await openReview(tester, 2);
+      expect(exportButton(), findsOneWidget);
+
+      await tester.tap(exportButton());
       await tester.pump();
 
       expect(completed, isNotNull);
@@ -108,7 +130,38 @@ void main() {
     });
   });
 
-  testWidgets('Done is inert until at least one page exists', (tester) async {
+  testWidgets('single: one capture advances straight to review', (
+    tester,
+  ) async {
+    await onDesktop(() async {
+      final calls = wireCaptures();
+      final controller = attachedController();
+      addTearDown(controller.dispose);
+
+      List<SupyDocumentPage>? completed;
+      await tester.pumpWidget(
+        host(
+          controller: controller,
+          onComplete: (p) => completed = p,
+          mode: SupyDocumentScanMode.single,
+        ),
+      );
+
+      // A single shot pauses the preview and lands on review immediately.
+      await tapShutter(tester);
+      expect(calls.map((c) => c.method), contains('pause'));
+      expect(exportButton(), findsOneWidget);
+
+      await tester.tap(exportButton());
+      await tester.pump();
+
+      expect(completed!.single.uri, 'file:///tmp/p1.jpg');
+    });
+  });
+
+  testWidgets('finish is unreachable until at least one page exists', (
+    tester,
+  ) async {
     await onDesktop(() async {
       wireCaptures();
       final controller = attachedController();
@@ -119,15 +172,11 @@ void main() {
         host(controller: controller, onComplete: (_) => completions++),
       );
 
-      // Tapping the disabled Done button is a no-op.
-      await tester.tap(find.widgetWithText(FilledButton, 'Done'));
-      await tester.pump();
+      // With zero pages there is no page-count badge and no way into review,
+      // so the terminal export action does not exist yet.
+      expect(find.bySemanticsLabel('0 pages'), findsNothing);
+      expect(exportButton(), findsNothing);
       expect(completions, 0);
-
-      await tapShutter(tester);
-      await tester.tap(find.widgetWithText(FilledButton, 'Done'));
-      await tester.pump();
-      expect(completions, 1);
     });
   });
 
@@ -146,13 +195,15 @@ void main() {
         ),
       );
 
-      await tester.tap(find.byTooltip('Cancel'));
+      await tester.tap(find.widgetWithText(TextButton, 'Cancel'));
       await tester.pump();
       expect(cancelled, isTrue);
     });
   });
 
-  testWidgets('delete removes a captured page from the tray', (tester) async {
+  testWidgets('multi: delete removes a captured page in review', (
+    tester,
+  ) async {
     await onDesktop(() async {
       wireCaptures();
       final controller = attachedController();
@@ -165,16 +216,16 @@ void main() {
 
       await tapShutter(tester);
       await tapShutter(tester);
-      expect(
-        find.byType(CircleAvatar),
-        findsNWidgets(2),
-      ); // one delete per page
+      await openReview(tester, 2);
+
+      // One delete affordance per page thumbnail.
+      expect(find.byType(CircleAvatar), findsNWidgets(2));
 
       // Delete the first page; the second (p2) survives.
       await tester.tap(find.byType(CircleAvatar).first);
       await tester.pump();
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Done'));
+      await tester.tap(exportButton());
       await tester.pump();
 
       expect(completed!.single.uri, 'file:///tmp/p2.jpg');
@@ -209,9 +260,91 @@ void main() {
         reason: 'only one capture reached the channel at maxPages: 1',
       );
 
-      await tester.tap(find.widgetWithText(FilledButton, 'Done'));
+      await openReview(tester, 1);
+      await tester.tap(exportButton());
       await tester.pump();
       expect(completed!.length, 1);
+    });
+  });
+
+  testWidgets('viewfinder shows the brand chrome: title, shutter, auto-capture '
+      'toggle', (tester) async {
+    await onDesktop(() async {
+      wireCaptures();
+      final controller = attachedController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(host(controller: controller, onComplete: (_) {}));
+
+      expect(find.text('Scan Document'), findsOneWidget);
+      expect(find.bySemanticsLabel('Capture page'), findsOneWidget);
+      expect(find.bySemanticsLabel('Auto'), findsOneWidget);
+      // The removed mode tabs must not resurface.
+      expect(find.text('Single'), findsNothing);
+      expect(find.text('Receipt'), findsNothing);
+    });
+  });
+
+  // Wires a single capture that carries the native scorer's quality bucket, so
+  // the review-grid badge has something to render.
+  void wireCaptureWithQuality(String quality) {
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      if (call.method == 'captureAndRectify') {
+        return <String, Object?>{
+          'path': '/tmp/p1.jpg',
+          'widthPx': 101,
+          'heightPx': 201,
+          'quality': quality,
+        };
+      }
+      return null;
+    });
+  }
+
+  testWidgets('review grid shows the color-coded quality badge from the native '
+      'score', (tester) async {
+    await onDesktop(() async {
+      wireCaptureWithQuality('good');
+      final controller = attachedController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        host(
+          controller: controller,
+          onComplete: (_) {},
+          mode: SupyDocumentScanMode.single,
+        ),
+      );
+
+      // Single lands straight on review, where the badge labels the page.
+      await tapShutter(tester);
+      expect(exportButton(), findsOneWidget);
+      expect(find.text('Good'), findsOneWidget);
+    });
+  });
+
+  testWidgets('review grid omits the quality badge when the page has no score', (
+    tester,
+  ) async {
+    await onDesktop(() async {
+      // Default captures carry no `quality` key (older native / import paths).
+      wireCaptures();
+      final controller = attachedController();
+      addTearDown(controller.dispose);
+
+      await tester.pumpWidget(
+        host(
+          controller: controller,
+          onComplete: (_) {},
+          mode: SupyDocumentScanMode.single,
+        ),
+      );
+
+      await tapShutter(tester);
+      expect(exportButton(), findsOneWidget);
+      for (final label in ['Very poor', 'Poor', 'OK', 'Good', 'Excellent']) {
+        expect(find.text(label), findsNothing);
+      }
     });
   });
 }

@@ -87,6 +87,31 @@ void main() {
     expect(page.qualityScore, 0.82);
   });
 
+  test('importDocumentImage forwards scan options to the wire', () async {
+    Object? captured;
+    messenger.setMockMethodCallHandler(channel, (call) async {
+      expect(call.method, 'importDocumentImage');
+      captured = call.arguments;
+      return <Object?, Object?>{
+        'uri': 'file:///import.jpg',
+        'width': 1240,
+        'height': 1754,
+      };
+    });
+
+    await channelUnderTest.importDocumentImage(
+      const SupyDocumentScanOptions(
+        filter: SupyDocumentFilter.grayscale,
+        enhanceMode: SupyDocumentEnhanceMode.balanced,
+      ),
+    );
+
+    expect(captured, isA<Map<Object?, Object?>>());
+    final args = captured! as Map<Object?, Object?>;
+    expect(args['filter'], 'grayscale');
+    expect(args['enhanceMode'], 'balanced');
+  });
+
   test(
     'importDocumentImage returns null when the picker is dismissed',
     () async {

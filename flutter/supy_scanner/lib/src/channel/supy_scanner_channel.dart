@@ -62,11 +62,20 @@ class SupyScannerChannel {
   /// image bytes cross the channel and no new Flutter plugin dependency is
   /// pulled in. Mirrors the branded capture path so an imported page is
   /// interchangeable with a camera-captured one.
-  Future<SupyDocumentPage?> importDocumentImage() async {
+  ///
+  /// Pass [options] to control how the imported page is enhanced — the same
+  /// [SupyDocumentScanOptions.filter] / [SupyDocumentScanOptions.enhanceMode] /
+  /// [SupyDocumentScanOptions.processing] the camera path uses. When omitted,
+  /// the native side applies its default paper-preserving enhancement (v1.0
+  /// behaviour).
+  Future<SupyDocumentPage?> importDocumentImage([
+    SupyDocumentScanOptions? options,
+  ]) async {
     SupyLicenseGate.ensureActivated();
     try {
       final result = await _methodChannel.invokeMapMethod<Object?, Object?>(
         'importDocumentImage',
+        options?.toWire(),
       );
       if (result == null) return null;
       return SupyDocumentPage.fromMap(result);

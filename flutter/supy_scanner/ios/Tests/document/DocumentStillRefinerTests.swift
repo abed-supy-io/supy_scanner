@@ -37,6 +37,64 @@ final class DocumentStillRefinerTests: XCTestCase {
     XCTAssertEqual(result.quad, closer)
   }
 
+  func testEvaluateAcceptsOffsetSameSizeCandidateViaContainment() {
+    // Seed is offset ~13% in x from the true page (preview→photo FOV error).
+    // Symmetric IoU falls below 0.8, but the two quads outline the same page,
+    // so containment keeps it and the correct (offset) detection wins.
+    let candidate = seed.map { CGPoint(x: $0.x - 0.08, y: $0.y) }
+    XCTAssertLessThan(QuadGeometry.iou(candidate, seed), 0.8)
+    let result = DocumentStillRefiner.evaluate(
+      candidates: [candidate], seedQuad: seed, minIoU: 0.8)
+    XCTAssertTrue(result.refined)
+    XCTAssertEqual(result.quad, candidate)
+  }
+
+  func testEvaluateRejectsSmallInnerRectangle() {
+    // A small rectangle fully inside the seed (e.g. a printed table) has
+    // containment 1.0 but is far too small — the area band must reject it so
+    // the crop never snaps onto sub-content.
+    let inner = [
+      CGPoint(x: 0.45, y: 0.45), CGPoint(x: 0.55, y: 0.45),
+      CGPoint(x: 0.55, y: 0.55), CGPoint(x: 0.45, y: 0.55),
+    ]
+    let result = DocumentStillRefiner.evaluate(
+      candidates: [inner], seedQuad: seed, minIoU: 0.8)
+    XCTAssertFalse(result.refined)
+    XCTAssertEqual(result.quad, seed)
+  }
+
+  func testEvaluateRejectsFullFrameBackgroundRectangle() {
+    // Regression: on device a ~0.51-area seed was snapped to the full frame.
+    // A background rectangle covering the whole image contains the seed
+    // (containment ~1.0) but is ~2× its area — the area band must veto it so
+    // the crop keeps the framed page instead of the whole image.
+    let halfFrameSeed = [
+      CGPoint(x: 0.15, y: 0.135), CGPoint(x: 0.85, y: 0.135),
+      CGPoint(x: 0.85, y: 0.865), CGPoint(x: 0.15, y: 0.865),
+    ]
+    let fullFrame = [
+      CGPoint(x: 0, y: 0), CGPoint(x: 1, y: 0),
+      CGPoint(x: 1, y: 1), CGPoint(x: 0, y: 1),
+    ]
+    // Same shape the on-device failure had: low IoU, containment ~1, ratio ~2.
+    XCTAssertLessThan(QuadGeometry.iou(fullFrame, halfFrameSeed), 0.8)
+    let result = DocumentStillRefiner.evaluate(
+      candidates: [fullFrame], seedQuad: halfFrameSeed, minIoU: 0.8)
+    XCTAssertFalse(result.refined)
+    XCTAssertEqual(result.quad, halfFrameSeed)
+  }
+
+  func testEvaluateStillRejectsDisjointCandidate() {
+    // A candidate that barely overlaps the seed is a different object — both
+    // IoU and containment stay low, so it is rejected (no regression of the
+    // wrong-object guard).
+    let candidate = seed.map { CGPoint(x: $0.x + 0.5, y: $0.y) }
+    let result = DocumentStillRefiner.evaluate(
+      candidates: [candidate], seedQuad: seed, minIoU: 0.8)
+    XCTAssertFalse(result.refined)
+    XCTAssertEqual(result.quad, seed)
+  }
+
   func testEvaluateWithNoCandidatesFallsBackToSeed() {
     let result = DocumentStillRefiner.evaluate(
       candidates: [], seedQuad: seed, minIoU: 0.8)

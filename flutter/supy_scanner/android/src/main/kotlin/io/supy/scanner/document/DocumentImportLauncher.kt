@@ -38,13 +38,22 @@ class DocumentImportLauncher : PluginRegistry.ActivityResultListener {
     private var pendingResult: Result? = null
     private var pendingActivity: Activity? = null
 
+    // Enhancement knobs resolved from the current call's args, mirroring the
+    // camera path (DocumentScannerLauncher) so an imported page is processed
+    // identically to a scanned one. Default to the prior hardcoded behaviour
+    // (BALANCED enhance, quality 95, COLOR filter) when no args are supplied.
+    private var pendingEnhanceMode: PageReencoder.EnhanceMode = PageReencoder.EnhanceMode.BALANCED
+    private var pendingJpegQuality: Int = RECTIFIED_JPEG_QUALITY
+    private var pendingMaxDimension: Int = DocumentProcessingOptions.DEFAULT_MAX_DIMENSION
+    private var pendingFilter: DocumentFilter = DocumentFilter.COLOR
+
     private val mainHandler = Handler(Looper.getMainLooper())
     // Off-main worker for decode + Vision-parity detect + warp + encode.
     private val ioExecutor = Executors.newSingleThreadExecutor { r ->
         Thread(r, "supy-document-import").apply { isDaemon = true }
     }
 
-    fun launch(activity: Activity?, result: Result) {
+    fun launch(activity: Activity?, args: Map<String, Any?>?, result: Result) {
         if (activity == null) {
             result.error("camera_unavailable", "No Activity attached", null)
             return
@@ -53,6 +62,19 @@ class DocumentImportLauncher : PluginRegistry.ActivityResultListener {
             result.error("unknown", "A document import is already in progress", null)
             return
         }
+        // Resolve the enhancement knobs up front so the background pipeline just
+        // reads the pending fields. `filter` / `enhanceMode` / `quality` fall
+        // back to the camera-path defaults, preserving the prior hardcoded
+        // BALANCED-`.color`-95 behaviour when no args are supplied.
+        val processing = DocumentProcessingOptions.parse(
+            args,
+            fallbackQuality = (args?.get("jpegQuality") as? Number)?.toInt() ?: RECTIFIED_JPEG_QUALITY,
+        )
+        pendingEnhanceMode = processing.enhanceMode
+        pendingJpegQuality = processing.quality
+        pendingMaxDimension = processing.maxDimension
+        pendingFilter = processing.filter
+
         val intent = pickImageIntent()
         pendingResult = result
         pendingActivity = activity
@@ -124,9 +146,11 @@ class DocumentImportLauncher : PluginRegistry.ActivityResultListener {
             PageReencoder.reencodeBitmap(
                 context = context,
                 bitmap = source,
-                quality = RECTIFIED_JPEG_QUALITY,
+                quality = pendingJpegQuality,
                 format = PageReencoder.Format.JPG,
-                enhanceMode = PageReencoder.EnhanceMode.BALANCED,
+                enhanceMode = pendingEnhanceMode,
+                maxDimension = pendingMaxDimension,
+                filter = pendingFilter,
             )
         }
 
@@ -163,8 +187,9 @@ class DocumentImportLauncher : PluginRegistry.ActivityResultListener {
             SupyLog.i(message = "import warp allocateDirect OOM ($byteCount B): ${oom.message}")
             // Fall back to enhancing the un-warped frame rather than failing.
             return PageReencoder.reencodeBitmap(
-                context, source, RECTIFIED_JPEG_QUALITY,
-                PageReencoder.Format.JPG, PageReencoder.EnhanceMode.BALANCED,
+                context, source, pendingJpegQuality,
+                PageReencoder.Format.JPG, pendingEnhanceMode,
+                pendingMaxDimension, pendingFilter,
             )
         }
         source.copyPixelsToBuffer(srcBuf)
@@ -187,8 +212,9 @@ class DocumentImportLauncher : PluginRegistry.ActivityResultListener {
         if (warp == null) {
             // Degenerate quad — keep the un-warped frame (recycled downstream).
             return PageReencoder.reencodeBitmap(
-                context, source, RECTIFIED_JPEG_QUALITY,
-                PageReencoder.Format.JPG, PageReencoder.EnhanceMode.BALANCED,
+                context, source, pendingJpegQuality,
+                PageReencoder.Format.JPG, pendingEnhanceMode,
+                pendingMaxDimension, pendingFilter,
             )
         }
         source.recycle()
@@ -203,9 +229,11 @@ class DocumentImportLauncher : PluginRegistry.ActivityResultListener {
         return PageReencoder.reencodeBitmap(
             context = context,
             bitmap = warped, // recycled inside reencodeBitmap
-            quality = RECTIFIED_JPEG_QUALITY,
+            quality = pendingJpegQuality,
             format = PageReencoder.Format.JPG,
-            enhanceMode = PageReencoder.EnhanceMode.BALANCED,
+            enhanceMode = pendingEnhanceMode,
+            maxDimension = pendingMaxDimension,
+            filter = pendingFilter,
         )
     }
 

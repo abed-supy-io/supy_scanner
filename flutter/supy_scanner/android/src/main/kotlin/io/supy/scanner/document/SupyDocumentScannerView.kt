@@ -441,16 +441,19 @@ class SupyDocumentScannerView(
         val quadPayload = (0 until 4).map {
             mapOf("x" to quad[it * 2].toDouble(), "y" to quad[it * 2 + 1].toDouble())
         }
-        val payload = mapOf(
-            "path" to path,
-            "widthPx" to warp.width,
-            "heightPx" to warp.height,
-            "quad" to quadPayload,
-            // Legacy keys for SupyDocumentPage.fromMap consumers (controller.capture()).
-            "uri" to page.uri.toString(),
-            "width" to warp.width,
-            "height" to warp.height,
-        )
+        val payload = HashMap<String, Any?>()
+        payload["path"] = path
+        payload["widthPx"] = warp.width
+        payload["heightPx"] = warp.height
+        payload["quad"] = quadPayload
+        // Legacy keys for SupyDocumentPage.fromMap consumers (controller.capture()).
+        payload["uri"] = page.uri.toString()
+        payload["width"] = warp.width
+        payload["height"] = warp.height
+        // Additive per-page quality from reencodeBitmap's scorePage pass — same
+        // keys the import path emits, decoded by SupyDocumentPage.fromMap.
+        if (page.quality != null) payload["quality"] = page.quality
+        if (page.qualityScore != null) payload["qualityScore"] = page.qualityScore
         mainHandler.post { result.success(payload) }
     }
 

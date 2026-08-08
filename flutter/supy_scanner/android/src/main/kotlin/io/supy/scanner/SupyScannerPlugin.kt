@@ -78,10 +78,13 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             }
             "importDocumentImage" -> {
                 // Native gallery import: photo picker → on-device detect +
-                // perspective warp + enhance + persist. No args; resolves null
-                // when the user dismisses the picker. On-device only — no bytes
-                // cross the channel.
-                documentImportLauncher.launch(activityHolder.activity, result)
+                // perspective warp + enhance + persist. Args are optional
+                // (`SupyDocumentScanOptions.toWire()` or null) — when present they
+                // drive the same filter / enhancement / processing knobs as the
+                // camera path. Resolves null when the user dismisses the picker.
+                // On-device only — no bytes cross the channel.
+                val args = expectMapArgs(call, result) ?: return
+                documentImportLauncher.launch(activityHolder.activity, args, result)
             }
             "scanBarcodesBatch" -> {
                 val args = expectMapArgs(call, result) ?: return

@@ -6,6 +6,7 @@ import '../licensing/supy_scanner_license.dart';
 import '../models/supy_document_data.dart';
 import '../models/supy_scan_options.dart';
 import '../models/ui/supy_document_guidance_configuration.dart';
+import '../models/ui/supy_document_scan_mode.dart';
 import '../models/ui/supy_scanner_palette.dart';
 import '../widgets/supy_document_scanner_screen.dart';
 
@@ -20,14 +21,16 @@ abstract final class SupyDocumentScanner {
   /// pages, or `null` if the user cancelled without capturing anything.
   ///
   /// Routing (see `TODO.md` decisions + `docs/MIGRATION.md`):
-  /// - On Android / iOS with the default [SupyDocumentScanIntent.generic], this
-  ///   pushes the Supy-branded Flutter session ([SupyDocumentScannerScreen]) so
-  ///   the whole capture → page-tray → done loop is drawn by Flutter over the
-  ///   native camera preview. The result carries `ocrText: ''` and no `pdfUri`
-  ///   — the retailer's `InvoiceScannerService` consumes only `.pages`, so this
-  ///   is behaviorally identical for that call site.
-  /// - [SupyDocumentScanIntent.invoice] (which needs native OCR + PDF assembly)
-  ///   and any non-mobile platform fall back to the native full-screen scanner.
+  /// - On Android / iOS, both [SupyDocumentScanIntent.generic] and
+  ///   [SupyDocumentScanIntent.invoice] push the Supy-branded Flutter session
+  ///   ([SupyDocumentScannerScreen]) so the whole capture → page-tray → done
+  ///   loop is drawn by Flutter over the native camera preview. The result
+  ///   carries `ocrText: ''` and no `pdfUri` — the retailer's
+  ///   `InvoiceScannerService` consumes only `.pages`, and server-side OCR is
+  ///   the source of truth (on-device OCR is only an optimization), so this is
+  ///   behaviorally equivalent for those call sites.
+  /// - Any non-mobile platform (web / desktop) falls back to the native
+  ///   full-screen scanner.
   ///
   /// [context] is accepted for call-site symmetry with Scanbot's
   /// `scanWithCamera(context)` and to default [locale] from the ambient
@@ -56,7 +59,7 @@ abstract final class SupyDocumentScanner {
             ? 'ar'
             : 'en');
 
-    if (_useBrandedSession(intent)) {
+    if (_useBrandedSession()) {
       return _startBranded(
         context,
         maxPages: maxPages,
@@ -79,10 +82,11 @@ abstract final class SupyDocumentScanner {
     );
   }
 
-  /// The branded Flutter session covers generic capture on the two mobile
-  /// targets. Invoice intent stays native (OCR + PDF), as does web / desktop.
-  static bool _useBrandedSession(SupyDocumentScanIntent intent) {
-    if (intent != SupyDocumentScanIntent.generic) return false;
+  /// The branded Flutter session covers all document capture on the two mobile
+  /// targets, invoice included (server-side OCR is the source of truth, so the
+  /// native on-device OCR + PDF path is no longer required). Web / desktop have
+  /// no branded session yet and stay on the native full-screen scanner.
+  static bool _useBrandedSession() {
     if (kIsWeb) return false;
     return defaultTargetPlatform == TargetPlatform.android ||
         defaultTargetPlatform == TargetPlatform.iOS;
@@ -114,6 +118,7 @@ abstract final class SupyDocumentScanner {
         builder:
             (routeContext) => SupyDocumentScannerScreen(
               maxPages: maxPages,
+              mode: SupyDocumentScanMode.multi,
               locale: locale,
               palette: palette,
               accentColor: accent,

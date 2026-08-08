@@ -22,10 +22,10 @@
 |---|---|---|
 | **Single-scan barcode** | ✅ | Flutter `SupyBarcodeScannerScreen`/`View` over embedded barcode PlatformView. Compat `BarcodeScanbotView` → `SupyBarcodeScannerView` (`compat/.../barcode_scanbot_view.dart:156`). |
 | **Find-and-pick** | ✅ | Flutter `SupyFindAndPickSheet` + accumulator over the same embedded barcode PlatformView. |
-| **Document (multi-page)** | ✅ *(mobile, generic)* | **D1 landed (2026-08-07).** `SupyDocumentScanner.startMultiPage` → on Android/iOS with the default generic intent, pushes Flutter `SupyDocumentScannerScreen` over the branded `SupyDocumentScannerView` (`lib/src/document/supy_document_scanner.dart`). Compat `InvoiceScannerService.scanWithCamera` (default generic intent, consumes only `.pages`) inherits the branded flow. **Native `scanDocument` retained as fallback only** for `intent: invoice` (native OCR + PDF) and non-mobile (`kIsWeb`/desktop). |
+| **Document (multi-page)** | ✅ *(mobile, all intents)* | **D1 landed (2026-08-07); extended to invoice (2026-08-08).** `SupyDocumentScanner.startMultiPage` → on Android/iOS, **both `generic` and `invoice`** push Flutter `SupyDocumentScannerScreen` over the branded `SupyDocumentScannerView` (`lib/src/document/supy_document_scanner.dart`). Compat `InvoiceScannerService.scanWithCamera` (consumes only `.pages`) inherits the branded flow. **Native `scanDocument` retained as fallback only** for non-mobile (`kIsWeb`/desktop). Invoice returns `ocrText: ''`/no `pdfUri` — safe because server-side OCR is the source of truth (TODO.md 9.3). |
 | **Batch / multiple** | ❌ | `SupyScannerChannel.scanBarcodesBatch` (`lib/src/channel/supy_scanner_channel.dart:55`) → **native full-screen** (iOS `BatchBarcodeScannerPresenter`; Android `BatchBarcodeScannerLauncher` → `BatchBarcodeScannerActivity`). Flutter `SupyMultipleScanSheet` + accumulator **exist but are bypassed.** |
 
-**Three of four use-cases are branded end-to-end on mobile (document landed via D1, 2026-08-07). Batch still routes to a native full-screen surface** despite having a complete Flutter widget — that remaining gap is the rest of plan phase **D1**.
+**Three of four use-cases are branded end-to-end on mobile (document landed via D1, 2026-08-07; invoice intent folded in 2026-08-08). Batch still routes to a native full-screen surface** despite having a complete Flutter widget — that remaining gap is the rest of plan phase **D1**.
 
 ---
 
@@ -35,10 +35,10 @@
 |---|---|---|---|---|
 | Single-scan | `SupyBarcodeScannerView` (`lib/src/widgets/supy_barcode_scanner_view.dart`) | — | — | ✅ embedded |
 | Find-and-pick | `SupyFindAndPickSheet` (`lib/src/widgets/supy_find_and_pick_sheet.dart`) | — | — | ✅ embedded |
-| Document | `SupyDocumentScannerScreen` → `SupyDocumentScannerView` (`lib/src/widgets/`) | `ios/Classes/document/DocumentScannerPresenter.swift` → `VNDocumentCameraViewController` *(now invoice/desktop fallback)* | `android/.../document/DocumentScannerLauncher.kt` → GMS `GmsDocumentScanning` → `CameraXDocumentScannerActivity.kt` *(now invoice/desktop fallback)* | ✅ **embedded** *(mobile, generic)* |
+| Document | `SupyDocumentScannerScreen` → `SupyDocumentScannerView` (`lib/src/widgets/`) | `ios/Classes/document/DocumentScannerPresenter.swift` → `VNDocumentCameraViewController` *(now desktop-only fallback)* | `android/.../document/DocumentScannerLauncher.kt` → GMS `GmsDocumentScanning` → `CameraXDocumentScannerActivity.kt` *(now desktop-only fallback)* | ✅ **embedded** *(mobile, all intents)* |
 | Batch/multiple | `SupyMultipleScanSheet` (`lib/src/widgets/supy_multiple_scan_sheet.dart`) | `ios/Classes/barcode/BatchBarcodeScannerPresenter.swift` | `android/.../barcode/BatchBarcodeScannerLauncher.kt` → `BatchBarcodeScannerActivity.kt` | ⚠️ **native** |
 
-**D1 target:** flip both rows' "Default today" to embedded; demote the native columns to explicit fallbacks (camera denied / no Play Services / device-tier gate). **Document row flipped 2026-08-07** — native retained for `intent: invoice` (native OCR + PDF) and non-mobile. Batch row still pending.
+**D1 target:** flip both rows' "Default today" to embedded; demote the native columns to explicit fallbacks (camera denied / no Play Services / device-tier gate). **Document row flipped 2026-08-07; invoice intent folded into the branded flow 2026-08-08** — native retained for non-mobile only. Batch row still pending.
 
 ---
 
@@ -104,7 +104,7 @@ Guidance FSM (`SupyDocumentStateMachine` in Dart) consumes `frame_metrics` from 
 | Compat surface | Routes to | Branded? |
 |---|---|---|
 | `BarcodeScanbotView` / `BarcodeScannerController` (`barcode_scanbot_view.dart`) | Supy embedded barcode widget (`:156`) | ✅ |
-| `InvoiceScannerService.scanWithCamera` (`invoice_scanner_service.dart:35`) | `startMultiPage` (default generic intent) → branded `SupyDocumentScannerScreen` on mobile; native `scanDocument` fallback for invoice/desktop | ✅ *(mobile, 2026-08-07)* |
+| `InvoiceScannerService.scanWithCamera` (`invoice_scanner_service.dart:35`) | `startMultiPage` (any intent) → branded `SupyDocumentScannerScreen` on mobile; native `scanDocument` fallback for desktop only | ✅ *(mobile, 2026-08-07; invoice 2026-08-08)* |
 | Scanbot document-UI-v2 types (`DocumentScanningFlow`, `ScanbotColor`) | intentionally omitted ("out-of-shim") | — |
 
 Compat signatures are snapshot-locked (`test/api_signature_snapshot_test.dart`); D1 must keep that suite + `retailer_call_sites_test.dart` green while re-routing the *implementation* behind `scanWithCamera`.
@@ -113,7 +113,7 @@ Compat signatures are snapshot-locked (`test/api_signature_snapshot_test.dart`);
 
 ## 7. Derived D1 backlog (what this audit hands to the plan)
 
-1. ~~**Re-route document** — `startMultiPage` / compat `scanWithCamera` → Flutter flow on `SupyDocumentScannerView`; native `scanDocument` becomes fallback.~~ **✅ Landed 2026-08-07** via `SupyDocumentScannerScreen` (generic intent, mobile). *(D1-1, D1-3, D1-4)*
+1. ~~**Re-route document** — `startMultiPage` / compat `scanWithCamera` → Flutter flow on `SupyDocumentScannerView`; native `scanDocument` becomes fallback.~~ **✅ Landed 2026-08-07** via `SupyDocumentScannerScreen` (generic intent, mobile); **invoice intent folded in 2026-08-08** (native `scanDocument` now desktop-only, see TODO.md 9.3). *(D1-1, D1-3, D1-4)*
 2. **Re-route batch** — batch entry → `SupyMultipleScanSheet`; native `scanBarcodesBatch`/`scanBatchBarcodes` becomes fallback. *(D1-2)*
 3. **Palette-drive config defaults** — remove per-config `Color(...)` literals. *(D2-1)*
 4. **Fix stale Android doc comment** — `SupyDocumentScannerView.kt:45-46`. *(D0-5)*

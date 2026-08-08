@@ -66,7 +66,7 @@ Wrapper: `SupyScannerChannel` (`lib/src/channel/supy_scanner_channel.dart`).
 |---|---|---|---|
 | `scanDocument` | `SupyDocumentScanOptions.toWire()` | `Map` → `SupyDocumentData` (or `null` if cancelled) | `scanDocument()` |
 | `scanBarcodesBatch` | `SupyBatchBarcodeScanOptions.toWire()` | `Map` → `SupyBatchBarcodeResult` (or `null` if cancelled) | `scanBarcodesBatch()` |
-| `importDocumentImage` | — | `{uri: String, width: int, height: int, quality?: String, qualityScore?: double}` → `SupyDocumentPage` (or `null` if the picker was dismissed) | `importDocumentImage()` |
+| `importDocumentImage` | `SupyDocumentScanOptions.toWire()` (optional; `null` → native defaults) | `{uri: String, width: int, height: int, quality?: String, qualityScore?: double}` → `SupyDocumentPage` (or `null` if the picker was dismissed) | `importDocumentImage([options])` |
 | `recognizeText` | `{imagePath: String, languages: List<String>, includeElements: bool}` | `{fullText: String, blocks: [{text, boundingBox, lines: [{text, boundingBox, elements: [{text, boundingBox}]}]}]}` → `SupyRecognizedText` | `recognizeText()` |
 | `decodeImage` | `{imagePath: String, formats: List<String>, useNativeCore: bool}` | `[{rawValue: String, format: String, boundingBox?: {left, top, width, height}}, …]` → `List<SupyBarcode>` | `decodeImage()` |
 | `prewarm` | — | `void` | `prewarm()` |

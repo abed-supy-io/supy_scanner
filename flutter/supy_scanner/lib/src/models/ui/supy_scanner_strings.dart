@@ -1,6 +1,7 @@
 import 'package:flutter/painting.dart';
 import 'package:meta/meta.dart';
 
+import '../supy_document_page.dart';
 import 'supy_document_guidance_configuration.dart';
 
 /// The single source of default user-facing copy for the branded scanner UI —
@@ -47,8 +48,28 @@ class SupyScannerStrings {
     required this.aimAtDocument,
     required this.maxPagesReached,
     required this.capturePage,
+    required this.captureFailed,
     required this.importFromGallery,
     required this.unsupportedPlatform,
+    required this.brandTitle,
+    required this.holdSteady,
+    required this.modeSingle,
+    required this.modeMulti,
+    required this.modeReceipt,
+    required this.adjustEdges,
+    required this.back,
+    required this.continueAction,
+    required this.exportAction,
+    required this.exportAsPdf,
+    required this.addPage,
+    required this.pageSingular,
+    required this.pagePlural,
+    required this.scanDocumentTitle,
+    required this.scanInstruction,
+    required this.help,
+    required this.helpTitle,
+    required this.helpBody,
+    required this.autoCapture,
     required this.documentHints,
   });
 
@@ -81,8 +102,31 @@ class SupyScannerStrings {
       aimAtDocument = 'Aim at the document',
       maxPagesReached = 'Max pages reached',
       capturePage = 'Capture page',
+      captureFailed = "Couldn't capture the page. Try again.",
       importFromGallery = 'Import from gallery',
       unsupportedPlatform = 'Scanning is not supported on this platform.',
+      brandTitle = 'supy',
+      holdSteady = 'Hold steady',
+      modeSingle = 'Single',
+      modeMulti = 'Multi',
+      modeReceipt = 'Receipt',
+      adjustEdges = 'Adjust edges',
+      back = 'Back',
+      continueAction = 'Continue',
+      exportAction = 'Export',
+      exportAsPdf = 'Export as PDF',
+      addPage = 'Add page',
+      pageSingular = 'page',
+      pagePlural = 'pages',
+      scanDocumentTitle = 'Scan Document',
+      scanInstruction = 'Scan each page of your document.',
+      help = 'Help',
+      helpTitle = 'Scanning tips',
+      helpBody =
+          'Place the document on a flat, contrasting surface. '
+              'Keep the whole page inside the frame and hold the camera '
+              'steady and level until the frame turns green.',
+      autoCapture = 'Auto',
       documentHints = const SupyDocumentGuidanceHints();
 
   /// Arabic defaults. Pairs with [textDirection] == [TextDirection.rtl] so the
@@ -114,8 +158,31 @@ class SupyScannerStrings {
       aimAtDocument = 'وجّه نحو المستند',
       maxPagesReached = 'تم بلوغ الحد الأقصى للصفحات',
       capturePage = 'التقاط الصفحة',
+      captureFailed = 'تعذّر التقاط الصفحة. حاول مرة أخرى.',
       importFromGallery = 'استيراد من المعرض',
       unsupportedPlatform = 'المسح غير مدعوم على هذا النظام.',
+      brandTitle = 'supy',
+      holdSteady = 'ثبّت الكاميرا',
+      modeSingle = 'مفردة',
+      modeMulti = 'متعددة',
+      modeReceipt = 'إيصال',
+      adjustEdges = 'ضبط الحواف',
+      back = 'رجوع',
+      continueAction = 'متابعة',
+      exportAction = 'تصدير',
+      exportAsPdf = 'تصدير كملف PDF',
+      addPage = 'إضافة صفحة',
+      pageSingular = 'صفحة',
+      pagePlural = 'صفحات',
+      scanDocumentTitle = 'مسح المستند',
+      scanInstruction = 'امسح كل صفحة من مستندك.',
+      help = 'مساعدة',
+      helpTitle = 'نصائح المسح',
+      helpBody =
+          'ضع المستند على سطح مستوٍ ومتباين اللون. '
+              'أبقِ الصفحة بالكامل داخل الإطار وامسك الكاميرا '
+              'ثابتة ومستوية حتى يتحول الإطار إلى اللون الأخضر.',
+      autoCapture = 'تلقائي',
       documentHints = const SupyDocumentGuidanceHints.ar();
 
   /// Returns the bundle for [languageCode] — [SupyScannerStrings.ar] for
@@ -146,7 +213,8 @@ class SupyScannerStrings {
   /// Clear-button label on the multi-scan sheet.
   final String clear;
 
-  /// Reset-button label on the find-and-pick sheet.
+  /// Reset-button label on the find-and-pick sheet, and on the document
+  /// "Adjust edges" editor.
   final String reset;
 
   /// Flash / torch toggle label (document top bar, action bar).
@@ -212,12 +280,76 @@ class SupyScannerStrings {
   /// Accessibility label for the document capture shutter button.
   final String capturePage;
 
+  /// Feedback shown when a shutter tap fails to produce a page (e.g. no frame
+  /// could be captured). Keeps the shutter from ever failing silently.
+  final String captureFailed;
+
   /// Label / accessibility text for the document gallery-import control that
   /// opens the platform photo picker.
   final String importFromGallery;
 
   /// Placeholder shown when a scanner view is built on an unsupported platform.
   final String unsupportedPlatform;
+
+  /// Brand wordmark shown centered in the document viewfinder top bar.
+  final String brandTitle;
+
+  /// Steadiness prompt pill shown under the viewfinder frame while aiming.
+  final String holdSteady;
+
+  /// Document capture-mode tab: capture one page, then go straight to review.
+  final String modeSingle;
+
+  /// Document capture-mode tab: accumulate many pages before review.
+  final String modeMulti;
+
+  /// Document capture-mode tab: receipt-tuned capture (tall frame).
+  final String modeReceipt;
+
+  /// Title of the per-page crop / edges editor.
+  final String adjustEdges;
+
+  /// Back-navigation label (edges editor + page review top bars).
+  final String back;
+
+  /// Primary "accept this page" action on the edges editor.
+  final String continueAction;
+
+  /// Top-bar finish action on the page-review screen.
+  final String exportAction;
+
+  /// Full-width terminal action on the page-review screen. Returns the captured
+  /// page images to the host (see the Phase 9 decision in `TODO.md`): a branded
+  /// finish label, not a PDF-generation step.
+  final String exportAsPdf;
+
+  /// Label for the "add another page" affordances (editor FAB, review tile).
+  final String addPage;
+
+  /// Singular page noun used by [pagesCountLabel] (e.g. `1 page`).
+  final String pageSingular;
+
+  /// Plural page noun used by [pagesCountLabel] (e.g. `3 pages`).
+  final String pagePlural;
+
+  /// Center title in the branded document scanner top bar (e.g. Scanbot's
+  /// "Scan Document").
+  final String scanDocumentTitle;
+
+  /// Instruction banner shown under the top bar in the document scanner.
+  final String scanInstruction;
+
+  /// Accessibility label for the document scanner help ("?") button.
+  final String help;
+
+  /// Title of the document scanner help sheet.
+  final String helpTitle;
+
+  /// Body copy of the document scanner help sheet.
+  final String helpBody;
+
+  /// Label for the document scanner auto-capture toggle.
+  final String autoCapture;
 
   /// Per-state document-guidance hint copy for this locale. Consumed when a
   /// [SupyDocumentGuidanceConfiguration] leaves its `hints` unset.
@@ -249,6 +381,49 @@ class SupyScannerStrings {
   /// Accessibility label for a page-tray delete control, e.g. `Delete page 3`.
   String deletePageLabel(int page) => '$deletePage $page';
 
+  /// Page-count title for the review screen, e.g. `3 pages` / `1 page`.
+  /// Arabic applies singular/dual/plural agreement.
+  String pagesCountLabel(int count) {
+    if (languageCode == 'ar') {
+      if (count == 1) return 'صفحة واحدة';
+      if (count == 2) return 'صفحتان';
+      if (count >= 3 && count <= 10) return '$count $pagePlural';
+      return '$count $pageSingular';
+    }
+    return '$count ${count == 1 ? pageSingular : pagePlural}';
+  }
+
+  /// Short, user-facing label for a captured page's quality bucket, shown on
+  /// the review-grid quality badge. Informational only - never gates capture.
+  String documentQualityLabel(SupyDocumentPageQuality quality) {
+    if (languageCode == 'ar') {
+      switch (quality) {
+        case SupyDocumentPageQuality.veryPoor:
+          return 'رديئة جدًا';
+        case SupyDocumentPageQuality.poor:
+          return 'رديئة';
+        case SupyDocumentPageQuality.ok:
+          return 'مقبولة';
+        case SupyDocumentPageQuality.good:
+          return 'جيدة';
+        case SupyDocumentPageQuality.excellent:
+          return 'ممتازة';
+      }
+    }
+    switch (quality) {
+      case SupyDocumentPageQuality.veryPoor:
+        return 'Very poor';
+      case SupyDocumentPageQuality.poor:
+        return 'Poor';
+      case SupyDocumentPageQuality.ok:
+        return 'OK';
+      case SupyDocumentPageQuality.good:
+        return 'Good';
+      case SupyDocumentPageQuality.excellent:
+        return 'Excellent';
+    }
+  }
+
   /// Returns a copy with the given fields replaced.
   SupyScannerStrings copyWith({
     String? languageCode,
@@ -277,8 +452,28 @@ class SupyScannerStrings {
     String? aimAtDocument,
     String? maxPagesReached,
     String? capturePage,
+    String? captureFailed,
     String? importFromGallery,
     String? unsupportedPlatform,
+    String? brandTitle,
+    String? holdSteady,
+    String? modeSingle,
+    String? modeMulti,
+    String? modeReceipt,
+    String? adjustEdges,
+    String? back,
+    String? continueAction,
+    String? exportAction,
+    String? exportAsPdf,
+    String? addPage,
+    String? pageSingular,
+    String? pagePlural,
+    String? scanDocumentTitle,
+    String? scanInstruction,
+    String? help,
+    String? helpTitle,
+    String? helpBody,
+    String? autoCapture,
     SupyDocumentGuidanceHints? documentHints,
   }) {
     return SupyScannerStrings(
@@ -308,8 +503,28 @@ class SupyScannerStrings {
       aimAtDocument: aimAtDocument ?? this.aimAtDocument,
       maxPagesReached: maxPagesReached ?? this.maxPagesReached,
       capturePage: capturePage ?? this.capturePage,
+      captureFailed: captureFailed ?? this.captureFailed,
       importFromGallery: importFromGallery ?? this.importFromGallery,
       unsupportedPlatform: unsupportedPlatform ?? this.unsupportedPlatform,
+      brandTitle: brandTitle ?? this.brandTitle,
+      holdSteady: holdSteady ?? this.holdSteady,
+      modeSingle: modeSingle ?? this.modeSingle,
+      modeMulti: modeMulti ?? this.modeMulti,
+      modeReceipt: modeReceipt ?? this.modeReceipt,
+      adjustEdges: adjustEdges ?? this.adjustEdges,
+      back: back ?? this.back,
+      continueAction: continueAction ?? this.continueAction,
+      exportAction: exportAction ?? this.exportAction,
+      exportAsPdf: exportAsPdf ?? this.exportAsPdf,
+      addPage: addPage ?? this.addPage,
+      pageSingular: pageSingular ?? this.pageSingular,
+      pagePlural: pagePlural ?? this.pagePlural,
+      scanDocumentTitle: scanDocumentTitle ?? this.scanDocumentTitle,
+      scanInstruction: scanInstruction ?? this.scanInstruction,
+      help: help ?? this.help,
+      helpTitle: helpTitle ?? this.helpTitle,
+      helpBody: helpBody ?? this.helpBody,
+      autoCapture: autoCapture ?? this.autoCapture,
       documentHints: documentHints ?? this.documentHints,
     );
   }
@@ -344,8 +559,28 @@ class SupyScannerStrings {
           other.aimAtDocument == aimAtDocument &&
           other.maxPagesReached == maxPagesReached &&
           other.capturePage == capturePage &&
+          other.captureFailed == captureFailed &&
           other.importFromGallery == importFromGallery &&
           other.unsupportedPlatform == unsupportedPlatform &&
+          other.brandTitle == brandTitle &&
+          other.holdSteady == holdSteady &&
+          other.modeSingle == modeSingle &&
+          other.modeMulti == modeMulti &&
+          other.modeReceipt == modeReceipt &&
+          other.adjustEdges == adjustEdges &&
+          other.back == back &&
+          other.continueAction == continueAction &&
+          other.exportAction == exportAction &&
+          other.exportAsPdf == exportAsPdf &&
+          other.addPage == addPage &&
+          other.pageSingular == pageSingular &&
+          other.pagePlural == pagePlural &&
+          other.scanDocumentTitle == scanDocumentTitle &&
+          other.scanInstruction == scanInstruction &&
+          other.help == help &&
+          other.helpTitle == helpTitle &&
+          other.helpBody == helpBody &&
+          other.autoCapture == autoCapture &&
           other.documentHints == documentHints;
 
   @override
@@ -376,8 +611,28 @@ class SupyScannerStrings {
     aimAtDocument,
     maxPagesReached,
     capturePage,
+    captureFailed,
     importFromGallery,
     unsupportedPlatform,
+    brandTitle,
+    holdSteady,
+    modeSingle,
+    modeMulti,
+    modeReceipt,
+    adjustEdges,
+    back,
+    continueAction,
+    exportAction,
+    exportAsPdf,
+    addPage,
+    pageSingular,
+    pagePlural,
+    scanDocumentTitle,
+    scanInstruction,
+    help,
+    helpTitle,
+    helpBody,
+    autoCapture,
     documentHints,
   ]);
 

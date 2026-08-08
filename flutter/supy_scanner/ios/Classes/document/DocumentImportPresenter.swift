@@ -22,13 +22,18 @@ final class DocumentImportPresenter: NSObject, PHPickerViewControllerDelegate {
   /// Pending FlutterResult while the picker is on-screen.
   private var pendingResult: FlutterResult?
 
+  /// Pipeline options parsed from the current call's args (filter, enhancement,
+  /// per-stage processing, JPEG quality). Mirrors the camera path so an imported
+  /// page is enhanced identically to a scanned one. Reset to `.default` per call.
+  private var pendingProcessing: DocumentProcessingOptions = .default
+
   /// Background queue for Vision + Core Image + file writes.
   private let ioQueue = DispatchQueue(
     label: "io.supy.scanner.document.import.io",
     qos: .userInitiated
   )
 
-  func present(result: @escaping FlutterResult) {
+  func present(args: [String: Any]?, result: @escaping FlutterResult) {
     dispatchPrecondition(condition: .onQueue(.main))
     guard pendingResult == nil else {
       result(
@@ -52,6 +57,17 @@ final class DocumentImportPresenter: NSObject, PHPickerViewControllerDelegate {
     }
 
     pendingResult = result
+    // Resolve the enhancement knobs up front (main thread), so the background
+    // pipeline just reads `pendingProcessing`. `filter` falls back to `.color`
+    // and `quality` to 95 — same defaults as the camera path, preserving the
+    // prior hardcoded-`.color` behaviour when no args are supplied.
+    let filter = SupyDocumentFilter.parse(args?["filter"] as? String)
+    let jpegQuality = (args?["jpegQuality"] as? Int) ?? 95
+    pendingProcessing = DocumentProcessingOptions.parse(
+      args,
+      fallbackFilter: filter,
+      fallbackQuality: jpegQuality
+    )
 
     var config = PHPickerConfiguration()
     config.filter = .images
@@ -143,9 +159,12 @@ final class DocumentImportPresenter: NSObject, PHPickerViewControllerDelegate {
       cropped = UIImage(cgImage: upright, scale: scale, orientation: .up)
     }
 
-    // Match the branded capture path's default `.color` enhancement so an
-    // imported page is visually interchangeable with a scanned one.
-    let enhanced = DocumentEnhancer.enhance(cropped, filter: .color)
+    // The page is already detected, cropped and upright, so run the
+    // enhancement tail only (resize + illumination/whitening/contrast/filter/
+    // denoise/sharpen) driven by the caller's options. This mirrors the camera
+    // path's enhancement so an imported page is visually interchangeable with a
+    // scanned one, and honours `filter` / `processing` from the wire.
+    let enhanced = DocumentProcessor.enhanceOnly(cropped, options: pendingProcessing)
 
     guard let payload = persist(page: enhanced) else {
       finish(
@@ -164,7 +183,8 @@ final class DocumentImportPresenter: NSObject, PHPickerViewControllerDelegate {
   /// channel payload (`uri`/`width`/`height` + optional quality). Returns nil
   /// on an encode/write failure.
   private func persist(page: UIImage) -> [String: Any]? {
-    guard let data = page.jpegData(compressionQuality: 0.95) else { return nil }
+    let quality = CGFloat(max(0, min(100, pendingProcessing.quality))) / 100.0
+    guard let data = page.jpegData(compressionQuality: quality) else { return nil }
     let stamp = ProcessInfo.processInfo.globallyUniqueString
     let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
       .appendingPathComponent("supy_import_\(stamp).jpg")

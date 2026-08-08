@@ -1,6 +1,7 @@
 import 'dart:io';
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart' show PlatformException;
 import 'package:supy_scanner/supy_scanner.dart';
 
 import '../../branding/supy_brand.dart';
@@ -28,7 +29,9 @@ class _SmartDocumentDemoState extends State<SmartDocumentDemo> {
   String? _capturedPath;
   String? _error;
   bool _torchOn = false;
-  bool _autoCapture = true;
+  // Manual capture by default — the user taps the shutter. Auto-snap is opt-in
+  // via the bolt toggle, matching the library-wide `autoCapture` default.
+  bool _autoCapture = false;
   // Friendly first-run coaching card. Stays up until the user taps "Got it" or
   // the first page is captured, then never nags again this session.
   bool _showHelp = true;
@@ -57,19 +60,60 @@ class _SmartDocumentDemoState extends State<SmartDocumentDemo> {
         _capturedPath = capture.path;
         _showHelp = false;
       });
-    } on StateError catch (e) {
-      // Falls back to a full-frame still when no quad is locked in yet.
-      try {
-        final capture = await _controller.captureFullFrame();
-        if (!mounted) return;
-        setState(() {
-          _capturedPath = capture.path;
-          _showHelp = false;
-        });
-      } on StateError {
-        if (!mounted) return;
-        setState(() => _error = e.message);
-      }
+    } on StateError {
+      // `captureUnsupported` — no quad is locked in yet. Fall back to a
+      // full-frame still. Any failure of the fallback is surfaced below so the
+      // shutter never silently does nothing.
+      await _captureFullFrame();
+    } catch (e) {
+      // A non-`StateError` (e.g. a native `captureFailed` PlatformException the
+      // controller rethrows unchanged) must not vanish as an unhandled async
+      // error — the shutter would look dead. Surface it in the banner.
+      if (!mounted) return;
+      setState(() => _error = _describeError(e));
+    }
+  }
+
+  Future<void> _captureFullFrame() async {
+    try {
+      final capture = await _controller.captureFullFrame();
+      if (!mounted) return;
+      setState(() {
+        _capturedPath = capture.path;
+        _showHelp = false;
+      });
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _error = _describeError(e));
+    }
+  }
+
+  // Pulls a human-readable line out of whatever the capture path threw so the
+  // banner is never a bare "Instance of …".
+  String _describeError(Object error) {
+    if (error is SupyScanError) return error.message;
+    if (error is StateError) return error.message;
+    if (error is PlatformException) {
+      return error.message ?? 'Capture failed (${error.code})';
+    }
+    return error.toString();
+  }
+
+  // Native gallery import: opens the platform photo picker, runs on-device
+  // detect + rectify + enhance natively, and shows the returned page in the
+  // same review card. A dismissed picker resolves to null and is a no-op.
+  Future<void> _importFromGallery() async {
+    setState(() => _error = null);
+    try {
+      final page = await SupyScannerChannel.instance.importDocumentImage();
+      if (page == null || !mounted) return;
+      setState(() {
+        _capturedPath = Uri.parse(page.uri).toFilePath();
+        _showHelp = false;
+      });
+    } on SupyScanError catch (e) {
+      if (!mounted) return;
+      setState(() => _error = e.message);
     }
   }
 
@@ -90,6 +134,11 @@ class _SmartDocumentDemoState extends State<SmartDocumentDemo> {
         appBar: AppBar(
           title: const Text('Smart Document'),
           actions: [
+            IconButton(
+              tooltip: 'Import from gallery',
+              icon: const Icon(Icons.photo_library_outlined),
+              onPressed: reviewing ? null : _importFromGallery,
+            ),
             IconButton(
               tooltip:
                   _autoCapture

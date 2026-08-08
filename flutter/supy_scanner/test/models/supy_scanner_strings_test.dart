@@ -115,6 +115,34 @@ void main() {
       expect(ar.documentPageLabel(2), 'صفحة 2');
       expect(ar.deletePageLabel(2), 'حذف الصفحة 2');
     });
+
+    test('documentQualityLabel maps every bucket in English', () {
+      const s = SupyScannerStrings.en();
+      expect(
+        s.documentQualityLabel(SupyDocumentPageQuality.veryPoor),
+        'Very poor',
+      );
+      expect(s.documentQualityLabel(SupyDocumentPageQuality.poor), 'Poor');
+      expect(s.documentQualityLabel(SupyDocumentPageQuality.ok), 'OK');
+      expect(s.documentQualityLabel(SupyDocumentPageQuality.good), 'Good');
+      expect(
+        s.documentQualityLabel(SupyDocumentPageQuality.excellent),
+        'Excellent',
+      );
+    });
+
+    test('documentQualityLabel is localized for Arabic', () {
+      const ar = SupyScannerStrings.ar();
+      for (final q in SupyDocumentPageQuality.values) {
+        final label = ar.documentQualityLabel(q);
+        expect(label, isNotEmpty);
+        // Arabic copy must not fall back to the English bucket words.
+        expect(
+          label,
+          isNot(const SupyScannerStrings.en().documentQualityLabel(q)),
+        );
+      }
+    });
   });
 
   group('SupyScannerStrings copyWith + equality', () {

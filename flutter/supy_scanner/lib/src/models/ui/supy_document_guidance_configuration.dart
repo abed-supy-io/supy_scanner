@@ -40,7 +40,7 @@ class SupyDocumentGuidanceConfiguration {
     this.edgeClipBlocking = false,
     this.centerGuidanceEnabled = true,
     this.maxCenterOffset = 0.12,
-    this.autoCapture = true,
+    this.autoCapture = false,
     this.autoCaptureDelay = const Duration(milliseconds: 600),
     this.allowUnrectifiedFallback = true,
     this.warningColor,
@@ -173,7 +173,8 @@ class SupyDocumentGuidanceConfiguration {
   final double maxCenterOffset;
 
   /// Whether the widget should auto-fire `captureAndRectify` after a brief
-  /// countdown when `ready` first lands.
+  /// countdown when `ready` first lands. Defaults to `false` — the scanner
+  /// waits for a manual shutter tap unless a consumer opts into auto-snap.
   final bool autoCapture;
 
   /// Countdown duration before auto-capture fires.
@@ -204,6 +205,72 @@ class SupyDocumentGuidanceConfiguration {
   /// bundle (`SupyScannerStrings.documentHints`) at the point of use when null;
   /// pass an explicit bundle to override individual strings.
   final SupyDocumentGuidanceHints? hints;
+
+  /// Returns a copy with the given fields replaced. Nullable palette / hints
+  /// fields cannot be reset to null through this API (passing null keeps the
+  /// current value); that matches how the scanner UI reuses a base config and
+  /// only ever *sets* overrides.
+  SupyDocumentGuidanceConfiguration copyWith({
+    double? minCoverageRatio,
+    double? maxCoverageRatio,
+    double? maxTiltDegrees,
+    double? minMeanLuma,
+    double? minBlurScore,
+    int? readyStableFrames,
+    int? lostDocumentGraceFrames,
+    double? exitMargin,
+    int? minDwellFrames,
+    double? smoothingAlpha,
+    double? readyStabilityFloor,
+    double? interiorVarianceFloor,
+    int? holdSteadyFrames,
+    double? maxGlareRatio,
+    double? glareExitMargin,
+    double? maxCornerVelocity,
+    double? minPerCornerStability,
+    bool? edgeClipBlocking,
+    bool? centerGuidanceEnabled,
+    double? maxCenterOffset,
+    bool? autoCapture,
+    Duration? autoCaptureDelay,
+    bool? allowUnrectifiedFallback,
+    Color? warningColor,
+    Color? notReadyColor,
+    Color? readyColor,
+    Color? scrimColor,
+    SupyDocumentGuidanceHints? hints,
+  }) => SupyDocumentGuidanceConfiguration(
+    minCoverageRatio: minCoverageRatio ?? this.minCoverageRatio,
+    maxCoverageRatio: maxCoverageRatio ?? this.maxCoverageRatio,
+    maxTiltDegrees: maxTiltDegrees ?? this.maxTiltDegrees,
+    minMeanLuma: minMeanLuma ?? this.minMeanLuma,
+    minBlurScore: minBlurScore ?? this.minBlurScore,
+    readyStableFrames: readyStableFrames ?? this.readyStableFrames,
+    lostDocumentGraceFrames:
+        lostDocumentGraceFrames ?? this.lostDocumentGraceFrames,
+    exitMargin: exitMargin ?? this.exitMargin,
+    minDwellFrames: minDwellFrames ?? this.minDwellFrames,
+    smoothingAlpha: smoothingAlpha ?? this.smoothingAlpha,
+    readyStabilityFloor: readyStabilityFloor ?? this.readyStabilityFloor,
+    interiorVarianceFloor: interiorVarianceFloor ?? this.interiorVarianceFloor,
+    holdSteadyFrames: holdSteadyFrames ?? this.holdSteadyFrames,
+    maxGlareRatio: maxGlareRatio ?? this.maxGlareRatio,
+    glareExitMargin: glareExitMargin ?? this.glareExitMargin,
+    maxCornerVelocity: maxCornerVelocity ?? this.maxCornerVelocity,
+    minPerCornerStability: minPerCornerStability ?? this.minPerCornerStability,
+    edgeClipBlocking: edgeClipBlocking ?? this.edgeClipBlocking,
+    centerGuidanceEnabled: centerGuidanceEnabled ?? this.centerGuidanceEnabled,
+    maxCenterOffset: maxCenterOffset ?? this.maxCenterOffset,
+    autoCapture: autoCapture ?? this.autoCapture,
+    autoCaptureDelay: autoCaptureDelay ?? this.autoCaptureDelay,
+    allowUnrectifiedFallback:
+        allowUnrectifiedFallback ?? this.allowUnrectifiedFallback,
+    warningColor: warningColor ?? this.warningColor,
+    notReadyColor: notReadyColor ?? this.notReadyColor,
+    readyColor: readyColor ?? this.readyColor,
+    scrimColor: scrimColor ?? this.scrimColor,
+    hints: hints ?? this.hints,
+  );
 
   /// Packs the 19 native-classifier thresholds in the wire-coupled order the
   /// C++ bridge unpacks by index. MUST stay byte-for-byte aligned with

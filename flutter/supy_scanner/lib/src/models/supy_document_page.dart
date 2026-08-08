@@ -22,15 +22,13 @@ enum SupyDocumentPageQuality {
   excellent,
 }
 
-/// Extension on [SupyDocumentPageQuality] exposing the symmetric counterpart
-/// to the internal `_qualityFromWire` parser. Names must stay byte-identical
-/// to the wire strings the native side emits — these are the values the
-/// per-page quality gate threshold (`minPageQuality`) ships across the
-/// channel.
+/// Extension on [SupyDocumentPageQuality] bridging the enum to its channel
+/// wire form. Names must stay byte-identical to the wire strings the native
+/// side emits — these are the values the per-page quality gate threshold
+/// (`minPageQuality`) ships across the channel.
 extension SupyDocumentPageQualityWire on SupyDocumentPageQuality {
   /// Channel-stable identifier (`'veryPoor'`/`'poor'`/`'ok'`/`'good'`/
-  /// `'excellent'`). Mirrors the strings parsed by the internal
-  /// `_qualityFromWire`.
+  /// `'excellent'`). Inverse of [fromWire].
   String get wireName {
     switch (this) {
       case SupyDocumentPageQuality.veryPoor:
@@ -43,6 +41,25 @@ extension SupyDocumentPageQualityWire on SupyDocumentPageQuality {
         return 'good';
       case SupyDocumentPageQuality.excellent:
         return 'excellent';
+    }
+  }
+
+  /// Inverse of [wireName]: parses a channel wire string back to a bucket, or
+  /// null for a null / unrecognized value.
+  static SupyDocumentPageQuality? fromWire(String? wire) {
+    switch (wire) {
+      case 'veryPoor':
+        return SupyDocumentPageQuality.veryPoor;
+      case 'poor':
+        return SupyDocumentPageQuality.poor;
+      case 'ok':
+        return SupyDocumentPageQuality.ok;
+      case 'good':
+        return SupyDocumentPageQuality.good;
+      case 'excellent':
+        return SupyDocumentPageQuality.excellent;
+      default:
+        return null;
     }
   }
 }
@@ -67,7 +84,7 @@ class SupyDocumentPage {
       uri: map['uri']! as String,
       width: (map['width']! as num).toInt(),
       height: (map['height']! as num).toInt(),
-      quality: _qualityFromWire(map['quality'] as String?),
+      quality: SupyDocumentPageQualityWire.fromWire(map['quality'] as String?),
       qualityScore: (map['qualityScore'] as num?)?.toDouble(),
       enhancedStages: (map['enhancedStages'] as num?)?.toInt(),
       enhanceMs: (map['enhanceMs'] as num?)?.toInt(),
@@ -129,23 +146,4 @@ class SupyDocumentPage {
       'SupyDocumentPage(uri: $uri, ${width}x$height, '
       'quality: $quality, score: $qualityScore, '
       'enhancedStages: $enhancedStages, enhanceMs: $enhanceMs)';
-}
-
-SupyDocumentPageQuality? _qualityFromWire(String? wire) {
-  switch (wire) {
-    case 'veryPoor':
-      return SupyDocumentPageQuality.veryPoor;
-    case 'poor':
-      return SupyDocumentPageQuality.poor;
-    case 'ok':
-      return SupyDocumentPageQuality.ok;
-    case 'good':
-      return SupyDocumentPageQuality.good;
-    case 'excellent':
-      return SupyDocumentPageQuality.excellent;
-    case null:
-      return null;
-    default:
-      return null;
-  }
 }

@@ -20,6 +20,8 @@ class SupyDocumentCapture {
     required this.heightPx,
     this.quad = const <Offset>[],
     this.quadSource,
+    this.quality,
+    this.qualityScore,
   });
 
   /// Parses a capture result from a channel map. Accepts wide payloads with
@@ -46,6 +48,8 @@ class SupyDocumentCapture {
       heightPx: (map['heightPx']! as num).toInt(),
       quad: List<Offset>.unmodifiable(quad),
       quadSource: map['quadSource'] as String?,
+      quality: SupyDocumentPageQualityWire.fromWire(map['quality'] as String?),
+      qualityScore: (map['qualityScore'] as num?)?.toDouble(),
     );
   }
 
@@ -67,6 +71,14 @@ class SupyDocumentCapture {
   /// quad was used. `null` on platforms/paths that don't report it.
   final String? quadSource;
 
+  /// Coarse quality bucket assigned by the native scorer on capture. `null`
+  /// on older native builds / paths that don't score the still.
+  final SupyDocumentPageQuality? quality;
+
+  /// Raw quality score in `[0..1]` from the native scorer. `null` when the
+  /// scorer didn't run.
+  final double? qualityScore;
+
   @override
   bool operator ==(Object other) =>
       identical(this, other) ||
@@ -75,16 +87,25 @@ class SupyDocumentCapture {
           other.widthPx == widthPx &&
           other.heightPx == heightPx &&
           other.quadSource == quadSource &&
+          other.quality == quality &&
+          other.qualityScore == qualityScore &&
           _quadsEqual(other.quad, quad);
 
   @override
-  int get hashCode =>
-      Object.hash(path, widthPx, heightPx, quadSource, Object.hashAll(quad));
+  int get hashCode => Object.hash(
+    path,
+    widthPx,
+    heightPx,
+    quadSource,
+    quality,
+    qualityScore,
+    Object.hashAll(quad),
+  );
 
   @override
   String toString() =>
       'SupyDocumentCapture(path: $path, ${widthPx}x$heightPx, quad: $quad, '
-      'quadSource: $quadSource)';
+      'quadSource: $quadSource, quality: $quality, score: $qualityScore)';
 }
 
 bool _quadsEqual(List<Offset> a, List<Offset> b) {

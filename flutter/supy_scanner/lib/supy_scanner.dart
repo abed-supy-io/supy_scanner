@@ -74,6 +74,7 @@ export 'src/models/ui/supy_camera_configuration.dart'
     show SupyCameraConfiguration, SupyScanRange;
 export 'src/models/ui/supy_document_guidance_configuration.dart'
     show SupyDocumentGuidanceConfiguration, SupyDocumentGuidanceHints;
+export 'src/models/ui/supy_document_scan_mode.dart' show SupyDocumentScanMode;
 export 'src/models/ui/supy_find_and_pick_use_case_configuration.dart'
     show SupyExpectedBarcode, SupyFindAndPickUseCaseConfiguration;
 export 'src/models/ui/supy_multiple_scan_use_case_configuration.dart'

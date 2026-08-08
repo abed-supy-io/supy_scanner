@@ -24,7 +24,7 @@ void main() {
       expect(c.readyStabilityFloor, 0.60);
       expect(c.interiorVarianceFloor, 3.0);
       expect(c.holdSteadyFrames, 6);
-      expect(c.autoCapture, isTrue);
+      expect(c.autoCapture, isFalse);
       expect(c.autoCaptureDelay, const Duration(milliseconds: 600));
       expect(c.allowUnrectifiedFallback, isTrue);
     });

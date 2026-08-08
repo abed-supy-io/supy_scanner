@@ -152,6 +152,7 @@ class SupyDocumentScannerView extends StatefulWidget {
     this.onError,
     this.onPreviewStarted,
     this.showOverlay = true,
+    this.showHintCard = true,
     this.header,
     this.footer,
     this.palette = const SupyScannerPalette.supyDark(),
@@ -193,6 +194,12 @@ class SupyDocumentScannerView extends StatefulWidget {
 
   /// Whether to paint the guidance overlay. Default `true`.
   final bool showOverlay;
+
+  /// Whether to paint the per-state hint card. Default `true`. Set `false`
+  /// when a host chrome (e.g. the branded [SupyDocumentScannerScreen]) renders
+  /// the live tracking overlay but supplies its own status band, so the two
+  /// don't stack. Only takes effect while [showOverlay] is `true`.
+  final bool showHintCard;
 
   /// Optional widget placed above the camera.
   final Widget? header;
@@ -506,7 +513,7 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
       children: [
         _buildPreview(),
         if (widget.showOverlay) _buildOverlay(),
-        if (widget.showOverlay) _buildHintCard(),
+        if (widget.showOverlay && widget.showHintCard) _buildHintCard(),
         if (_countdownActive)
           Positioned.fill(
             child: IgnorePointer(

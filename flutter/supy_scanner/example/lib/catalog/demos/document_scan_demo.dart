@@ -19,6 +19,18 @@ class _DocumentScanDemoState extends State<DocumentScanDemo> {
   String? _error;
   bool _running = false;
   SupyDocumentFilter _filter = SupyDocumentFilter.color;
+  bool _optimize = true;
+
+  /// Shared options for both the camera scan and gallery import. When
+  /// [_optimize] is on we force the readability-enhance pipeline (perspective
+  /// + color/contrast clean-up) via `enhanceMode`; off leaves it to the native
+  /// default.
+  SupyDocumentScanOptions _options({int maxPages = 0}) =>
+      SupyDocumentScanOptions(
+        maxPages: maxPages,
+        filter: _filter,
+        enhanceMode: _optimize ? SupyDocumentEnhanceMode.balanced : null,
+      );
 
   Future<void> _scan({int maxPages = 0}) async {
     setState(() {
@@ -27,10 +39,39 @@ class _DocumentScanDemoState extends State<DocumentScanDemo> {
     });
     try {
       final result = await SupyScannerChannel.instance.scanDocument(
-        SupyDocumentScanOptions(maxPages: maxPages, filter: _filter),
+        _options(maxPages: maxPages),
       );
       if (!mounted) return;
       setState(() => _result = result);
+    } on SupyScanError catch (e) {
+      if (e.code == SupyScanErrorCode.cancelled) {
+        setState(() {});
+      } else {
+        setState(() => _error = '${e.code.name}: ${e.message}');
+      }
+    } finally {
+      if (mounted) setState(() => _running = false);
+    }
+  }
+
+  Future<void> _import() async {
+    setState(() {
+      _running = true;
+      _error = null;
+    });
+    try {
+      final page = await SupyScannerChannel.instance.importDocumentImage(
+        _options(),
+      );
+      if (!mounted) return;
+      // Surface the single imported page through the same results UI. Import
+      // returns just the cropped page (no OCR), so the OCR panel stays empty.
+      setState(() {
+        _result =
+            page == null
+                ? _result
+                : SupyDocumentData(pages: [page], ocrText: '');
+      });
     } on SupyScanError catch (e) {
       if (e.code == SupyScanErrorCode.cancelled) {
         setState(() {});
@@ -52,9 +93,9 @@ class _DocumentScanDemoState extends State<DocumentScanDemo> {
           'apply a color / grayscale / B&W filter, and return each cropped page '
           'as an image plus recognized OCR text — across one or many pages.',
       apiSummary:
-          'SupyScannerChannel.instance.scanDocument('
-          'SupyDocumentScanOptions(maxPages:, filter: SupyDocumentFilter)) '
-          '→ SupyDocumentData(pages, ocrText)',
+          'SupyScannerChannel.instance.scanDocument(SupyDocumentScanOptions(…)) '
+          '→ SupyDocumentData  ·  .importDocumentImage(SupyDocumentScanOptions(…)) '
+          '→ SupyDocumentPage',
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.stretch,
         children: [
@@ -87,6 +128,17 @@ class _DocumentScanDemoState extends State<DocumentScanDemo> {
               ),
             ),
           ),
+          const SizedBox(height: 4),
+          SwitchListTile(
+            contentPadding: EdgeInsets.zero,
+            title: const Text('Optimize for readability'),
+            subtitle: const Text(
+              'Enhance perspective, color and contrast so the page looks '
+              'like a clean scan. Applies to both camera scan and import.',
+            ),
+            value: _optimize,
+            onChanged: _running ? null : (v) => setState(() => _optimize = v),
+          ),
           const SizedBox(height: 8),
           Row(
             children: [
@@ -106,6 +158,12 @@ class _DocumentScanDemoState extends State<DocumentScanDemo> {
                 ),
               ),
             ],
+          ),
+          const SizedBox(height: 8),
+          OutlinedButton.icon(
+            onPressed: _running ? null : _import,
+            icon: const Icon(Icons.photo_library_outlined),
+            label: const Text('Import from gallery'),
           ),
           const SizedBox(height: 12),
           if (_result != null)

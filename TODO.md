@@ -451,6 +451,164 @@ flutter test --tags golden
 # layout diff <= 2 dp, SSIM >= 0.94, brand hex assertions EXACT
 ```
 
+### 9.1 Document-scanner three-screen redesign (decision, 2026-08-08)
+
+Logged decision for redrawing the branded embedded document flow
+(`SupyDocumentScannerScreen`) to match the supplied screenshot spec. The
+screenshot is the authoritative layout/colour/copy reference for this work; no
+Figma source exists (Q11 remains unanswered, but this flow does not wait on it).
+All colours come from existing `SupyScannerPalette` tokens; no hex literals in
+view files (anti-pattern 31).
+
+**The flow is three screens:**
+
+1. **Viewfinder** (dark, branded): "supy" wordmark, close + torch, a centred
+   rounded viewfinder frame, a "Hold steady" guidance pill, and a bottom bar
+   with Single / Multi / Receipt mode tabs, gallery import, capture shutter, and
+   a page-count badge.
+2. **Adjust edges** (crop editor): captured page with four draggable corner
+   handles, add-page action, and Continue.
+3. **Page review**: numbered thumbnail grid plus an add-page tile, and a
+   full-width "Export as PDF" finish action.
+
+**Bounded decisions (do not re-open without a new logged note):**
+
+- **"Export as PDF" is a label only, not a format change.** The action returns
+  the captured page images as today (`List<SupyDocumentPage>` -> the facade's
+  `SupyDocumentData(pages, ocrText: '')`). No PDF is generated and no return
+  type changes, so drop-in Scanbot compatibility is preserved. The retailer's
+  `InvoiceScannerService` still consumes only `.pages`.
+- **Mode semantics:** Single captures one page then goes straight to review;
+  Multi accumulates pages in the viewfinder until the user finishes; Receipt is
+  a receipt-tuned single capture (tall frame) that otherwise behaves like
+  Single. Mode changes capture-flow and frame shape only; every mode returns the
+  same `List<SupyDocumentPage>`. Added as `SupyDocumentScanMode`.
+
+**Delivered in Increment 1 (this pass, Flutter-only, verified via
+`flutter analyze` + `flutter test`):** viewfinder redesign, page-review grid,
+mode tabs + semantics, navigation between the two stages, new `en`/`ar` strings,
+and the `SupyDocumentScanMode` enum. No channel or native change.
+
+**Increment 2 (pending, NOT in this pass):** the "Adjust edges" crop editor and
+its new `rectifyImage(imagePath, quad, processing?)` channel method (Dart
+wrapper + both native handlers + `docs/ARCHITECTURE.md` row + mocked test). This
+requires native Kotlin/Swift work and on-device `docs/QA.md` walkthroughs that
+cannot be built or QA'd in the current environment; it must be implemented and
+verified on-device before it ships.
+
+### 9.2 Scanbot live-capture parity pass (decision, 2026-08-08)
+
+Logged decision: bring `SupyDocumentScannerScreen`'s viewfinder to exact parity
+with Scanbot's pro live-capture document UI (six supplied screenshots are the
+authoritative reference). Flutter-only; no channel or native change; verified via
+`flutter analyze` + `flutter test` (library 499 tests green, example analyzes
+clean).
+
+**Delivered:**
+
+- **Solid brand chrome.** The viewfinder is a `Column` of a solid-purple top
+  bar (Cancel / "Scan Document" / help "?"), a live camera body, and a solid-
+  purple capture bar. Each bar absorbs the safe-area inset itself (no outer
+  `SafeArea`) so the fill bleeds under the notch and home indicator, matching
+  Scanbot.
+- **Live status band + instruction band** replace the old static frame and
+  "Hold steady" pill: a top instruction band ("Scan each page of your
+  document.") and a bottom status band that recolours green / amber / red off
+  the live `SupyDocumentFrameState` (reusing the view's existing overlay FSM;
+  the screen sets `showHintCard: false` so it owns the status copy).
+- **In-bar auto-capture toggle,** off by default. Toggling it re-derives
+  `guidance.copyWith(autoCapture:)`, which the embedded view picks up live via
+  `didUpdateWidget` — arms/disarms with no native rebuild.
+- **White shutter, gallery import, torch, and a page-stack thumbnail** with a
+  count badge that opens review; capture bar layout mirrors the screenshots.
+- **Example demo:** `example/lib/catalog/demos/branded_document_demo.dart` pushes
+  the full-screen screen; registered as "Branded document scanner" in the
+  `document` catalog category (distinct from the embedded-view "Smart document"
+  demo).
+
+**Bounded decisions (do not re-open without a new logged note):**
+
+- **Mode tabs removed for exact parity.** Scanbot's live UI has no
+  Single / Multi / Receipt selector, so the on-screen tabs are gone. The
+  `SupyDocumentScanMode` enum and the `mode:` parameter stay (public API,
+  behaviour unchanged: Single / Receipt advance to review after one capture,
+  Multi accumulates) — only the tab UI was dropped. No Scanbot-compat break.
+- **`frameLabel` is now unused** by the viewfinder (the static frame is gone) but
+  remains a public field for API stability.
+
+### 9.3 Invoice intent re-routed to the branded Flutter session (decision, 2026-08-08)
+
+Logged decision, reversing the 9.x / `docs/UI-PARITY.md` D1 note (2026-08-07)
+that kept `intent: invoice` on the native full-screen scanner "for OCR + PDF".
+`SupyDocumentScanner.startMultiPage` now routes **both** `generic` and `invoice`
+to the branded `SupyDocumentScannerScreen` on Android and iOS; only web / desktop
+(which have no branded session yet) still fall back to the native
+`scanDocument` channel call. Requested directly by the user: the real
+document-scan entry must open the branded shaded UI, not the native one.
+
+**Why this is safe (does not break Scanbot-compat):**
+
+- **Server-side OCR is the source of truth** (hard constraint, this doc's
+  on-device-OCR section): on-device OCR is only an optimisation, so the branded
+  flow returning `ocrText: ''` for invoices removes nothing the pipeline relies
+  on — pages are captured offline and extracted server-side on reconnect.
+- **"Export as PDF" was already a label only** (decision 9.1): no on-device PDF
+  was ever assembled on the branded path, so no `pdfUri` regression.
+- **No return-type change.** Both paths return `SupyDocumentData`; only its
+  content differs for the invoice case (`ocrText: ''`, `pdfUri: null`). No lib
+  consumer reads those fields; the retailer's `InvoiceScannerService` consumes
+  only `.pages`. This is a behaviour change, not an API-surface break.
+
+**Delivered (Flutter-only, verified via `flutter analyze` + `flutter test`):**
+dropped the `intent != generic` gate in `_useBrandedSession`, refreshed the
+`startMultiPage` routing dartdoc, and reworked
+`test/document/supy_document_scanner_test.dart` (native-path arg-mapping +
+locale-derivation assertions moved under a desktop platform override; added a
+mobile-invoice → branded test). `docs/UI-PARITY.md` updated to match. No channel
+or native change.
+
+**Bounded decision (do not re-open without a new logged note):** invoice on
+mobile no longer produces on-device OCR text or a PDF. If a call site is ever
+found that genuinely needs on-device invoice OCR (offline Latin pre-fill), that
+is a new decision, not a silent revert of this one.
+
+### 9.4 Per-page quality badge on the branded review grid (decision, 2026-08-08)
+
+Logged decision, requested directly by the user ("a way to give score to the
+image that we capture ... add it to the branded scanning"). The branded
+document flow now surfaces the native per-page quality bucket as an
+informational, color-coded badge on each review-grid thumbnail.
+
+**Bounded scope (do not re-open without a new logged note):**
+
+- **Informational only.** The badge never gates capture, blocks export, or
+  prompts a re-take. It labels; it does not enforce. (`minPageQuality` gating
+  stays a separate, unshipped concern.)
+- **Review grid only.** No live viewfinder quality gauge - the badge appears
+  solely on the captured-page thumbnails in review.
+- **Bucket → palette mapping:** `veryPoor`/`poor` → `palette.negative`,
+  `ok` → `palette.warning`, `good`/`excellent` → `palette.positive`. Rendered
+  as a `palette.surface` scrim pill (colored dot + localized bucket word),
+  positioned bottom-end, clear of the page number (bottom-start) and the delete
+  affordance (top-end).
+
+**Why this does not break Scanbot-compat:** no public type gains a required
+field. `SupyDocumentCapture` gained optional/nullable `quality` +
+`qualityScore` (decoded from the existing wire payload the native scorer
+already emits); `_onCapture` carries them into `SupyDocumentPage` (which
+already had the fields). Badge renders only when `quality != null`, so older
+native builds / the gallery-import path (no score) simply show no badge - no
+channel bump, no native change required for this Dart-side surfacing.
+
+**Delivered (Flutter-only, verified via `flutter analyze` + `flutter test`,
+504 pass):** promoted the wire parser to `SupyDocumentPageQualityWire.fromWire`
+(shared by page + capture, replacing the private `_qualityFromWire`); added
+`quality`/`qualityScore` to `SupyDocumentCapture` (fields + `fromMap` decode +
+`==`/`hashCode`/`toString`); added `SupyScannerStrings.documentQualityLabel`
+(en + ar) and the `_qualityColor` + badge in `SupyDocumentScannerScreen`; two
+widget tests (badge renders from a scored capture; omitted when unscored) plus
+two strings tests.
+
 ---
 
 # PART 4: TARGET SPEC, THE PIPELINE

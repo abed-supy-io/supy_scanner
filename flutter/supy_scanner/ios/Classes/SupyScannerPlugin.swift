@@ -63,9 +63,14 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
       documentPresenter.present(args: args, result: result)
     case "importDocumentImage":
       // Native gallery import: PHPicker → on-device edge-detect + rectify +
-      // enhance + persist. No args; resolves nil when the user dismisses the
-      // picker. On-device only — no bytes cross the channel.
-      documentImportPresenter.present(result: result)
+      // enhance + persist. Args are optional (`SupyDocumentScanOptions.toWire()`
+      // or nil) — when present they drive the same filter / enhancement /
+      // processing knobs as the camera path. Resolves nil when the user
+      // dismisses the picker. On-device only — no bytes cross the channel.
+      documentImportPresenter.present(
+        args: call.arguments as? [String: Any],
+        result: result
+      )
     case "scanBarcodesBatch":
       guard let args = Self.expectMapArgs(call, result: result) else { return }
       batchBarcodePresenter.present(args: args, result: result)
