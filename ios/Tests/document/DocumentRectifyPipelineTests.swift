@@ -18,6 +18,12 @@ final class DocumentRectifyPipelineTests: XCTestCase {
     CGPoint(x: 0.2, y: 0.3), CGPoint(x: 0.8, y: 0.3),
     CGPoint(x: 0.8, y: 0.7), CGPoint(x: 0.2, y: 0.7),
   ]
+  // The pipeline bleeds the final quad outward before warping, so the value
+  // it reports (and the pixels it samples) is the *expanded* mapped quad.
+  private var expandedStillQuad: [CGPoint] {
+    DocumentRectifyPipeline.expandQuad(
+      expectedStillQuad, by: DocumentRectifyPipeline.edgeExpansion)
+  }
 
   func testPreviewFallbackWarpsMappedQuad() throws {
     let still = Self.makeStill(size: stillSize)
@@ -31,12 +37,17 @@ final class DocumentRectifyPipelineTests: XCTestCase {
     )
     let result = try XCTUnwrap(output)
     XCTAssertEqual(result.quadSource, "preview")
-    // Warped image ≈ the page's pixel size: (0.8−0.2)*900 × (0.7−0.3)*1200.
-    XCTAssertEqual(CGFloat(result.image.width), 540, accuracy: 2)
-    XCTAssertEqual(CGFloat(result.image.height), 480, accuracy: 2)
-    for (got, want) in zip(result.quad, expectedStillQuad) {
-      XCTAssertEqual(got.x, want.x, accuracy: 1e-6)
-      XCTAssertEqual(got.y, want.y, accuracy: 1e-6)
+    // Warped image ≈ the expanded page's pixel span.
+    let want = expandedStillQuad
+    XCTAssertEqual(
+      CGFloat(result.image.width), (want[1].x - want[0].x) * stillSize.width,
+      accuracy: 2)
+    XCTAssertEqual(
+      CGFloat(result.image.height), (want[3].y - want[0].y) * stillSize.height,
+      accuracy: 2)
+    for (got, expected) in zip(result.quad, want) {
+      XCTAssertEqual(got.x, expected.x, accuracy: 1e-6)
+      XCTAssertEqual(got.y, expected.y, accuracy: 1e-6)
     }
   }
 
@@ -54,11 +65,16 @@ final class DocumentRectifyPipelineTests: XCTestCase {
     )
     let result = try XCTUnwrap(output)
     XCTAssertEqual(result.quadSource, "preview")
-    XCTAssertEqual(CGFloat(result.image.width), 540, accuracy: 2)
-    XCTAssertEqual(CGFloat(result.image.height), 480, accuracy: 2)
-    for (got, want) in zip(result.quad, expectedStillQuad) {
-      XCTAssertEqual(got.x, want.x, accuracy: 1e-6)
-      XCTAssertEqual(got.y, want.y, accuracy: 1e-6)
+    let want = expandedStillQuad
+    XCTAssertEqual(
+      CGFloat(result.image.width), (want[1].x - want[0].x) * stillSize.width,
+      accuracy: 2)
+    XCTAssertEqual(
+      CGFloat(result.image.height), (want[3].y - want[0].y) * stillSize.height,
+      accuracy: 2)
+    for (got, expected) in zip(result.quad, want) {
+      XCTAssertEqual(got.x, expected.x, accuracy: 1e-6)
+      XCTAssertEqual(got.y, expected.y, accuracy: 1e-6)
     }
   }
 
@@ -80,12 +96,47 @@ final class DocumentRectifyPipelineTests: XCTestCase {
     )
     let result = try XCTUnwrap(output)
     XCTAssertEqual(result.quadSource, "refined")
-    XCTAssertEqual(result.quad, refinedQuad)
-    // The refiner must be seeded with the MAPPED quad, not the analyzer quad.
-    for (got, want) in zip(seedSeenByRefiner, expectedStillQuad) {
-      XCTAssertEqual(got.x, want.x, accuracy: 1e-6)
-      XCTAssertEqual(got.y, want.y, accuracy: 1e-6)
+    // The accepted refined quad is still bled outward before the warp.
+    let want = DocumentRectifyPipeline.expandQuad(
+      refinedQuad, by: DocumentRectifyPipeline.edgeExpansion)
+    for (got, expected) in zip(result.quad, want) {
+      XCTAssertEqual(got.x, expected.x, accuracy: 1e-6)
+      XCTAssertEqual(got.y, expected.y, accuracy: 1e-6)
     }
+    // The refiner must be seeded with the MAPPED quad, not the analyzer quad.
+    for (got, expected) in zip(seedSeenByRefiner, expectedStillQuad) {
+      XCTAssertEqual(got.x, expected.x, accuracy: 1e-6)
+      XCTAssertEqual(got.y, expected.y, accuracy: 1e-6)
+    }
+  }
+
+  func testExpandQuadBleedsOutwardFromCentroidAndClamps() {
+    // A centered quad expands symmetrically: each corner moves away from the
+    // 0.5,0.5 centroid by `ratio` of its offset.
+    let expanded = DocumentRectifyPipeline.expandQuad(expectedStillQuad, by: 0.1)
+    // Original half-width 0.3 → 0.33, so x spans [0.17, 0.83].
+    XCTAssertEqual(expanded[0].x, 0.17, accuracy: 1e-6)
+    XCTAssertEqual(expanded[1].x, 0.83, accuracy: 1e-6)
+    XCTAssertEqual(expanded[0].y, 0.28, accuracy: 1e-6)
+    XCTAssertEqual(expanded[2].y, 0.72, accuracy: 1e-6)
+
+    // A quad already touching the edge stays clamped inside [0,1].
+    let edgeHugging = [
+      CGPoint(x: 0.0, y: 0.0), CGPoint(x: 1.0, y: 0.0),
+      CGPoint(x: 1.0, y: 1.0), CGPoint(x: 0.0, y: 1.0),
+    ]
+    for p in DocumentRectifyPipeline.expandQuad(edgeHugging, by: 0.1) {
+      XCTAssertGreaterThanOrEqual(p.x, 0)
+      XCTAssertLessThanOrEqual(p.x, 1)
+      XCTAssertGreaterThanOrEqual(p.y, 0)
+      XCTAssertLessThanOrEqual(p.y, 1)
+    }
+
+    // A degenerate quad or zero ratio is a no-op.
+    XCTAssertEqual(
+      DocumentRectifyPipeline.expandQuad(expectedStillQuad, by: 0),
+      expectedStillQuad)
+    XCTAssertEqual(DocumentRectifyPipeline.expandQuad([], by: 0.1), [])
   }
 
   func testOutOfBoundsMappedQuadIsClampedNotFailed() throws {

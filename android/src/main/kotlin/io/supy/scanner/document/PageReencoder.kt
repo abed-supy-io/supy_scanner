@@ -3,6 +3,9 @@ package io.supy.scanner.document
 import android.content.Context
 import android.graphics.Bitmap
 import android.graphics.BitmapFactory
+import android.graphics.Canvas
+import android.graphics.Paint
+import android.graphics.Rect
 import android.net.Uri
 import androidx.core.net.toUri
 import io.supy.scanner.log.SupyLog
@@ -49,20 +52,25 @@ internal object PageReencoder {
         quality: Int,
         format: Format,
         enhanceMode: EnhanceMode = EnhanceMode.BALANCED,
+        maxDimension: Int = 0,
+        filter: DocumentFilter = DocumentFilter.COLOR,
     ): List<ReencodedPage> {
         val clamped = quality.coerceIn(1, 100)
         // GMS already emits high-quality JPEGs; skip the re-encode pass when
         // the consumer asks for ≥95% JPEG to avoid an unnecessary disk
-        // round-trip — but only when enhance is also OFF, otherwise we still
-        // need to decode→enhance→re-encode. PNG always re-encodes.
+        // round-trip — but only when there is genuinely nothing to do:
+        // enhance OFF, no smart-resize, and no color transform (color/original
+        // leave pixels untouched). PNG always re-encodes.
         if (format == Format.JPG &&
             clamped >= MAX_PASSTHROUGH_QUALITY &&
-            enhanceMode == EnhanceMode.OFF
+            enhanceMode == EnhanceMode.OFF &&
+            maxDimension <= 0 &&
+            (filter == DocumentFilter.COLOR || filter == DocumentFilter.ORIGINAL)
         ) {
             return sourceUris.map { ReencodedPage(it, quality = null, qualityScore = null) }
         }
         return sourceUris.mapIndexed { index, uri ->
-            reencodeOne(context, uri, clamped, format, enhanceMode, index)
+            reencodeOne(context, uri, clamped, format, enhanceMode, maxDimension, filter, index)
                 ?: ReencodedPage(uri, quality = null, qualityScore = null)
         }
     }
@@ -73,6 +81,8 @@ internal object PageReencoder {
         quality: Int,
         format: Format,
         enhanceMode: EnhanceMode,
+        maxDimension: Int,
+        filter: DocumentFilter,
         index: Int,
     ): ReencodedPage? {
         val decoded = try {
@@ -100,13 +110,16 @@ internal object PageReencoder {
             decoded
         }
 
-        if (enhanceMode != EnhanceMode.OFF) {
-            runEnhance(bitmap, enhanceMode)
-        }
-        val score = scorePage(bitmap)
+        // Smart-resize → enhance → filter. May return a different bitmap
+        // instance than `bitmap` (the original is recycled inside).
+        val processed = applyProcessing(bitmap, enhanceMode, maxDimension, filter)
+        val score = scorePage(processed)
 
         val dir = File(context.cacheDir, "supy_scanner")
-        if (!dir.exists() && !dir.mkdirs()) return null
+        if (!dir.exists() && !dir.mkdirs()) {
+            processed.recycle()
+            return null
+        }
         val ext = if (format == Format.PNG) "png" else "jpg"
         val target = File(dir, "supy_scan_${UUID.randomUUID()}_$index.$ext")
         val compress = if (format == Format.PNG) {
@@ -116,7 +129,7 @@ internal object PageReencoder {
         }
         return try {
             FileOutputStream(target).use { out ->
-                bitmap.compress(compress, quality, out)
+                processed.compress(compress, quality, out)
                 out.flush()
             }
             ReencodedPage(
@@ -127,7 +140,7 @@ internal object PageReencoder {
         } catch (_: IOException) {
             null
         } finally {
-            bitmap.recycle()
+            processed.recycle()
         }
     }
 
@@ -145,16 +158,18 @@ internal object PageReencoder {
         quality: Int,
         format: Format,
         enhanceMode: EnhanceMode,
+        maxDimension: Int = 0,
+        filter: DocumentFilter = DocumentFilter.COLOR,
     ): ReencodedPage? {
         val clamped = quality.coerceIn(1, 100)
-        if (enhanceMode != EnhanceMode.OFF) {
-            runEnhance(bitmap, enhanceMode)
-        }
-        val score = scorePage(bitmap)
+        // Smart-resize → enhance → filter. May return a different bitmap
+        // instance than `bitmap` (the original is recycled inside).
+        val processed = applyProcessing(bitmap, enhanceMode, maxDimension, filter)
+        val score = scorePage(processed)
 
         val dir = File(context.cacheDir, "supy_scanner")
         if (!dir.exists() && !dir.mkdirs()) {
-            bitmap.recycle()
+            processed.recycle()
             return null
         }
         val ext = if (format == Format.PNG) "png" else "jpg"
@@ -166,7 +181,7 @@ internal object PageReencoder {
         }
         return try {
             FileOutputStream(target).use { out ->
-                bitmap.compress(compress, clamped, out)
+                processed.compress(compress, clamped, out)
                 out.flush()
             }
             ReencodedPage(
@@ -177,8 +192,159 @@ internal object PageReencoder {
         } catch (_: IOException) {
             null
         } finally {
-            bitmap.recycle()
+            processed.recycle()
         }
+    }
+
+    /**
+     * The pure-Kotlin post-decode chain shared by both re-encode paths:
+     * smart-resize → native enhance → output filter. Mirrors the tail of the
+     * iOS `DocumentProcessor` (stages 8–9). May return a **different** bitmap
+     * instance than [source] — the resize allocates a fresh bitmap and recycles
+     * [source] — so callers must encode/recycle the returned bitmap, not the
+     * one they passed in.
+     */
+    private fun applyProcessing(
+        source: Bitmap,
+        enhanceMode: EnhanceMode,
+        maxDimension: Int,
+        filter: DocumentFilter,
+    ): Bitmap {
+        val bitmap = if (maxDimension > 0) resizeToMax(source, maxDimension) else source
+        if (enhanceMode != EnhanceMode.OFF) {
+            runEnhance(bitmap, enhanceMode)
+        }
+        when (filter) {
+            DocumentFilter.GRAYSCALE -> applyGrayscale(bitmap)
+            DocumentFilter.BLACK_AND_WHITE -> applyBlackAndWhite(bitmap)
+            // Color keeps the enhanced pixels; original is the un-enhanced bypass.
+            DocumentFilter.COLOR, DocumentFilter.ORIGINAL -> Unit
+        }
+        return bitmap
+    }
+
+    /**
+     * Downscales [source] so its longest edge is at most [maxDimension],
+     * preserving aspect ratio (bilinear). Returns [source] unchanged when it is
+     * already within budget or on an allocation failure. The returned bitmap is
+     * always mutable ARGB_8888 so the downstream native enhance can write back
+     * in place; [source] is recycled when a smaller copy is produced.
+     */
+    private fun resizeToMax(source: Bitmap, maxDimension: Int): Bitmap {
+        val width = source.width
+        val height = source.height
+        val longest = maxOf(width, height)
+        if (longest <= maxDimension || longest <= 0) return source
+        val scale = maxDimension.toDouble() / longest
+        val newW = (width * scale).toInt().coerceAtLeast(1)
+        val newH = (height * scale).toInt().coerceAtLeast(1)
+        val dst = try {
+            Bitmap.createBitmap(newW, newH, Bitmap.Config.ARGB_8888)
+        } catch (oom: OutOfMemoryError) {
+            SupyLog.i(message = "resize createBitmap OOM (${newW}x$newH): ${oom.message}")
+            return source
+        }
+        Canvas(dst).drawBitmap(
+            source,
+            Rect(0, 0, width, height),
+            Rect(0, 0, newW, newH),
+            Paint(Paint.FILTER_BITMAP_FLAG or Paint.ANTI_ALIAS_FLAG),
+        )
+        source.recycle()
+        return dst
+    }
+
+    /** Desaturates [bitmap] in place using Rec.601 luma weights. */
+    private fun applyGrayscale(bitmap: Bitmap) {
+        val width = bitmap.width
+        val height = bitmap.height
+        val count = width * height
+        if (count <= 0) return
+        val pixels = try {
+            IntArray(count)
+        } catch (oom: OutOfMemoryError) {
+            SupyLog.i(message = "grayscale IntArray OOM ($count px): ${oom.message}")
+            return
+        }
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        for (i in 0 until count) {
+            val c = pixels[i]
+            val y = luma(c)
+            pixels[i] = (c and ALPHA_MASK) or (y shl 16) or (y shl 8) or y
+        }
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+    }
+
+    /**
+     * Binarizes [bitmap] in place with a global Otsu threshold over its luma
+     * histogram — black ink on white paper. The upstream illumination-flatten
+     * from the native enhance pass makes a global threshold hold up across the
+     * page; a per-pixel adaptive pass isn't needed here.
+     */
+    private fun applyBlackAndWhite(bitmap: Bitmap) {
+        val width = bitmap.width
+        val height = bitmap.height
+        val count = width * height
+        if (count <= 0) return
+        val pixels = try {
+            IntArray(count)
+        } catch (oom: OutOfMemoryError) {
+            SupyLog.i(message = "b&w IntArray OOM ($count px): ${oom.message}")
+            return
+        }
+        bitmap.getPixels(pixels, 0, width, 0, 0, width, height)
+        val histogram = IntArray(256)
+        val lumaValues = try {
+            IntArray(count)
+        } catch (oom: OutOfMemoryError) {
+            SupyLog.i(message = "b&w luma IntArray OOM ($count px): ${oom.message}")
+            return
+        }
+        for (i in 0 until count) {
+            val y = luma(pixels[i])
+            lumaValues[i] = y
+            histogram[y]++
+        }
+        val threshold = otsuThreshold(histogram, count)
+        for (i in 0 until count) {
+            val v = if (lumaValues[i] < threshold) 0 else 255
+            pixels[i] = (pixels[i] and ALPHA_MASK) or (v shl 16) or (v shl 8) or v
+        }
+        bitmap.setPixels(pixels, 0, width, 0, 0, width, height)
+    }
+
+    /** Rec.601 luma of a packed ARGB pixel, 0..255. */
+    private fun luma(color: Int): Int {
+        val r = (color ushr 16) and 0xFF
+        val g = (color ushr 8) and 0xFF
+        val b = color and 0xFF
+        return ((r * 299 + g * 587 + b * 114) / 1000).coerceIn(0, 255)
+    }
+
+    /** Otsu's between-class-variance threshold over a 256-bin luma [histogram]. */
+    private fun otsuThreshold(histogram: IntArray, total: Int): Int {
+        var sum = 0.0
+        for (t in 0..255) sum += (t * histogram[t]).toDouble()
+        var sumB = 0.0
+        var weightB = 0
+        var maxVariance = -1.0
+        var threshold = 127
+        for (t in 0..255) {
+            weightB += histogram[t]
+            if (weightB == 0) continue
+            val weightF = total - weightB
+            if (weightF == 0) break
+            sumB += (t * histogram[t]).toDouble()
+            val meanB = sumB / weightB
+            val meanF = (sum - sumB) / weightF
+            val between = weightB.toDouble() * weightF.toDouble() *
+                (meanB - meanF) * (meanB - meanF)
+            if (between > maxVariance) {
+                maxVariance = between
+                threshold = t
+            }
+        }
+        return threshold
     }
 
     /**
@@ -287,4 +453,7 @@ internal object PageReencoder {
     }
 
     private const val MAX_PASSTHROUGH_QUALITY = 95
+
+    /** Preserves the alpha byte when rewriting RGB channels (0xFF000000). */
+    private const val ALPHA_MASK = -0x1000000
 }

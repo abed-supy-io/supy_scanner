@@ -26,12 +26,36 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
     private var pendingJpegQuality: Int = DEFAULT_JPEG_QUALITY
     private var pendingOutputFormat: PageReencoder.Format = PageReencoder.Format.JPG
     private var pendingWantPdf: Boolean = false
+    private var pendingWantTiff: Boolean = false
+    private var pendingWantSearchablePdf: Boolean = false
     private var pendingEnhanceMode: PageReencoder.EnhanceMode = PageReencoder.EnhanceMode.BALANCED
+    private var pendingMaxDimension: Int = DocumentProcessingOptions.DEFAULT_MAX_DIMENSION
+    private var pendingFilter: DocumentFilter = DocumentFilter.COLOR
     private var pendingResolvedBackend: String = BACKEND_UNKNOWN
     private var pendingMinPageQualityOrdinal: Int = 0
     private var pendingLocale: String = "en"
     private var pendingIntent: String = INTENT_GENERIC
     private val ocrRunner: OcrRunner = OcrRunner()
+
+    /**
+     * Delegates the standalone `recognizeText` channel call to the shared
+     * [ocrRunner]. Reuses the launcher's single ML Kit recognizer instance
+     * rather than spinning up a second Closeable. Errors if no Context is
+     * available (activity detached).
+     */
+    fun recognizeText(
+        context: android.content.Context?,
+        uri: Uri,
+        includeElements: Boolean,
+        onComplete: (Map<String, Any?>) -> Unit,
+        onError: (code: String, message: String) -> Unit,
+    ) {
+        if (context == null) {
+            onError("model_unavailable", "recognizeText: no Activity context attached")
+            return
+        }
+        ocrRunner.recognizeStructured(context, uri, includeElements, onComplete, onError)
+    }
 
     /**
      * Touches the GMS Document Scanner client to trigger model download
@@ -65,9 +89,15 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         }
 
         val maxPages = (args?.get("maxPages") as? Int) ?: DEFAULT_MAX_PAGES
+        // Phase DPX: resolve the nested `processing` map (with the legacy
+        // top-level `filter`/`enhanceMode`/`jpegQuality` as fallbacks) into one
+        // options struct shared with the embedded paths. The effective JPEG
+        // quality — nested `quality` override or the top-level request — is then
+        // tier-clamped exactly as before.
         val requestedJpegQuality = (args?.get("jpegQuality") as? Int) ?: DEFAULT_JPEG_QUALITY
+        val processing = DocumentProcessingOptions.parse(args, fallbackQuality = requestedJpegQuality)
         val jpegQuality = io.supy.scanner.perf.DeviceTier.detect(activity)
-            .jpegQuality(requestedJpegQuality)
+            .jpegQuality(processing.quality)
         // useNativeCore is a v1.1 wire field reserved for the C++ pre-processing
         // path. Read it here so the contract is honored end-to-end; the document
         // launcher still routes to GMS in v1.0 regardless.
@@ -82,21 +112,25 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         //   jpg → JPEG-only (v1.0 behaviour).
         //   png → JPEG from GMS, re-encoded to PNG; `jpegQuality` is ignored.
         //   pdf → JPEG pages AND a GMS-assembled PDF; pdfUri surfaced on result.
+        // v1.2 Phase DC8:
+        //   tiff → JPEG pages AND a self-assembled multi-page TIFF; tiffUri.
+        //   searchablePdf → JPEG pages AND a self-assembled PDF carrying an
+        //     invisible OCR text layer; pdfUri (GMS's native PDF has no text
+        //     layer, so we always build our own from the page URIs + word boxes).
         val outputFormatWire = (args?.get("outputFormat") as? String) ?: "jpg"
         val outputFormat = when (outputFormatWire) {
             "png" -> PageReencoder.Format.PNG
             else -> PageReencoder.Format.JPG
         }
         val wantPdf = outputFormatWire == "pdf"
+        val wantTiff = outputFormatWire == "tiff"
+        val wantSearchablePdf = outputFormatWire == "searchablePdf"
 
         // v1.2: optional native enhancement pass on the captured pages.
         // Default = balanced on Android (VisionKit handles iOS internally).
-        val enhanceMode = when ((args?.get("enhanceMode") as? String)?.lowercase()) {
-            "off" -> PageReencoder.EnhanceMode.OFF
-            "fast" -> PageReencoder.EnhanceMode.FAST
-            "max" -> PageReencoder.EnhanceMode.MAX
-            else -> PageReencoder.EnhanceMode.BALANCED
-        }
+        // DPX: the effective mode also folds in the `processing` stage toggles /
+        // filter (original bypass or all-stages-off downgrade to OFF).
+        val enhanceMode = processing.enhanceMode
 
         val resultFormats = if (wantPdf) {
             GmsDocumentScannerOptions.RESULT_FORMAT_JPEG or
@@ -118,7 +152,11 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         pendingJpegQuality = jpegQuality
         pendingOutputFormat = outputFormat
         pendingWantPdf = wantPdf
+        pendingWantTiff = wantTiff
+        pendingWantSearchablePdf = wantSearchablePdf
         pendingEnhanceMode = enhanceMode
+        pendingMaxDimension = processing.maxDimension
+        pendingFilter = processing.filter
         pendingLocale = (args?.get("locale") as? String) ?: "en"
         pendingIntent = (args?.get("intent") as? String) ?: INTENT_GENERIC
         // Wire string from `SupyDocumentPageQuality.name`. The Dart layer
@@ -207,6 +245,8 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
                 pendingJpegQuality,
                 pendingOutputFormat,
                 pendingEnhanceMode,
+                pendingMaxDimension,
+                pendingFilter,
             )
         } else {
             rawUris.map { PageReencoder.ReencodedPage(it, quality = null, qualityScore = null) }
@@ -230,19 +270,63 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
             // OCR + dimension decode happens off the UI thread inside OcrRunner —
             // ML Kit dispatches its own executors. Reply on the same thread the
             // success listener fires on (main), which is what Flutter expects.
-            ocrRunner.run(activity.applicationContext, acceptedPages) { resultPages, ocrText ->
-                pendingResult = null
-                pendingActivity = null
-                pending.success(
-                    buildResponse(
-                        pages = resultPages,
-                        ocrText = ocrText,
-                        pdfUri = capturedPdfUri,
-                    ),
-                )
-            }
+            // For searchablePdf/tiff we ignore GMS's native PDF (capturedPdfUri
+            // is null there anyway) and assemble our own artifact.
+            finishWithPages(activity.applicationContext, acceptedPages, capturedPdfUri)
         }
         return true
+    }
+
+    /**
+     * Shared tail for both backends: runs OCR over [pages], assembles the
+     * format-specific export artifact (searchable PDF / TIFF / plain PDF), and
+     * resolves the pending channel call exactly once. [plainPdfUri] is the
+     * already-resolved `pdf` output (GMS-native or CameraX-assembled) used only
+     * when `outputFormat == pdf`. v1.2 Phase DC8.
+     */
+    private fun finishWithPages(
+        context: android.content.Context,
+        pages: List<PageReencoder.ReencodedPage>,
+        plainPdfUri: String?,
+    ) {
+        when {
+            pendingWantSearchablePdf -> {
+                ocrRunner.runWithWords(context, pages) { resultPages, ocrText, wordsPerPage ->
+                    val searchable = pages.mapIndexed { i, page ->
+                        PdfAssembler.SearchablePage(page.uri, wordsPerPage.getOrElse(i) { emptyList() })
+                    }
+                    val pdfUri = runCatching {
+                        PdfAssembler.assembleSearchable(context, searchable)
+                    }.onFailure {
+                        SupyLog.i(message = "assembleSearchable failed: ${it.message}")
+                    }.getOrNull()?.let { Uri.fromFile(it).toString() }
+                    respondSuccess(buildResponse(resultPages, ocrText, pdfUri = pdfUri))
+                }
+            }
+            pendingWantTiff -> {
+                ocrRunner.run(context, pages) { resultPages, ocrText ->
+                    val tiffUri = runCatching {
+                        TiffAssembler.assemble(context, pages.map { it.uri })
+                    }.onFailure {
+                        SupyLog.i(message = "TiffAssembler failed: ${it.message}")
+                    }.getOrNull()?.let { Uri.fromFile(it).toString() }
+                    respondSuccess(buildResponse(resultPages, ocrText, pdfUri = null, tiffUri = tiffUri))
+                }
+            }
+            else -> {
+                ocrRunner.run(context, pages) { resultPages, ocrText ->
+                    respondSuccess(buildResponse(resultPages, ocrText, pdfUri = plainPdfUri))
+                }
+            }
+        }
+    }
+
+    /** Resolves the pending `scanDocument` call with [payload] and clears state. */
+    private fun respondSuccess(payload: Map<String, Any?>) {
+        val pending = pendingResult ?: return
+        pendingResult = null
+        pendingActivity = null
+        pending.success(payload)
     }
 
     /**
@@ -293,6 +377,7 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
         pages: List<Map<String, Any?>>,
         ocrText: String,
         pdfUri: String?,
+        tiffUri: String? = null,
     ): Map<String, Any?> {
         val payload = mutableMapOf<String, Any?>(
             "pages" to pages,
@@ -300,6 +385,7 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
             "resolvedBackend" to pendingResolvedBackend,
         )
         if (pdfUri != null) payload["pdfUri"] = pdfUri
+        if (tiffUri != null) payload["tiffUri"] = tiffUri
         return payload
     }
 
@@ -351,9 +437,11 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
             pendingJpegQuality,
             pendingOutputFormat,
             pendingEnhanceMode,
+            pendingMaxDimension,
+            pendingFilter,
         )
 
-        val pdfUri = if (pendingWantPdf) {
+        val plainPdfUri = if (pendingWantPdf) {
             runCatching {
                 PdfAssembler.assemble(activity.applicationContext, pages.map { it.uri })
             }.onFailure {
@@ -361,11 +449,7 @@ class DocumentScannerLauncher : PluginRegistry.ActivityResultListener {
             }.getOrNull()?.let { Uri.fromFile(it).toString() }
         } else null
 
-        ocrRunner.run(activity.applicationContext, pages) { resultPages, ocrText ->
-            pendingResult = null
-            pendingActivity = null
-            pending.success(buildResponse(pages = resultPages, ocrText = ocrText, pdfUri = pdfUri))
-        }
+        finishWithPages(activity.applicationContext, pages, plainPdfUri)
         return true
     }
 

@@ -52,6 +52,17 @@ void main() {
       }
     });
 
+    test('exposes the native-core-only symbologies', () {
+      // These decode only via the zxing-cpp core (useNativeCore); their wire
+      // names must round-trip so FormatMapper.kt can build the SUPY_FORMAT
+      // mask. See docs/SYMBOLOGIES.md.
+      expect(SupyBarcodeFormat.dataBar.wireName, 'dataBar');
+      expect(SupyBarcodeFormat.dataBarExpanded.wireName, 'dataBarExpanded');
+      expect(SupyBarcodeFormat.microQr.wireName, 'microQr');
+      expect(SupyBarcodeFormat.rMQR.wireName, 'rMQR');
+      expect(SupyBarcodeFormat.maxiCode.wireName, 'maxiCode');
+    });
+
     test('fromWireName throws on unknown', () {
       expect(
         () => SupyBarcodeFormat.fromWireName('not_a_format'),

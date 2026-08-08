@@ -14,25 +14,26 @@ class SupySingleScanUseCaseConfiguration {
   /// Creates a single-scan use case configuration.
   const SupySingleScanUseCaseConfiguration({
     this.confirmationSheetEnabled = true,
-    this.title = 'Barcode detected',
+    this.title,
     this.showBarcodeFormat = true,
     this.showRawValue = true,
-    this.confirmButtonText = 'Submit',
-    this.retryButtonText = 'Retry',
-    this.sheetBackgroundColor = const Color(0xFFFFFFFF),
-    this.titleColor = const Color(0xFF000000),
-    this.bodyColor = const Color(0xCC000000),
-    this.confirmButtonBackgroundColor = const Color(0xFF000000),
-    this.confirmButtonForegroundColor = const Color(0xFFFFFFFF),
-    this.retryButtonForegroundColor = const Color(0xFF000000),
+    this.confirmButtonText,
+    this.retryButtonText,
+    this.sheetBackgroundColor,
+    this.titleColor,
+    this.bodyColor,
+    this.confirmButtonBackgroundColor,
+    this.confirmButtonForegroundColor,
+    this.retryButtonForegroundColor,
   });
 
   /// When `false`, the first detection is returned without showing the
   /// confirmation sheet.
   final bool confirmationSheetEnabled;
 
-  /// Title rendered at the top of the confirmation sheet.
-  final String title;
+  /// Title rendered at the top of the confirmation sheet. Resolves to the
+  /// string bundle's `barcodeDetected` when null.
+  final String? title;
 
   /// Whether the symbology name is rendered as a chip on the sheet.
   final bool showBarcodeFormat;
@@ -40,30 +41,33 @@ class SupySingleScanUseCaseConfiguration {
   /// Whether the raw decoded value is rendered on the sheet.
   final bool showRawValue;
 
-  /// Label on the primary (accept) button.
-  final String confirmButtonText;
+  /// Label on the primary (accept) button. Resolves to the string bundle's
+  /// `submit` when null.
+  final String? confirmButtonText;
 
-  /// Label on the secondary (retry) button.
-  final String retryButtonText;
+  /// Label on the secondary (retry) button. Resolves to the string bundle's
+  /// `retry` when null.
+  final String? retryButtonText;
 
-  /// Sheet background fill.
-  final Color sheetBackgroundColor;
+  /// Sheet background fill. Resolves to the palette `surface` when null.
+  final Color? sheetBackgroundColor;
 
-  /// Color of the [title] text.
-  final Color titleColor;
+  /// Color of the [title] text. Resolves to the palette `onSurface` when null.
+  final Color? titleColor;
 
-  /// Color of the body text (raw value, format chip).
-  final Color bodyColor;
+  /// Color of the body text (raw value, format chip). Resolves to the palette
+  /// `onSurfaceVariant` when null.
+  final Color? bodyColor;
 
-  /// Primary button fill.
-  final Color confirmButtonBackgroundColor;
+  /// Primary button fill. Resolves to the palette `primary` when null.
+  final Color? confirmButtonBackgroundColor;
 
-  /// Primary button label color.
-  final Color confirmButtonForegroundColor;
+  /// Primary button label color. Resolves to the palette `onPrimary` when null.
+  final Color? confirmButtonForegroundColor;
 
   /// Secondary (retry) button label color. The retry button renders as a
-  /// text button without a fill.
-  final Color retryButtonForegroundColor;
+  /// text button without a fill. Resolves to the palette `onSurface` when null.
+  final Color? retryButtonForegroundColor;
 
   @override
   bool operator ==(Object other) =>

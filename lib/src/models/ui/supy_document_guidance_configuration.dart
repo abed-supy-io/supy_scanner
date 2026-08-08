@@ -16,30 +16,38 @@ class SupyDocumentGuidanceConfiguration {
     this.maxCoverageRatio = 0.90,
     this.maxTiltDegrees = 20.0,
     this.minMeanLuma = 60.0,
-    this.minBlurScore = 80.0,
+    // Live-preview lock gates below are tuned for *hand-held* capture: the
+    // whole production invoice flow routes through this generic default (the
+    // retailer calls startMultiPage with no intent), and the pre-tuning values
+    // (blur≥80, stability≥0.75, velocity≤0.020, perCorner≥0.55) were strict
+    // enough that a phone held by hand under indoor light never reached
+    // `ready`. These gate the *preview* only — the still is re-shot at full
+    // resolution on capture — so relaxing them trades nothing in output
+    // quality for the ability to actually lock. See docs/QA.md doc-scan cases.
+    this.minBlurScore = 55.0,
     this.readyStableFrames = 5,
     this.lostDocumentGraceFrames = 3,
     this.exitMargin = 0.10,
     this.minDwellFrames = 4,
     this.smoothingAlpha = 0.35,
-    this.readyStabilityFloor = 0.75,
-    this.interiorVarianceFloor = 5.0,
+    this.readyStabilityFloor = 0.60,
+    this.interiorVarianceFloor = 3.0,
     this.holdSteadyFrames = 6,
     this.maxGlareRatio = 0.04,
     this.glareExitMargin = 0.50,
-    this.maxCornerVelocity = 0.020,
-    this.minPerCornerStability = 0.55,
+    this.maxCornerVelocity = 0.035,
+    this.minPerCornerStability = 0.42,
     this.edgeClipBlocking = false,
     this.centerGuidanceEnabled = true,
     this.maxCenterOffset = 0.12,
     this.autoCapture = true,
     this.autoCaptureDelay = const Duration(milliseconds: 600),
     this.allowUnrectifiedFallback = true,
-    this.warningColor = const Color(0xFFFF4D4D),
-    this.notReadyColor = const Color(0xFFE5484D),
-    this.readyColor = const Color(0xFF30A46C),
-    this.scrimColor = const Color(0x99000000),
-    this.hints = const SupyDocumentGuidanceHints(),
+    this.warningColor,
+    this.notReadyColor,
+    this.readyColor,
+    this.scrimColor,
+    this.hints,
   });
 
   /// Preset that pairs with [SupyDocumentScanIntent.invoice]. Tightens the
@@ -176,20 +184,26 @@ class SupyDocumentGuidanceConfiguration {
   /// Set `false` for "rectified or nothing" flows.
   final bool allowUnrectifiedFallback;
 
-  /// Color for failure-state corner brackets.
-  final Color warningColor;
+  /// Color for failure-state corner brackets. Resolves to the palette
+  /// `warning` when null.
+  final Color? warningColor;
 
-  /// Color used for the outline + hint card when not capture-ready.
-  final Color notReadyColor;
+  /// Color used for the outline + hint card when not capture-ready. Resolves to
+  /// the palette `negative` when null.
+  final Color? notReadyColor;
 
-  /// Color used for the outline + hint card when capture-ready.
-  final Color readyColor;
+  /// Color used for the outline + hint card when capture-ready. Resolves to the
+  /// palette `positive` when null.
+  final Color? readyColor;
 
-  /// Background scrim color for the hint card.
-  final Color scrimColor;
+  /// Background scrim color for the hint card. Resolves to the palette
+  /// `modalOverlay` when null.
+  final Color? scrimColor;
 
-  /// Per-state hint copy.
-  final SupyDocumentGuidanceHints hints;
+  /// Per-state hint copy. Resolves to the ambient-locale hints from the string
+  /// bundle (`SupyScannerStrings.documentHints`) at the point of use when null;
+  /// pass an explicit bundle to override individual strings.
+  final SupyDocumentGuidanceHints? hints;
 
   /// Packs the 19 native-classifier thresholds in the wire-coupled order the
   /// C++ bridge unpacks by index. MUST stay byte-for-byte aligned with
@@ -224,15 +238,20 @@ class SupyDocumentGuidanceConfiguration {
     centerGuidanceEnabled ? maxCenterOffset : -1.0,
   ];
 
-  /// Returns the hint text to show for [state].
-  String hintFor(SupyDocumentFrameState state) => hints.textFor(state);
+  /// Returns the hint text to show for [state], falling back to the English
+  /// default bundle when [hints] is null. Locale-aware resolution happens at
+  /// the point of use in the document view (via the string bundle); this
+  /// convenience is English-only.
+  String hintFor(SupyDocumentFrameState state) =>
+      (hints ?? const SupyDocumentGuidanceHints()).textFor(state);
 
   /// Returns the outline color appropriate for [state].
   ///
   /// `ready`, `capturing`, and `captured` all paint with [readyColor] — the
   /// outline stays green through the whole capture lifecycle, the hint copy
-  /// is what tells the user what's happening.
-  Color colorFor(SupyDocumentFrameState state) {
+  /// is what tells the user what's happening. Returns the raw (nullable) field;
+  /// palette resolution happens at the point of use in the document view.
+  Color? colorFor(SupyDocumentFrameState state) {
     switch (state) {
       case SupyDocumentFrameState.ready:
       case SupyDocumentFrameState.capturing:
@@ -355,6 +374,30 @@ class SupyDocumentGuidanceHints {
     this.moveUp = 'Move up',
     this.moveDown = 'Move down',
   });
+
+  /// Arabic preset. Companion to the default (English) constructor; supplied by
+  /// [SupyScannerStrings.ar] so the document overlay speaks the ambient locale
+  /// when the guidance config leaves `hints` null.
+  const SupyDocumentGuidanceHints.ar()
+    : noDocument = 'جارٍ البحث عن مستند…',
+      tooDark = 'انتقل إلى مكان أكثر إضاءة',
+      tooClose = 'ابتعد قليلاً',
+      tooFar = 'اقترب أكثر',
+      tooSkewed = 'أمسك الكاميرا بشكل مستوٍ',
+      blurry = 'ثبّت يدك',
+      glare = 'قلّل الوهج — أمِل الصفحة',
+      occluded = 'أبعد أصابعك عن الصفحة',
+      handShake = 'ثبّت يديك',
+      edgeClipped = 'أدخِل الصفحة كاملة في الإطار',
+      holdSteady = 'ثبّت…',
+      ready = 'لا تحرّك',
+      capturing = 'جارٍ الالتقاط…',
+      captured = 'تم الالتقاط!',
+      centerDocument = 'وسّط المستند',
+      moveLeft = 'حرّك لليسار',
+      moveRight = 'حرّك لليمين',
+      moveUp = 'حرّك للأعلى',
+      moveDown = 'حرّك للأسفل';
 
   /// Hint shown for [SupyDocumentFrameState.noDocument].
   final String noDocument;

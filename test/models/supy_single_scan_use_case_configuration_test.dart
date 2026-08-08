@@ -4,12 +4,13 @@ import 'package:supy_scanner/supy_scanner.dart';
 
 void main() {
   group('SupySingleScanUseCaseConfiguration', () {
-    test('defaults render confirmation sheet with submit/retry copy', () {
+    test('defaults enable the confirmation sheet with copy left to the '
+        'string bundle', () {
       const cfg = SupySingleScanUseCaseConfiguration();
       expect(cfg.confirmationSheetEnabled, isTrue);
-      expect(cfg.title, 'Barcode detected');
-      expect(cfg.confirmButtonText, 'Submit');
-      expect(cfg.retryButtonText, 'Retry');
+      expect(cfg.title, isNull);
+      expect(cfg.confirmButtonText, isNull);
+      expect(cfg.retryButtonText, isNull);
       expect(cfg.showBarcodeFormat, isTrue);
       expect(cfg.showRawValue, isTrue);
     });

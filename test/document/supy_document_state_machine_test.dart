@@ -311,7 +311,7 @@ void main() {
     });
 
     test('occluded holds at a stability that still trips the entry floor', () {
-      // entry floor: 0.55. A corner at 0.52 still trips entry, so the Dart FSM
+      // entry floor: 0.42. A corner at 0.39 still trips entry, so the Dart FSM
       // keeps occluded latched (no exit-margin un-latch on this path — CXD-IG3).
       const config = SupyDocumentGuidanceConfiguration(
         smoothingAlpha: 1.0,
@@ -321,7 +321,7 @@ void main() {
       sm.tick(_goodFrame(perCornerStability: const [0.95, 0.95, 0.10, 0.95]));
       expect(sm.state, SupyDocumentFrameState.occluded);
       final held = sm.tick(
-        _goodFrame(perCornerStability: const [0.95, 0.95, 0.52, 0.95]),
+        _goodFrame(perCornerStability: const [0.95, 0.95, 0.39, 0.95]),
       );
       expect(held.state, SupyDocumentFrameState.occluded);
     });
@@ -329,7 +329,7 @@ void main() {
     test(
       'handShake holds at a velocity that still trips the entry ceiling',
       () {
-        // entry: 0.020. Velocity 0.021 still trips entry, so the Dart FSM keeps
+        // entry: 0.035. Velocity 0.036 still trips entry, so the Dart FSM keeps
         // handShake latched (no exit-margin un-latch on this path — CXD-IG3).
         const config = SupyDocumentGuidanceConfiguration(
           smoothingAlpha: 1.0,
@@ -338,7 +338,7 @@ void main() {
         final sm = SupyDocumentStateMachine(configuration: config);
         sm.tick(_goodFrame(cornerVelocity: 0.10));
         expect(sm.state, SupyDocumentFrameState.handShake);
-        final held = sm.tick(_goodFrame(cornerVelocity: 0.021));
+        final held = sm.tick(_goodFrame(cornerVelocity: 0.036));
         expect(held.state, SupyDocumentFrameState.handShake);
       },
     );
@@ -409,6 +409,56 @@ void main() {
       expect(sm.state, SupyDocumentFrameState.offCenter);
       final still = sm.tick(_goodFrame(centerOffsetX: 0.20));
       expect(still.state, SupyDocumentFrameState.offCenter);
+    });
+
+    test('hand-held invoice sample reaches ready under relaxed defaults', () {
+      // Regression for "invoice capture never locks onto page": the production
+      // invoice flow routes through the generic default config on both
+      // platforms. A phone held by hand over a sparse, mostly-white invoice
+      // under indoor light produces this metrics profile — every value sits in
+      // the band the pre-tuning gates rejected but a real, capturable frame
+      // occupies. It must resolve to `ready`.
+      SupyDocumentFrameMetrics invoiceSample() => _goodFrame(
+        blurScore: 65, // hand-held softness, but legible
+        quadStability: 0.68, // small sway
+        interiorVariance: 4.0, // low-ink invoice, wide margins
+        cornerVelocity: 0.028, // steady but not tripod-still
+        perCornerStability: const [0.5, 0.5, 0.5, 0.5],
+      );
+
+      // No config argument — exercise the exact defaults the app ships with.
+      const relaxed = SupyDocumentGuidanceConfiguration();
+      final smRelaxed = SupyDocumentStateMachine();
+      var frame = smRelaxed.tick(invoiceSample());
+      for (var i = 0; i < relaxed.readyStableFrames; i++) {
+        frame = smRelaxed.tick(invoiceSample());
+      }
+      expect(
+        frame.state,
+        SupyDocumentFrameState.ready,
+        reason: 'relaxed defaults must let a hand-held invoice lock',
+      );
+
+      // Guard the direction of the fix: the pre-tuning thresholds would have
+      // pinned this same frame to noDocument (interior variance below the old
+      // 5.0 floor), so the outline never even highlighted.
+      const strict = SupyDocumentGuidanceConfiguration(
+        minBlurScore: 80.0,
+        readyStabilityFloor: 0.75,
+        interiorVarianceFloor: 5.0,
+        maxCornerVelocity: 0.020,
+        minPerCornerStability: 0.55,
+      );
+      final smStrict = SupyDocumentStateMachine(configuration: strict);
+      var strictFrame = smStrict.tick(invoiceSample());
+      for (var i = 0; i < strict.readyStableFrames + 2; i++) {
+        strictFrame = smStrict.tick(invoiceSample());
+      }
+      expect(
+        strictFrame.state,
+        isNot(SupyDocumentFrameState.ready),
+        reason: 'the old strict gates never locked this frame — the bug',
+      );
     });
   });
 

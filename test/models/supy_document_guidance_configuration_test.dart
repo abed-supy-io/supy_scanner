@@ -10,7 +10,8 @@ void main() {
       expect(cfg.maxCoverageRatio, 0.90);
       expect(cfg.maxTiltDegrees, 20.0);
       expect(cfg.minMeanLuma, 60.0);
-      expect(cfg.minBlurScore, 80.0);
+      // Relaxed for hand-held capture — see the const constructor rationale.
+      expect(cfg.minBlurScore, 55.0);
       expect(cfg.readyStableFrames, 5);
       expect(cfg.lostDocumentGraceFrames, 3);
       expect(cfg.exitMargin, 0.10);
@@ -20,20 +21,20 @@ void main() {
 
     test('exposes holdSteady defaults', () {
       const c = SupyDocumentGuidanceConfiguration();
-      expect(c.readyStabilityFloor, 0.75);
-      expect(c.interiorVarianceFloor, 5.0);
+      expect(c.readyStabilityFloor, 0.60);
+      expect(c.interiorVarianceFloor, 3.0);
       expect(c.holdSteadyFrames, 6);
       expect(c.autoCapture, isTrue);
       expect(c.autoCaptureDelay, const Duration(milliseconds: 600));
       expect(c.allowUnrectifiedFallback, isTrue);
     });
 
-    test('palette defaults: red for not-ready, green for ready', () {
+    test('color fields default to null so the palette resolves them', () {
       const cfg = SupyDocumentGuidanceConfiguration();
-      expect(cfg.notReadyColor, const Color(0xFFE5484D));
-      expect(cfg.readyColor, const Color(0xFF30A46C));
-      expect(cfg.warningColor, const Color(0xFFFF4D4D));
-      expect(cfg.scrimColor.a, lessThan(1.0));
+      expect(cfg.notReadyColor, isNull);
+      expect(cfg.readyColor, isNull);
+      expect(cfg.warningColor, isNull);
+      expect(cfg.scrimColor, isNull);
     });
   });
 

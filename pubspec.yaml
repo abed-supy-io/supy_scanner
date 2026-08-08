@@ -11,6 +11,9 @@ dependencies:
   flutter:
     sdk: flutter
   meta: ^1.15.0
+  # Offline Ed25519 verification of the commercial license token (Phase PAID,
+  # 2026-08-07). Pure-Dart, no network — keeps enforcement out of the scan path.
+  cryptography: ^2.7.0
 
 dev_dependencies:
   flutter_test:

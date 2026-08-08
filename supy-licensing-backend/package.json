@@ -1,0 +1,20 @@
+{
+  "name": "supy-licensing-backend",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "Billing + offline-license issuance backend for the paid supy_scanner library. Stripe checkout -> webhook -> Ed25519-signed license token.",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "keygen": "node scripts/generate-keys.mjs",
+    "test": "node --test"
+  },
+  "dependencies": {
+    "express": "^4.19.2",
+    "stripe": "^16.8.0"
+  }
+}

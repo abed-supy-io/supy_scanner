@@ -25,6 +25,7 @@ class SupyDocumentFrameMetrics {
     this.centerOffsetY = 0.0,
     this.perCornerStability = const <double>[],
     this.liveQualityScore,
+    this.sourceAspectRatio,
   });
 
   /// Parses a raw map from the native event channel.
@@ -63,6 +64,9 @@ class SupyDocumentFrameMetrics {
               ? List<double>.unmodifiable(perCorner)
               : const <double>[],
       liveQualityScore: (map['liveQualityScore'] as num?)?.toDouble(),
+      sourceAspectRatio: _positiveOrNull(
+        (map['sourceAspectRatio'] as num?)?.toDouble(),
+      ),
     );
   }
 
@@ -136,6 +140,16 @@ class SupyDocumentFrameMetrics {
   /// side hasn't populated it.
   final double? liveQualityScore;
 
+  /// Aspect ratio (width / height) of the camera frame the [quad] was measured
+  /// against, in the same orientation the preview renders. `null` when the
+  /// native side didn't report it (older payloads, Android — which maps 1:1).
+  ///
+  /// The preview layer fills its container with `BoxFit.cover` semantics, so
+  /// when this differs from the view's own aspect ratio the frame is cropped.
+  /// Overlays use this to reproduce the crop and keep the drawn quad glued to
+  /// the real document edges. See `SupyDocumentScannerView`'s guidance painter.
+  final double? sourceAspectRatio;
+
   /// `true` when the frame contains a usable document quad.
   bool get hasDocument => quad.length == 4;
 
@@ -156,7 +170,8 @@ class SupyDocumentFrameMetrics {
           other.centerOffsetX == centerOffsetX &&
           other.centerOffsetY == centerOffsetY &&
           _doubleListEquals(other.perCornerStability, perCornerStability) &&
-          other.liveQualityScore == liveQualityScore;
+          other.liveQualityScore == liveQualityScore &&
+          other.sourceAspectRatio == sourceAspectRatio;
 
   @override
   int get hashCode => Object.hash(
@@ -174,6 +189,7 @@ class SupyDocumentFrameMetrics {
     centerOffsetY,
     Object.hashAll(perCornerStability),
     liveQualityScore,
+    sourceAspectRatio,
   );
 
   @override
@@ -191,7 +207,17 @@ class SupyDocumentFrameMetrics {
       'centerOff: (${centerOffsetX.toStringAsFixed(2)}, '
       '${centerOffsetY.toStringAsFixed(2)}), '
       'perCorner: ${perCornerStability.length}, '
-      'liveQ: ${liveQualityScore?.toStringAsFixed(2) ?? '-'})';
+      'liveQ: ${liveQualityScore?.toStringAsFixed(2) ?? '-'}, '
+      'srcAspect: ${sourceAspectRatio?.toStringAsFixed(3) ?? '-'})';
+}
+
+/// Returns [value] when it is a usable positive, finite ratio; `null`
+/// otherwise. A `0` or negative aspect (the native "unknown" sentinel) means
+/// "no crop correction available" — collapse it to `null` so overlays fall
+/// back to identity mapping.
+double? _positiveOrNull(double? value) {
+  if (value == null || !value.isFinite || value <= 0.0) return null;
+  return value;
 }
 
 bool _quadEquals(List<Offset> a, List<Offset> b) {

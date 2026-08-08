@@ -1,7 +1,14 @@
 import Flutter
+import ImageIO
 import PDFKit
 import UIKit
 import VisionKit
+
+// SPM builds the Obj-C bridge as a separate module; CocoaPods folds it into
+// this umbrella module.
+#if SWIFT_PACKAGE
+import supy_scanner_objc
+#endif
 
 /// Per-page encoding for the document scanner. Mirrors the Dart
 /// `SupyDocumentOutputFormat` enum names exactly.
@@ -9,6 +16,11 @@ enum SupyDocumentOutputFormat: String {
   case jpg
   case png
   case pdf
+  /// v1.2 Phase DC8: JPG pages + a multi-page TIFF on `tiffUri`.
+  case tiff
+  /// v1.2 Phase DC8: JPG pages + a PDF carrying an invisible, selectable OCR
+  /// text layer on `pdfUri`.
+  case searchablePdf
 }
 
 /// Presents `VNDocumentCameraViewController` over the host app's root view
@@ -108,6 +120,17 @@ final class DocumentScannerPresenter: NSObject, VNDocumentCameraViewControllerDe
     // through DocumentEnhancer to recover paper tone and lift text contrast.
     // Callers can pass `filter: "original"` to keep VisionKit's output as-is.
     let filter = SupyDocumentFilter.parse(args?["filter"] as? String)
+    // Phase DPX: the full document pipeline (detect → perspective-correct →
+    // crop → deskew → illumination/whitening/contrast → resize). VisionKit has
+    // no preview seed, so the processor detects the document on the still and
+    // crops it — recovering the tight, Full-HD-class scan its stock auto-crop
+    // misses on white-page-on-light-surface captures. `filter` maps into the
+    // enhancement mode; per-page `processing` overrides come from the wire.
+    let processing = DocumentProcessingOptions.parse(
+      args,
+      fallbackFilter: filter,
+      fallbackQuality: jpegQuality
+    )
     // Legacy enhanceMode is still honored for the native C-core pipeline so
     // callers that opted into it before this PR don't regress.
     let enhanceMode = Self.parseEnhanceMode(args?["enhanceMode"] as? String)
@@ -117,8 +140,8 @@ final class DocumentScannerPresenter: NSObject, VNDocumentCameraViewControllerDe
 
     ioQueue.async { [weak self] in
       guard let self = self else { return }
-      let filtered = self.applyFilter(pages: images, filter: filter)
-      let enhanced = self.enhance(pages: filtered, mode: enhanceMode)
+      let processed = images.map { DocumentProcessor.process($0, options: processing) }
+      let enhanced = self.enhance(pages: processed, mode: enhanceMode)
       let persisted = self.persist(
         pages: enhanced,
         jpegQuality: jpegQuality,
@@ -135,20 +158,51 @@ final class DocumentScannerPresenter: NSObject, VNDocumentCameraViewControllerDe
         locale: locale
       ) { [weak self] accepted in
         guard let self = self else { return }
-        // PDF assembly piggybacks on the JPG/PNG persistence pass — VisionKit
-        // doesn't expose a native PDF result, so we build one with PDFKit
-        // *after* the quality gate so discarded pages don't enter the PDF.
-        let pdfUri: String? = outputFormat == .pdf
-          ? self.assemblePdf(from: accepted.map { $0.image })
-          : nil
-        self.ocrRunner.run(pages: accepted, languages: languages) { [weak self] entries, ocrText in
-          var payload: [String: Any] = [
-            "pages": entries,
-            "ocrText": ocrText,
-            "resolvedBackend": "gms",
-          ]
-          if let pdfUri = pdfUri { payload["pdfUri"] = pdfUri }
-          self?.finish(success: payload)
+        // Export assembly piggybacks on the JPG/PNG persistence pass — VisionKit
+        // exposes no native PDF/TIFF result, so we build them *after* the
+        // quality gate so discarded pages don't enter the artifact.
+        switch outputFormat {
+        case .searchablePdf:
+          // One OCR pass yields both `ocrText` and the word boxes for the
+          // invisible text layer — no second recognition pass.
+          self.ocrRunner.runWithWords(pages: accepted, languages: languages) {
+            [weak self] entries, ocrText, wordsPerPage in
+            guard let self = self else { return }
+            let pageWords = zip(accepted.map { $0.image }, wordsPerPage)
+              .map { (image: $0.0, words: $0.1) }
+            let pdfUri = self.assembleSearchablePdf(from: pageWords)
+            var payload: [String: Any] = [
+              "pages": entries,
+              "ocrText": ocrText,
+              "resolvedBackend": "gms",
+            ]
+            if let pdfUri = pdfUri { payload["pdfUri"] = pdfUri }
+            self.finish(success: payload)
+          }
+        case .tiff:
+          let tiffUri = self.assembleTiff(from: accepted.map { $0.image })
+          self.ocrRunner.run(pages: accepted, languages: languages) { [weak self] entries, ocrText in
+            var payload: [String: Any] = [
+              "pages": entries,
+              "ocrText": ocrText,
+              "resolvedBackend": "gms",
+            ]
+            if let tiffUri = tiffUri { payload["tiffUri"] = tiffUri }
+            self?.finish(success: payload)
+          }
+        default:
+          let pdfUri: String? = outputFormat == .pdf
+            ? self.assemblePdf(from: accepted.map { $0.image })
+            : nil
+          self.ocrRunner.run(pages: accepted, languages: languages) { [weak self] entries, ocrText in
+            var payload: [String: Any] = [
+              "pages": entries,
+              "ocrText": ocrText,
+              "resolvedBackend": "gms",
+            ]
+            if let pdfUri = pdfUri { payload["pdfUri"] = pdfUri }
+            self?.finish(success: payload)
+          }
         }
       }
     }
@@ -186,14 +240,6 @@ final class DocumentScannerPresenter: NSObject, VNDocumentCameraViewControllerDe
   }
 
   // MARK: - Helpers
-
-  /// Re-processes VisionKit's output through DocumentEnhancer. This is the
-  /// stage that produces Scanbot-class output — paper warmth preserved, text
-  /// dark and crisp. No-op for `.original`.
-  private func applyFilter(pages: [UIImage], filter: SupyDocumentFilter) -> [UIImage] {
-    if filter == .original { return pages }
-    return pages.map { DocumentEnhancer.enhance($0, filter: filter) }
-  }
 
   /// Runs each page through the native enhance pipeline. Pages whose
   /// enhancement fails fall back to the original `UIImage` so we never lose a
@@ -243,7 +289,9 @@ final class DocumentScannerPresenter: NSObject, VNDocumentCameraViewControllerDe
         switch format {
         case .png:
           return (image.pngData(), "png")
-        case .jpg, .pdf:
+        case .jpg, .pdf, .tiff, .searchablePdf:
+          // tiff/searchablePdf still surface per-page JPEGs on `pages[].uri`;
+          // the TIFF / searchable PDF is assembled separately from these images.
           return (image.jpegData(compressionQuality: quality), "jpg")
         }
       }()
@@ -377,6 +425,94 @@ final class DocumentScannerPresenter: NSObject, VNDocumentCameraViewControllerDe
     } catch {
       return nil
     }
+  }
+
+  /// Assembles `images` into a single multi-page TIFF via ImageIO's built-in
+  /// encoder (`public.tiff`) and writes it to `NSTemporaryDirectory()`. Returns
+  /// the file URL string, or nil on failure. v1.2 Phase DC8.
+  private func assembleTiff(from images: [UIImage]) -> String? {
+    let cgImages = images.compactMap { Self.orientedCGImage($0) }
+    guard !cgImages.isEmpty else { return nil }
+    let stamp = ProcessInfo.processInfo.globallyUniqueString
+    let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+      .appendingPathComponent("supy_scan_\(stamp).tiff")
+    guard
+      let destination = CGImageDestinationCreateWithURL(
+        url as CFURL,
+        "public.tiff" as CFString,
+        cgImages.count,
+        nil
+      )
+    else { return nil }
+    for cgImage in cgImages {
+      CGImageDestinationAddImage(destination, cgImage, nil)
+    }
+    guard CGImageDestinationFinalize(destination) else { return nil }
+    return url.absoluteString
+  }
+
+  /// Assembles a searchable PDF: each page's image is drawn, then every
+  /// recognized word is stamped on top in `UIColor.clear` — the glyphs enter
+  /// the PDF content stream (selectable and searchable) but render invisibly,
+  /// mirroring the Android `alpha = 0` text layer. Word boxes are normalized
+  /// `[0..1]`, top-left origin. v1.2 Phase DC8.
+  private func assembleSearchablePdf(
+    from pages: [(image: UIImage, words: [SupyOcrWord])]
+  ) -> String? {
+    guard !pages.isEmpty else { return nil }
+    let stamp = ProcessInfo.processInfo.globallyUniqueString
+    let url = URL(fileURLWithPath: NSTemporaryDirectory(), isDirectory: true)
+      .appendingPathComponent("supy_scan_\(stamp).pdf")
+
+    // The renderer needs an initial bounds; each page overrides it via
+    // `beginPage(withBounds:)` so mixed page sizes stay correct.
+    let first = pages[0].image
+    let firstBounds = CGRect(origin: .zero, size: first.size)
+    let renderer = UIGraphicsPDFRenderer(bounds: firstBounds)
+    do {
+      try renderer.writePDF(to: url) { context in
+        for page in pages {
+          let size = page.image.size
+          let bounds = CGRect(origin: .zero, size: size)
+          context.beginPage(withBounds: bounds, pageInfo: [:])
+          page.image.draw(in: bounds)
+          for word in page.words where !word.text.isEmpty {
+            let rect = CGRect(
+              x: word.left * size.width,
+              y: word.top * size.height,
+              width: word.width * size.width,
+              height: word.height * size.height
+            )
+            guard rect.width > 0, rect.height > 0 else { continue }
+            let font = UIFont.systemFont(ofSize: max(1, rect.height))
+            let attributes: [NSAttributedString.Key: Any] = [
+              .font: font,
+              .foregroundColor: UIColor.clear,
+            ]
+            (word.text as NSString).draw(in: rect, withAttributes: attributes)
+          }
+        }
+      }
+      return url.absoluteString
+    } catch {
+      return nil
+    }
+  }
+
+  /// Returns a `CGImage` with the image's orientation baked in. ImageIO's TIFF
+  /// encoder ignores `UIImage.imageOrientation`, so a non-`.up` page would be
+  /// written rotated; redraw it upright first. VisionKit pages are normally
+  /// `.up`, so this is usually the fast path.
+  private static func orientedCGImage(_ image: UIImage) -> CGImage? {
+    if image.imageOrientation == .up, let cg = image.cgImage { return cg }
+    let format = UIGraphicsImageRendererFormat()
+    format.scale = image.scale
+    format.opaque = true
+    let renderer = UIGraphicsImageRenderer(size: image.size, format: format)
+    let redrawn = renderer.image { _ in
+      image.draw(in: CGRect(origin: .zero, size: image.size))
+    }
+    return redrawn.cgImage
   }
 
   private func finish(success payload: [String: Any]) {

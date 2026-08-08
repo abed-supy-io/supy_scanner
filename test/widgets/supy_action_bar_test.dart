@@ -186,4 +186,63 @@ void main() {
     // Post-tap: controller.zoom=2.0 → label '2x' replaces icon.
     expect(find.text('2x'), findsOneWidget);
   });
+
+  testWidgets('each control exposes an accessibility button label', (
+    tester,
+  ) async {
+    final controller = SupyBarcodeScannerController();
+    await tester.pumpWidget(
+      host(config: const SupyActionBarConfiguration(), controller: controller),
+    );
+
+    for (final label in const [
+      'Flash',
+      'Zoom',
+      'Flip camera',
+      'Close-up focus',
+    ]) {
+      expect(
+        tester.getSemantics(find.bySemanticsLabel(label)),
+        isSemantics(isButton: true, label: label),
+        reason: '"$label" should be a semantics button',
+      );
+    }
+  });
+
+  testWidgets('flash button reports its toggled state to screen readers', (
+    tester,
+  ) async {
+    final controller = SupyBarcodeScannerController();
+    const channel = MethodChannel('test/action_bar_flash_toggle');
+    TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+        .setMockMethodCallHandler(channel, (call) async {
+          if (call.method == 'setTorch') {
+            return <String, Object?>{'on': true};
+          }
+          return null;
+        });
+    controller.attach(channel);
+    addTearDown(() {
+      controller.detach();
+      TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger
+          .setMockMethodCallHandler(channel, null);
+    });
+
+    await tester.pumpWidget(
+      host(config: const SupyActionBarConfiguration(), controller: controller),
+    );
+    // Torch off → not toggled.
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Flash')),
+      isSemantics(isToggled: false),
+    );
+
+    await tester.tap(find.bySemanticsLabel('Flash'));
+    await tester.pumpAndSettle();
+    // Torch on → toggled.
+    expect(
+      tester.getSemantics(find.bySemanticsLabel('Flash')),
+      isSemantics(isToggled: true),
+    );
+  });
 }

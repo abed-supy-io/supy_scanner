@@ -8,6 +8,8 @@ import '../channel/supy_event_channel.dart';
 import '../models/supy_barcode.dart';
 import '../models/supy_scan_error.dart';
 import '../models/supy_scan_options.dart';
+import '../models/ui/supy_scanner_palette.dart';
+import '../models/ui/supy_scanner_strings.dart';
 import 'supy_barcode_scanner_controller.dart';
 
 /// View-type identifier registered by the native PlatformView factories.
@@ -34,6 +36,8 @@ class SupyBarcodeScannerView extends StatefulWidget {
     this.showFinder = true,
     this.header,
     this.footer,
+    this.palette = const SupyScannerPalette.supyDark(),
+    this.strings = const SupyScannerStrings.en(),
   });
 
   /// Scanner configuration (active formats, scan window, etc.).
@@ -65,6 +69,12 @@ class SupyBarcodeScannerView extends StatefulWidget {
 
   /// Optional widget placed below the camera (e.g., instructions).
   final Widget? footer;
+
+  /// Palette used to resolve the finder overlay and placeholder colors.
+  final SupyScannerPalette palette;
+
+  /// String bundle used to resolve the unsupported-platform placeholder text.
+  final SupyScannerStrings strings;
 
   @override
   State<SupyBarcodeScannerView> createState() => _SupyBarcodeScannerViewState();
@@ -110,7 +120,11 @@ class _SupyBarcodeScannerViewState extends State<SupyBarcodeScannerView> {
       children: [
         preview,
         if (widget.showFinder)
-          const Positioned.fill(child: IgnorePointer(child: _FinderOverlay())),
+          Positioned.fill(
+            child: IgnorePointer(
+              child: _FinderOverlay(palette: widget.palette),
+            ),
+          ),
         if (widget.header != null)
           Positioned(top: 0, left: 0, right: 0, child: widget.header!),
         if (widget.footer != null)
@@ -141,26 +155,33 @@ class _SupyBarcodeScannerViewState extends State<SupyBarcodeScannerView> {
       case TargetPlatform.linux:
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
-        return const _UnsupportedPlatformPlaceholder();
+        return _UnsupportedPlatformPlaceholder(
+          palette: widget.palette,
+          message: widget.strings.unsupportedPlatform,
+        );
     }
   }
 }
 
 class _FinderOverlay extends StatelessWidget {
-  const _FinderOverlay();
+  const _FinderOverlay({required this.palette});
+
+  final SupyScannerPalette palette;
 
   @override
   Widget build(BuildContext context) {
     return CustomPaint(
-      painter: _FinderPainter(),
+      painter: _FinderPainter(palette: palette),
       child: const SizedBox.expand(),
     );
   }
 }
 
 class _FinderPainter extends CustomPainter {
-  static const Color _scrim = Color(0x99000000);
-  static const Color _border = Color(0xFF6448C3);
+  _FinderPainter({required this.palette});
+
+  final SupyScannerPalette palette;
+
   static const double _cornerRadius = 16;
   static const double _strokeWidth = 3;
   static const double _widthRatio = 0.78;
@@ -181,37 +202,43 @@ class _FinderPainter extends CustomPainter {
     );
 
     canvas.saveLayer(Offset.zero & size, Paint());
-    canvas.drawRect(Offset.zero & size, Paint()..color = _scrim);
+    canvas.drawRect(Offset.zero & size, Paint()..color = palette.modalOverlay);
     canvas.drawRRect(rrect, Paint()..blendMode = BlendMode.clear);
     canvas.restore();
 
     canvas.drawRRect(
       rrect,
       Paint()
-        ..color = _border
+        ..color = palette.primary
         ..style = PaintingStyle.stroke
         ..strokeWidth = _strokeWidth,
     );
   }
 
   @override
-  bool shouldRepaint(covariant _FinderPainter oldDelegate) => false;
+  bool shouldRepaint(covariant _FinderPainter oldDelegate) =>
+      oldDelegate.palette != palette;
 }
 
 class _UnsupportedPlatformPlaceholder extends StatelessWidget {
-  const _UnsupportedPlatformPlaceholder();
+  const _UnsupportedPlatformPlaceholder({
+    required this.palette,
+    required this.message,
+  });
+
+  final SupyScannerPalette palette;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: Colors.black,
+      color: palette.surface,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'SupyBarcodeScannerView is not yet supported on '
-            '${defaultTargetPlatform.name}.',
-            style: const TextStyle(color: Colors.white),
+            message,
+            style: TextStyle(color: palette.onSurface),
             textAlign: TextAlign.center,
           ),
         ),

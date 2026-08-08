@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Supy Scanner — The Scanner SDK for your enterprise app</title>
+  <meta name="description" content="First-party, native-backed barcode & document scanning SDK for Flutter. On-device, no network in the scan path. Drop-in compatible. Simple per-app licensing." />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="scroll-progress" id="scrollProgress" aria-hidden="true"></div>
+  <!-- ============ NAV ============ -->
+  <header class="nav" id="nav">
+    <div class="container nav__inner">
+      <a href="#" class="brand" aria-label="Supy Scanner home">
+        <span class="brand__mark">
+          <svg viewBox="0 0 24 24" width="26" height="26" aria-hidden="true">
+            <path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            <path d="M3 12h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+          </svg>
+        </span>
+        <span class="brand__name">Supy<span>Scanner</span></span>
+      </a>
+
+      <nav class="nav__links" aria-label="Primary">
+        <a href="#products">Products</a>
+        <a href="#features">Features</a>
+        <a href="#symbologies">Barcodes</a>
+        <a href="#usecases">Use cases</a>
+        <a href="#compare">Compare</a>
+        <a href="#pricing">Pricing</a>
+        <a href="#faq">FAQ</a>
+      </nav>
+
+      <div class="nav__cta">
+        <a href="#docs" class="btn btn--ghost">Docs</a>
+        <a href="#pricing" class="btn btn--primary">Get started</a>
+      </div>
+
+      <button class="nav__burger" id="burger" aria-label="Menu" aria-expanded="false">
+        <span></span><span></span><span></span>
+      </button>
+    </div>
+  </header>
+
+  <!-- ============ HERO ============ -->
+  <section class="hero" id="hero">
+    <div class="hero__glow" data-parallax="0.05"></div>
+    <div class="hero__glow hero__glow--b" data-parallax="-0.08"></div>
+    <div class="hero__grid-lines" aria-hidden="true"></div>
+    <div class="container hero__grid">
+      <div class="hero__copy">
+        <span class="pill"><svg class="pill__ic" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true"><path d="M12 2l1.9 6.1L20 10l-6.1 1.9L12 18l-1.9-6.1L4 10l6.1-1.9L12 2z"/></svg>Native-backed · On-device · Fair per-app pricing</span>
+        <h1>Fast, reliable<br /><span class="rotator" aria-live="polite"><span class="rotator__word grad is-active">Barcode Scanning</span><span class="rotator__word grad">Document Scanning</span><span class="rotator__word grad">Data Capture</span></span><br />for your Flutter app</h1>
+        <p class="hero__sub">
+          Fast, accurate barcode &amp; document scanning for Flutter — powered by
+          Apple Vision and Google ML Kit. Drop-in compatible, 100% offline,
+          simple per-app licensing.
+        </p>
+        <div class="hero__actions">
+          <a href="#pricing" class="btn btn--primary btn--lg">See pricing</a>
+          <a href="#products" class="btn btn--outline btn--lg">Explore features →</a>
+        </div>
+        <ul class="hero__ticks">
+          <li>✓ iOS 16+ &amp; Android 21+</li>
+          <li>✓ No cloud calls</li>
+          <li>✓ 13 symbologies</li>
+        </ul>
+      </div>
+
+      <div class="hero__device">
+        <div class="phone" data-parallax="0.14" data-parallax-tilt>
+          <div class="phone__notch"></div>
+          <div class="phone__screen">
+            <div class="scan-frame">
+              <span class="corner tl"></span><span class="corner tr"></span>
+              <span class="corner bl"></span><span class="corner br"></span>
+              <div class="scan-line"></div>
+              <div class="barcode">
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span><span></span>
+                <span></span><span></span><span></span><span></span>
+              </div>
+            </div>
+            <div class="scan-toast">
+              <span class="scan-toast__dot"></span>
+              <div>
+                <strong>EAN-13 detected</strong>
+                <code>4006381333931</code>
+              </div>
+            </div>
+          </div>
+        </div>
+        <div class="float-card float-card--1" data-parallax="0.26">
+          <b>99.9%</b><span>read accuracy</span>
+        </div>
+        <div class="float-card float-card--2" data-parallax="0.34">
+          <b>&lt;60ms</b><span>time-to-scan</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- trust bar -->
+    <div class="container trust">
+      <p>Built to replace paid SDKs across the Supy retailer fleet</p>
+      <div class="trust__logos">
+        <div class="marquee__track">
+          <span>AVFoundation</span><span>Apple Vision</span><span>Google ML Kit</span>
+          <span>Flutter</span><span>Kotlin</span><span>Swift</span>
+          <span aria-hidden="true">AVFoundation</span><span aria-hidden="true">Apple Vision</span><span aria-hidden="true">Google ML Kit</span>
+          <span aria-hidden="true">Flutter</span><span aria-hidden="true">Kotlin</span><span aria-hidden="true">Swift</span>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRODUCTS ============ -->
+  <section class="section" id="products">
+    <div class="container">
+      <div class="section__head">
+        <span class="eyebrow">Products</span>
+        <h2>Three scanners. One SDK.</h2>
+        <p>Barcodes, documents, and structured data — captured on-device and handed back to the exact call sites you already ship.</p>
+      </div>
+
+      <div class="product-grid">
+        <article class="product-card">
+          <div class="product-card__icon">
+            <svg viewBox="0 0 24 24" width="28" height="28"><path d="M3 5h2v14H3zM7 5h1v14H7zM10 5h2v14h-2zM14 5h1v14h-1zM17 5h1v14h-1zM20 5h1v14h-1z" fill="currentColor"/></svg>
+          </div>
+          <h3>Barcode Scanner</h3>
+          <p>Real-time 1D &amp; 2D barcode detection with an embedded camera preview or full-screen UI. Single, batch, and multi-scan modes out of the box.</p>
+          <ul class="ticks">
+            <li>13 supported symbologies</li>
+            <li>Embedded &amp; full-screen views</li>
+            <li>AR overlays on live results</li>
+          </ul>
+          <a href="#symbologies" class="link-arrow">See symbologies →</a>
+        </article>
+
+        <article class="product-card product-card--featured">
+          <div class="product-card__icon">
+            <svg viewBox="0 0 24 24" width="28" height="28"><path d="M6 2h9l5 5v13a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2z" fill="none" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/><path d="M14 2v6h6M8 13h8M8 17h6" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <span class="product-card__tag">What most teams start with</span>
+          <h3>Document Scanner</h3>
+          <p>Auto edge-detection, perspective correction and multi-page capture with live guidance and a countdown auto-shutter — plus on-device OCR text.</p>
+          <ul class="ticks">
+            <li>Auto-crop &amp; perspective fix</li>
+            <li>Filters &amp; enhance modes</li>
+            <li>On-device OCR (no cloud)</li>
+          </ul>
+          <a href="#features" class="link-arrow">How it works →</a>
+        </article>
+
+        <article class="product-card">
+          <div class="product-card__icon">
+            <svg viewBox="0 0 24 24" width="28" height="28"><path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2M3 12h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/></svg>
+          </div>
+          <h3>Data Capture</h3>
+          <p>Purpose-built use cases — Single Scan, Multiple Scan, and Find &amp; Pick — turn raw detections into structured picking &amp; counting workflows.</p>
+          <ul class="ticks">
+            <li>Find &amp; Pick against a list</li>
+            <li>Multi-scan accumulator</li>
+            <li>Confirmation sheets</li>
+          </ul>
+          <a href="#usecases" class="link-arrow">See use cases →</a>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ DOCUMENT SCANNER DEMO ============ -->
+  <section class="section" id="doc-demo">
+    <div class="container">
+      <div class="showcase">
+        <div class="showcase__copy">
+          <span class="eyebrow">Document Scanner</span>
+          <h2>Watch a page get captured</h2>
+          <p>Point at a page and the scanner finds the edges, straightens the perspective, cleans it up and pulls the text — every step on the device, no cloud round-trip.</p>
+          <ol class="scan-steps" id="scanSteps">
+            <li class="scan-step">
+              <span class="scan-step__no">1</span>
+              <div><strong>Detect edges</strong><em>Live edge-finding locks onto the document.</em></div>
+            </li>
+            <li class="scan-step">
+              <span class="scan-step__no">2</span>
+              <div><strong>Auto-capture</strong><em>The shutter fires once the frame holds steady.</em></div>
+            </li>
+            <li class="scan-step">
+              <span class="scan-step__no">3</span>
+              <div><strong>Crop &amp; de-skew</strong><em>Perspective correction flattens the page.</em></div>
+            </li>
+            <li class="scan-step">
+              <span class="scan-step__no">4</span>
+              <div><strong>Enhance &amp; OCR</strong><em>Clean-up runs and text is read offline.</em></div>
+            </li>
+          </ol>
+        </div>
+
+        <div class="showcase__device">
+          <div class="phone phone--doc" id="docScanner" data-stage="0">
+            <div class="phone__notch"></div>
+            <div class="phone__screen">
+              <div class="doc-scene">
+                <div class="doc-paper">
+                  <span class="doc-title"></span>
+                  <span class="doc-line"></span>
+                  <span class="doc-line"></span>
+                  <span class="doc-line"></span>
+                  <span class="doc-line"></span>
+                  <span class="doc-line"></span>
+                  <span class="doc-line"></span>
+                </div>
+                <div class="doc-detect">
+                  <span class="dcorner tl"></span><span class="dcorner tr"></span>
+                  <span class="dcorner bl"></span><span class="dcorner br"></span>
+                </div>
+                <div class="doc-sweep"></div>
+                <div class="doc-flash"></div>
+              </div>
+              <div class="doc-badge"><span class="doc-badge__dot"></span>Page 1</div>
+              <div class="doc-toast">
+                <span class="scan-toast__dot"></span>
+                <div><strong>Page captured</strong><span>Cropped · enhanced · text extracted</span></div>
+              </div>
+            </div>
+          </div>
+          <div class="float-card float-card--1"><b>4</b><span>pages / session</span></div>
+          <div class="float-card float-card--2"><b>OCR</b><span>fully on-device</span></div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FEATURES ============ -->
+  <section class="section section--tint" id="features">
+    <div class="container">
+      <div class="section__head">
+        <span class="eyebrow">Capabilities</span>
+        <h2>Built for accuracy, speed &amp; privacy</h2>
+        <p>Every scan runs on the device. No network calls in the scanning path — ever.</p>
+      </div>
+
+      <div class="feature-grid">
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/></svg></div>
+          <h4>Real-time detection</h4>
+          <p>Sub-60ms recognition on the analyzer thread — the main thread never blocks.</p>
+        </div>
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10"/><path d="m9 12 2 2 4-4"/></svg></div>
+          <h4>100% on-device</h4>
+          <p>Apple Vision &amp; ML Kit run locally. Nothing leaves the phone.</p>
+        </div>
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 2v14a2 2 0 0 0 2 2h14"/><path d="M18 22V8a2 2 0 0 0-2-2H2"/></svg></div>
+          <h4>Auto edge-detection</h4>
+          <p>Documents are found, cropped and de-skewed automatically with live nudges.</p>
+        </div>
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8"/><path d="M16 17H8"/><path d="M10 9H8"/></svg></div>
+          <h4>On-device OCR</h4>
+          <p>Extract text from scanned pages without a single cloud round-trip.</p>
+        </div>
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 7V5a2 2 0 0 1 2-2h2"/><path d="M17 3h2a2 2 0 0 1 2 2v2"/><path d="M21 17v2a2 2 0 0 1-2 2h-2"/><path d="M7 21H5a2 2 0 0 1-2-2v-2"/><path d="M7 12h10"/></svg></div>
+          <h4>AR overlays</h4>
+          <p>Highlight and label live barcodes directly over the camera feed.</p>
+        </div>
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><rect width="14" height="14" x="8" y="8" rx="2" ry="2"/><path d="M4 16c-1.1 0-2-.9-2-2V4c0-1.1.9-2 2-2h10c1.1 0 2 .9 2 2"/></svg></div>
+          <h4>Multi-page capture</h4>
+          <p>Batch pages into a single result with a countdown auto-shutter.</p>
+        </div>
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><line x1="21" x2="14" y1="4" y2="4"/><line x1="10" x2="3" y1="4" y2="4"/><line x1="21" x2="12" y1="12" y2="12"/><line x1="8" x2="3" y1="12" y2="12"/><line x1="21" x2="16" y1="20" y2="20"/><line x1="12" x2="3" y1="20" y2="20"/><line x1="14" x2="14" y1="2" y2="6"/><line x1="8" x2="8" y1="10" y2="14"/><line x1="16" x2="16" y1="18" y2="22"/></svg></div>
+          <h4>Filters &amp; enhance</h4>
+          <p>Grayscale, color and document-clean enhance modes at capture time.</p>
+        </div>
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M3 21v-5h5"/></svg></div>
+          <h4>Drop-in compatible</h4>
+          <p>Same call sites as the SDK it replaces — cutover is an import change.</p>
+        </div>
+        <div class="feature">
+          <div class="feature__ic"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><circle cx="12" cy="12" r="10"/><path d="M12 2a14.5 14.5 0 0 0 0 20 14.5 14.5 0 0 0 0-20"/><path d="M2 12h20"/></svg></div>
+          <h4>Localized &amp; RTL</h4>
+          <p>English &amp; Arabic strings, right-to-left aware camera UI.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ SYMBOLOGIES ============ -->
+  <section class="section" id="symbologies">
+    <div class="container">
+      <div class="section__head">
+        <span class="eyebrow">Barcode Scanner</span>
+        <h2>13 symbologies, one enum</h2>
+        <p>Enable exactly the formats you need — or turn them all on with a single flag.</p>
+      </div>
+
+      <div class="chips">
+        <span class="chip chip--2d">QR Code</span>
+        <span class="chip">EAN-13</span>
+        <span class="chip">EAN-8</span>
+        <span class="chip">UPC-A</span>
+        <span class="chip">UPC-E</span>
+        <span class="chip">Code 39</span>
+        <span class="chip">Code 93</span>
+        <span class="chip">Code 128</span>
+        <span class="chip">ITF</span>
+        <span class="chip chip--2d">PDF417</span>
+        <span class="chip chip--2d">Data Matrix</span>
+        <span class="chip chip--2d">Aztec</span>
+        <span class="chip">Codabar</span>
+      </div>
+
+      <div class="legend">
+        <span><i class="dot dot--1d"></i> 1D linear</span>
+        <span><i class="dot dot--2d"></i> 2D matrix</span>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ USE CASES ============ -->
+  <section class="section section--dark" id="usecases">
+    <div class="container">
+      <div class="section__head section__head--light">
+        <span class="eyebrow">Data Capture Use Cases</span>
+        <h2>From detection to workflow</h2>
+        <p>Ready-made capture flows so you ship features, not camera plumbing.</p>
+      </div>
+
+      <div class="usecase-grid">
+        <article class="usecase">
+          <div class="usecase__num">01</div>
+          <h3>Single Scan</h3>
+          <p>Scan one code, confirm it in a bottom sheet, and hand it back. Perfect for quick lookups.</p>
+        </article>
+        <article class="usecase">
+          <div class="usecase__num">02</div>
+          <h3>Multiple Scan</h3>
+          <p>Accumulate many codes in one session with a live running list and de-duplication.</p>
+        </article>
+        <article class="usecase">
+          <div class="usecase__num">03</div>
+          <h3>Find &amp; Pick</h3>
+          <p>Match live scans against an expected list — green checks as items are found and counted.</p>
+        </article>
+        <article class="usecase">
+          <div class="usecase__num">04</div>
+          <h3>Batch Barcode</h3>
+          <p>High-throughput batch sessions with a configurable max count for receiving &amp; stock-takes.</p>
+        </article>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CODE ============ -->
+  <section class="section" id="docs">
+    <div class="container code-split">
+      <div class="code-split__copy">
+        <span class="eyebrow">Developer experience</span>
+        <h2>A few lines to a live scanner</h2>
+        <p>Composable Flutter widgets and a versioned platform channel. Embed a preview, wire a callback, done.</p>
+        <ul class="ticks ticks--lg">
+          <li>Typed <code>Supy*</code> results — no <code>Map&lt;String, dynamic&gt;</code></li>
+          <li><code>ChangeNotifier</code> &amp; streams, bring your own state mgmt</li>
+          <li>Versioned channel <code>io.supy.scanner/v1</code></li>
+        </ul>
+        <a href="#trial" class="btn btn--primary btn--lg">Read the docs</a>
+      </div>
+
+      <div class="code-window">
+        <div class="code-window__bar">
+          <span></span><span></span><span></span>
+          <em>main.dart</em>
+        </div>
+<pre class="code-window__body"><code><span class="k">SupyBarcodeScannerView</span>(
+  controller: controller,
+  options: <span class="k">const</span> SupyBarcodeScanOptions(
+    formats: {
+      <span class="e">SupyBarcodeFormat</span>.qr,
+      <span class="e">SupyBarcodeFormat</span>.ean13,
+    },
+  ),
+  onBarcodeDetected: (<span class="e">SupyBarcode</span> b) <span class="k">async</span> {
+    <span class="c">// b.rawValue, b.format</span>
+    print(b.rawValue);
+  },
+  header: <span class="k">const</span> Text(<span class="s">'Scan a product'</span>),
+);</code><span class="code-caret" aria-hidden="true"></span></pre>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PLATFORMS + STATS ============ -->
+  <section class="section section--tint" id="platforms">
+    <div class="container">
+      <div class="section__head">
+        <span class="eyebrow">Under the hood</span>
+        <h2>Platform frameworks doing the heavy lifting</h2>
+      </div>
+      <div class="platforms">
+        <div class="platform"><b>iOS 16+</b><span>AVFoundation · Vision</span></div>
+        <div class="platform"><b>Android 21+</b><span>CameraX · ML Kit</span></div>
+        <div class="platform"><b>Flutter</b><span>3.29+ · Dart 3.7</span></div>
+        <div class="platform"><b>Offline</b><span>No network path</span></div>
+      </div>
+
+      <div class="stats">
+        <div class="stat"><b><span class="num" data-count="1">1</span></b><p>flat per-app license</p></div>
+        <div class="stat"><b>~<span class="num" data-count="50">50</span><span class="unit">MB</span></b><p>native blob removed</p></div>
+        <div class="stat"><b><span class="num" data-count="13">13</span></b><p>barcode symbologies</p></div>
+        <div class="stat"><b><span class="num" data-count="100">100</span><span class="unit">%</span></b><p>on-device processing</p></div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ COMPARE ============ -->
+  <section class="section" id="compare">
+    <div class="container">
+      <div class="section__head">
+        <span class="eyebrow">Why switch</span>
+        <h2>Supy Scanner vs. a paid SDK</h2>
+        <p>Same capabilities your users already rely on — without the recurring bill or the network dependency.</p>
+      </div>
+
+      <div class="compare">
+        <table class="compare__table">
+          <thead>
+            <tr>
+              <th>Capability</th>
+              <th class="compare__us">Supy Scanner</th>
+              <th>Paid SDK</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td>Pricing model</td><td class="compare__us"><b>Flat per app</b></td><td>Per-seat $$$ / year</td></tr>
+            <tr><td>Barcode &amp; document scanning</td><td class="compare__us"><i class="yes">✓</i></td><td><i class="yes">✓</i></td></tr>
+            <tr><td>On-device only (no cloud)</td><td class="compare__us"><i class="yes">✓</i></td><td>Varies</td></tr>
+            <tr><td>Added binary size</td><td class="compare__us"><b>~0 MB</b></td><td>~50 MB blob</td></tr>
+            <tr><td>Source you control</td><td class="compare__us"><i class="yes">✓</i></td><td><i class="no">✕</i></td></tr>
+            <tr><td>Drop-in migration</td><td class="compare__us"><i class="yes">✓</i> import-only</td><td>n/a</td></tr>
+            <tr><td>Native engines</td><td class="compare__us">Vision + ML Kit</td><td>Proprietary</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ PRICING ============ -->
+  <section class="section section--tint" id="pricing">
+    <div class="container">
+      <div class="section__head">
+        <span class="eyebrow">Pricing</span>
+        <h2>Simple per-app licensing.</h2>
+        <p>One flat plan per app — no per-scan metering. Licenses activate offline, so nothing phones home in the scan path. Cancel anytime.</p>
+      </div>
+
+      <div class="pricing">
+        <article class="price-card">
+          <h3>Starter</h3>
+          <div class="price"><span class="price__amt">$49</span><span class="price__per">/ month</span></div>
+          <ul class="ticks">
+            <li>1 production app</li>
+            <li>Barcode + document + OCR</li>
+            <li>On-device, no network path</li>
+            <li>1 device seat</li>
+            <li>Community support</li>
+          </ul>
+          <button type="button" class="btn btn--outline btn--lg price-card__cta" data-checkout-tier="starter">Start Starter</button>
+        </article>
+
+        <article class="price-card price-card--hero">
+          <span class="price-card__badge">Most popular</span>
+          <h3>Growth</h3>
+          <div class="price"><span class="price__amt">$199</span><span class="price__per">/ month</span></div>
+          <ul class="ticks">
+            <li>Up to 3 production apps</li>
+            <li>Everything in Starter</li>
+            <li>5 device seats</li>
+            <li>Drop-in, import-only migration</li>
+            <li>Priority email support</li>
+          </ul>
+          <button type="button" class="btn btn--primary btn--lg price-card__cta" data-checkout-tier="growth">Start Growth</button>
+        </article>
+
+        <article class="price-card">
+          <h3>Enterprise</h3>
+          <div class="price"><span class="price__amt">Custom</span><span class="price__per">annual</span></div>
+          <ul class="ticks">
+            <li>Unlimited apps &amp; device seats</li>
+            <li>iOS 16+ &amp; Android 21+</li>
+            <li>English &amp; Arabic / RTL</li>
+            <li>SLA &amp; first-party support</li>
+          </ul>
+          <a href="mailto:sales@supy.io?subject=Supy%20Scanner%20Enterprise" class="btn btn--outline btn--lg price-card__cta">Contact sales</a>
+        </article>
+      </div>
+      <p class="pricing__note" id="checkout-status" role="status" aria-live="polite"></p>
+    </div>
+  </section>
+
+  <!-- ============ MIGRATION ============ -->
+  <section class="section section--dark" id="migrate">
+    <div class="container">
+      <div class="section__head section__head--light">
+        <span class="eyebrow">Migration</span>
+        <h2>Swap in three steps</h2>
+        <p>The compat shim preserves the exact call sites, so the cutover is an import change — not a rewrite.</p>
+      </div>
+
+      <div class="steps">
+        <div class="step">
+          <span class="step__n">1</span>
+          <h4>Add the package</h4>
+          <p>Point <code>pubspec.yaml</code> at <code>supy_scanner</code> and drop the paid dependency.</p>
+        </div>
+        <div class="step__arrow">→</div>
+        <div class="step">
+          <span class="step__n">2</span>
+          <h4>Switch the import</h4>
+          <p>The compat shim keeps the same widget &amp; method signatures your app already calls.</p>
+        </div>
+        <div class="step__arrow">→</div>
+        <div class="step">
+          <span class="step__n">3</span>
+          <h4>Ship it</h4>
+          <p>Activate your license, ship. Same behavior — users see no difference.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FAQ ============ -->
+  <section class="section section--tint" id="faq">
+    <div class="container container--narrow">
+      <div class="section__head">
+        <span class="eyebrow">FAQ</span>
+        <h2>What teams ask before switching</h2>
+      </div>
+
+      <div class="faq">
+        <details class="faq__item">
+          <summary>Does any scan data leave the device?<span class="faq__ic"></span></summary>
+          <p>No. Barcode and document recognition run entirely on-device via Apple Vision and Google ML Kit. There are no network calls in the scanning path.</p>
+        </details>
+        <details class="faq__item">
+          <summary>How hard is it to migrate off our current SDK?<span class="faq__ic"></span></summary>
+          <p>The compat shim mirrors the existing call sites exactly — same widget props and method signatures — so the cutover is an import-only change with no behavior difference for end users.</p>
+        </details>
+        <details class="faq__item">
+          <summary>Which platforms are supported?<span class="faq__ic"></span></summary>
+          <p>iOS 16+ (AVFoundation + Vision) and Android 21+ (CameraX + ML Kit), through a single Flutter 3.29 / Dart 3.7 package.</p>
+        </details>
+        <details class="faq__item">
+          <summary>Which barcode formats can it read?<span class="faq__ic"></span></summary>
+          <p>13 symbologies: QR, EAN-13, EAN-8, UPC-A, UPC-E, Code 39, Code 93, Code 128, ITF, PDF417, Data Matrix, Aztec and Codabar. Enable any subset, or all at once.</p>
+        </details>
+        <details class="faq__item">
+          <summary>How does pricing work?<span class="faq__ic"></span></summary>
+          <p>A simple flat license per app — no per-scan metering. Built on the native vision frameworks (no third-party SDK royalties), so every plan covers unlimited scans; tiers differ by the number of activated devices (seats). Pick a tier above, or talk to us for enterprise (unmetered seats).</p>
+        </details>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ CTA ============ -->
+  <section class="cta" id="trial">
+    <div class="container cta__inner">
+      <h2>Ready to cut your scanner bill?</h2>
+      <p>Drop Supy Scanner into your Flutter app and keep every scan on-device.</p>
+      <div class="cta__actions">
+        <a href="#pricing" class="btn btn--light btn--lg">See pricing</a>
+        <a href="#" class="btn btn--outline-light btn--lg">Talk to the team</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- ============ FOOTER ============ -->
+  <footer class="footer">
+    <div class="container footer__grid">
+      <div class="footer__brand">
+        <a href="#" class="brand brand--footer">
+          <span class="brand__mark">
+            <svg viewBox="0 0 24 24" width="24" height="24" aria-hidden="true">
+              <path d="M4 7V5a1 1 0 0 1 1-1h2M4 17v2a1 1 0 0 0 1 1h2M20 7V5a1 1 0 0 0-1-1h-2M20 17v2a1 1 0 0 1-1 1h-2M3 12h18" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+            </svg>
+          </span>
+          <span class="brand__name">Supy<span>Scanner</span></span>
+        </a>
+        <p>First-party, native-backed scanning for the Supy retailer app. On-device by design.</p>
+      </div>
+      <div class="footer__col">
+        <h5>Products</h5>
+        <a href="#products">Barcode Scanner</a>
+        <a href="#products">Document Scanner</a>
+        <a href="#usecases">Data Capture</a>
+      </div>
+      <div class="footer__col">
+        <h5>Developers</h5>
+        <a href="#docs">Documentation</a>
+        <a href="#symbologies">Symbologies</a>
+        <a href="#platforms">Platforms</a>
+      </div>
+      <div class="footer__col">
+        <h5>Company</h5>
+        <a href="#">About Supy</a>
+        <a href="#">Migration guide</a>
+        <a href="#">Changelog</a>
+      </div>
+    </div>
+    <div class="container footer__bottom">
+      <p>© 2026 Supy. Built to replace paid SDKs — on-device, always.</p>
+      <div class="footer__socials">
+        <a href="#" aria-label="GitHub">GitHub</a>
+        <a href="#" aria-label="Privacy">Privacy</a>
+        <a href="#" aria-label="Terms">Terms</a>
+      </div>
+    </div>
+  </footer>
+
+  <button class="to-top" id="toTop" aria-label="Back to top">↑</button>
+
+  <script src="script.js"></script>
+</body>
+</html>

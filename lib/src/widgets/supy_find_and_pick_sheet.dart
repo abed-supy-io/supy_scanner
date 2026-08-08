@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/ui/supy_find_and_pick_use_case_configuration.dart';
+import '../models/ui/supy_scanner_palette.dart';
+import '../models/ui/supy_scanner_strings.dart';
 import 'supy_find_and_pick_accumulator.dart';
 
 /// Collapsible bottom sheet rendered by the find-and-pick use case.
@@ -13,6 +15,8 @@ class SupyFindAndPickSheet extends StatefulWidget {
     required this.config,
     required this.onSubmit,
     required this.onClear,
+    this.palette = const SupyScannerPalette.supyDark(),
+    this.strings = const SupyScannerStrings.en(),
     super.key,
   });
 
@@ -21,6 +25,12 @@ class SupyFindAndPickSheet extends StatefulWidget {
 
   /// Visibility / text / color knobs.
   final SupyFindAndPickUseCaseConfiguration config;
+
+  /// Palette used to resolve any color the [config] leaves null.
+  final SupyScannerPalette palette;
+
+  /// String bundle used to resolve copy the [config] leaves null.
+  final SupyScannerStrings strings;
 
   /// Invoked on submit-button tap.
   final VoidCallback onSubmit;
@@ -35,11 +45,15 @@ class SupyFindAndPickSheet extends StatefulWidget {
 class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
   late bool _expanded = !widget.config.initiallyCollapsed;
 
+  Color get _titleColor => widget.config.titleColor ?? widget.palette.onSurface;
+  Color get _bodyColor =>
+      widget.config.bodyColor ?? widget.palette.onSurfaceVariant;
+
   @override
   Widget build(BuildContext context) {
     final cfg = widget.config;
     return Material(
-      color: cfg.sheetBackgroundColor,
+      color: cfg.sheetBackgroundColor ?? widget.palette.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -73,24 +87,27 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    cfg.sheetTitle,
+                    cfg.sheetTitle ?? widget.strings.pickList,
                     style: TextStyle(
-                      color: cfg.titleColor,
+                      color: _titleColor,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
                   ),
                   const SizedBox(height: 2),
                   Text(
-                    '${acc.completedRowCount}/${acc.totalRowCount} picked',
-                    style: TextStyle(color: cfg.bodyColor, fontSize: 12),
+                    widget.strings.pickedProgress(
+                      acc.completedRowCount,
+                      acc.totalRowCount,
+                    ),
+                    style: TextStyle(color: _bodyColor, fontSize: 12),
                   ),
                 ],
               ),
             ),
             Icon(
               _expanded ? Icons.expand_more : Icons.expand_less,
-              color: cfg.titleColor,
+              color: _titleColor,
             ),
           ],
         ),
@@ -114,8 +131,8 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
                   ? Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                     child: Text(
-                      'No expected items',
-                      style: TextStyle(color: cfg.bodyColor, fontSize: 13),
+                      widget.strings.noExpectedItems,
+                      style: TextStyle(color: _bodyColor, fontSize: 13),
                     ),
                   )
                   : ListView(
@@ -126,9 +143,9 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
                       if (unexpected.isNotEmpty) ...[
                         const SizedBox(height: 12),
                         Text(
-                          'Unexpected',
+                          widget.strings.unexpected,
                           style: TextStyle(
-                            color: cfg.bodyColor,
+                            color: _bodyColor,
                             fontSize: 11,
                             fontWeight: FontWeight.w600,
                             letterSpacing: 0.6,
@@ -142,10 +159,7 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
                               b.rawValue,
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
-                              style: TextStyle(
-                                color: cfg.bodyColor,
-                                fontSize: 13,
-                              ),
+                              style: TextStyle(color: _bodyColor, fontSize: 13),
                             ),
                           ),
                       ],
@@ -160,10 +174,12 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
                 child: TextButton(
                   onPressed: rows.isEmpty ? null : widget.onClear,
                   style: TextButton.styleFrom(
-                    foregroundColor: cfg.clearButtonForegroundColor,
+                    foregroundColor:
+                        cfg.clearButtonForegroundColor ??
+                        widget.palette.onSurface,
                     minimumSize: const Size.fromHeight(48),
                   ),
-                  child: Text(cfg.clearButtonText),
+                  child: Text(cfg.clearButtonText ?? widget.strings.reset),
                 ),
               ),
               const SizedBox(width: 12),
@@ -173,14 +189,18 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
                   onPressed:
                       rows.isEmpty || !acc.isComplete ? null : widget.onSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: cfg.submitButtonBackgroundColor,
-                    foregroundColor: cfg.submitButtonForegroundColor,
+                    backgroundColor:
+                        cfg.submitButtonBackgroundColor ??
+                        widget.palette.primary,
+                    foregroundColor:
+                        cfg.submitButtonForegroundColor ??
+                        widget.palette.onPrimary,
                     minimumSize: const Size.fromHeight(48),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(cfg.submitButtonText),
+                  child: Text(cfg.submitButtonText ?? widget.strings.done),
                 ),
               ),
             ],
@@ -191,8 +211,11 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
   }
 
   Widget _row(SupyFindAndPickRow row) {
-    final cfg = widget.config;
-    final color = row.isComplete ? cfg.matchedRowColor : cfg.pendingRowColor;
+    final color =
+        row.isComplete
+            ? (widget.config.matchedRowColor ?? widget.palette.positive)
+            : (widget.config.pendingRowColor ??
+                widget.palette.onSurfaceVariant);
     return Padding(
       padding: const EdgeInsets.symmetric(vertical: 4),
       child: Row(
@@ -223,7 +246,7 @@ class _SupyFindAndPickSheetState extends State<SupyFindAndPickSheet> {
                     row.expected.rawValue,
                     maxLines: 1,
                     overflow: TextOverflow.ellipsis,
-                    style: TextStyle(color: cfg.bodyColor, fontSize: 11),
+                    style: TextStyle(color: _bodyColor, fontSize: 11),
                   ),
               ],
             ),

@@ -141,4 +141,57 @@ void main() {
       controller.dispose();
     });
   });
+
+  group('SupyBarcodeScannerScreen locale + RTL', () {
+    // The scanner chrome wraps its Scaffold in a Directionality driven by the
+    // resolved string bundle — read it off the Scaffold's context.
+    TextDirection scannerDirection(WidgetTester tester) {
+      final ctx = tester.element(find.byType(Scaffold));
+      return Directionality.of(ctx);
+    }
+
+    testWidgets('defaults to LTR when no locale is supplied', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SupyBarcodeScannerScreen(useCase: SupyMultipleScanUseCase()),
+        ),
+      );
+      expect(scannerDirection(tester), TextDirection.ltr);
+    });
+
+    testWidgets('explicit ar locale mirrors the chrome to RTL', (tester) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SupyBarcodeScannerScreen(
+            useCase: SupyMultipleScanUseCase(),
+            locale: 'ar',
+          ),
+        ),
+      );
+      expect(scannerDirection(tester), TextDirection.rtl);
+    });
+
+    testWidgets('ar locale resolves sheet copy from the Arabic bundle', (
+      tester,
+    ) async {
+      await tester.pumpWidget(
+        const MaterialApp(
+          home: SupyBarcodeScannerScreen(
+            useCase: SupyMultipleScanUseCase(),
+            locale: 'ar',
+          ),
+        ),
+      );
+      // Config leaves the header title null, so it falls through to the
+      // Arabic bundle's `itemsScanned`.
+      expect(
+        find.text(const SupyScannerStrings.ar().itemsScanned),
+        findsOneWidget,
+      );
+      expect(
+        find.text(const SupyScannerStrings.en().itemsScanned),
+        findsNothing,
+      );
+    });
+  });
 }

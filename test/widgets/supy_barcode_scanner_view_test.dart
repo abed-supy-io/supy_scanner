@@ -123,10 +123,9 @@ void main() {
     await withPlatform(TargetPlatform.macOS, () async {
       await tester.pumpWidget(host(const SupyBarcodeScannerView()));
       expect(
-        find.textContaining('SupyBarcodeScannerView is not yet supported'),
+        find.text(const SupyScannerStrings.en().unsupportedPlatform),
         findsOneWidget,
       );
-      expect(find.textContaining('macOS'), findsOneWidget);
     });
   });
 

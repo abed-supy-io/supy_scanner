@@ -4,9 +4,11 @@ Project-specific rules for Claude Code sessions working inside `/supy-scanner`. 
 
 ## What this repo is
 
-A first-party Flutter scanning library that replaces Scanbot SDK in the Supy retailer mobile app. Native-backed: AVFoundation/Vision on iOS, ML Kit on Android. The non-negotiable product constraint is **drop-in API compatibility with the existing Scanbot call sites** — end users must see no difference after migration.
+A first-party, **Supy-licensed (paid)** Flutter scanning library that replaces Scanbot SDK in the Supy retailer mobile app. Native-backed: AVFoundation/Vision on iOS, ML Kit on Android. The non-negotiable product constraint is **drop-in API compatibility with the existing Scanbot call sites** — end users must see no difference after migration, save for the one logged exception below.
 
 If a change you're about to make would force the retailer app to rename a prop, add a new required argument, or change a return type vs. the current Scanbot API, **stop and surface it** before writing code.
+
+**Logged exception (Phase PAID, `TODO.md` decisions log):** the library now requires a one-time `SupyScanner.activate(<license token>)` before scanning. This is the *only* sanctioned break of drop-in compatibility; enforcement is an on-device signed-token check (no network in the scan path). Do not add further compat breaks without a new logged decision.
 
 ## Sources of truth (read these before non-trivial work)
 
@@ -45,7 +47,7 @@ If a change you're about to make would force the retailer app to rename a prop, 
 
 ## What to never do
 
-- **Don't introduce a paid SDK dependency.** The whole point is to remove Scanbot's license cost.
+- **Don't introduce a paid *third-party* SDK dependency.** The scanner stays built on free platform frameworks (Vision / ML Kit) — the point of replacing Scanbot was to drop *its* license cost, not to buy another vendor's. (Note: as of the *Phase PAID* decision in `TODO.md`, `supy_scanner` is itself a paid, Supy-licensed library — that reversal is logged and intentional. It does **not** license this rule to add third-party paid SDKs.)
 - **Don't add cloud OCR or any network call in the scanning path.** On-device only.
 - **Don't break the Scanbot-compat API surface** without an explicit decision logged in `TODO.md`'s decisions section.
 - **Don't add features outside the `docs/PLAN.md` Phase scope** to "while we're here" the codebase. Open a separate phase entry instead.

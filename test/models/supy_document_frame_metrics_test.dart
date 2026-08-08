@@ -37,5 +37,31 @@ void main() {
       const b = SupyDocumentFrameMetrics(quadStability: 0.6);
       expect(a == b, isFalse);
     });
+
+    test('fromMap reads sourceAspectRatio', () {
+      final m = SupyDocumentFrameMetrics.fromMap(const <Object?, Object?>{
+        'sourceAspectRatio': 0.75,
+      });
+      expect(m.sourceAspectRatio, 0.75);
+    });
+
+    test('fromMap collapses a non-positive sourceAspectRatio to null', () {
+      // Native emits `0` as its "unknown" sentinel; overlays treat null as
+      // "no crop correction available" and fall back to identity mapping.
+      final zero = SupyDocumentFrameMetrics.fromMap(const <Object?, Object?>{
+        'sourceAspectRatio': 0,
+      });
+      final missing = SupyDocumentFrameMetrics.fromMap(
+        const <Object?, Object?>{},
+      );
+      expect(zero.sourceAspectRatio, isNull);
+      expect(missing.sourceAspectRatio, isNull);
+    });
+
+    test('equality includes sourceAspectRatio', () {
+      const a = SupyDocumentFrameMetrics(sourceAspectRatio: 0.75);
+      const b = SupyDocumentFrameMetrics(sourceAspectRatio: 1.33);
+      expect(a == b, isFalse);
+    });
   });
 }

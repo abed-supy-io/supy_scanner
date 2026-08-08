@@ -96,6 +96,62 @@ void main() {
       expect(a, isNot(equals(c)));
     });
 
+    test('tiffUri is null when omitted', () {
+      final data = SupyDocumentData.fromMap(const <Object?, Object?>{
+        'pages': <Object?>[],
+        'ocrText': '',
+      });
+      expect(data.tiffUri, isNull);
+    });
+
+    test('tiffUri round-trips from the channel map (v1.2 tiff output)', () {
+      final data = SupyDocumentData.fromMap(const <Object?, Object?>{
+        'pages': <Object?>[
+          <Object?, Object?>{
+            'uri': 'file:///p1.jpg',
+            'width': 800,
+            'height': 1200,
+          },
+        ],
+        'ocrText': '',
+        'tiffUri': 'file:///tmp/scan.tiff',
+      });
+      expect(data.tiffUri, 'file:///tmp/scan.tiff');
+      expect(data.pdfUri, isNull);
+    });
+
+    test('searchablePdf output surfaces on pdfUri (v1.2)', () {
+      final data = SupyDocumentData.fromMap(const <Object?, Object?>{
+        'pages': <Object?>[],
+        'ocrText': 'invisible layer',
+        'pdfUri': 'file:///tmp/searchable.pdf',
+      });
+      expect(data.pdfUri, 'file:///tmp/searchable.pdf');
+      expect(data.tiffUri, isNull);
+    });
+
+    test('equality includes tiffUri', () {
+      const page = SupyDocumentPage(uri: 'file:///p.jpg', width: 1, height: 1);
+      const a = SupyDocumentData(
+        pages: [page],
+        ocrText: '',
+        tiffUri: 'file:///a.tiff',
+      );
+      const b = SupyDocumentData(
+        pages: [page],
+        ocrText: '',
+        tiffUri: 'file:///a.tiff',
+      );
+      const c = SupyDocumentData(
+        pages: [page],
+        ocrText: '',
+        tiffUri: 'file:///b.tiff',
+      );
+      expect(a, equals(b));
+      expect(a.hashCode, equals(b.hashCode));
+      expect(a, isNot(equals(c)));
+    });
+
     test('resolvedBackend defaults to unknown when payload omits it', () {
       final data = SupyDocumentData.fromMap(const <Object?, Object?>{
         'pages': <Object?>[],

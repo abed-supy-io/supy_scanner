@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/ui/supy_multiple_scan_use_case_configuration.dart';
+import '../models/ui/supy_scanner_palette.dart';
+import '../models/ui/supy_scanner_strings.dart';
 import 'supy_multiple_scan_accumulator.dart';
 
 /// Collapsible bottom sheet rendered by the multi-scan use case. The header
@@ -13,6 +15,8 @@ class SupyMultipleScanSheet extends StatefulWidget {
     required this.config,
     required this.onSubmit,
     required this.onClear,
+    this.palette = const SupyScannerPalette.supyDark(),
+    this.strings = const SupyScannerStrings.en(),
     super.key,
   });
 
@@ -21,6 +25,12 @@ class SupyMultipleScanSheet extends StatefulWidget {
 
   /// Visibility / text / color knobs.
   final SupyMultipleScanUseCaseConfiguration config;
+
+  /// Palette used to resolve any color the [config] leaves null.
+  final SupyScannerPalette palette;
+
+  /// String bundle used to resolve copy the [config] leaves null.
+  final SupyScannerStrings strings;
 
   /// Invoked on submit-button tap. Receives the current items via the
   /// accumulator the caller already holds.
@@ -37,11 +47,15 @@ class SupyMultipleScanSheet extends StatefulWidget {
 class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
   late bool _expanded = !widget.config.initiallyCollapsed;
 
+  Color get _titleColor => widget.config.titleColor ?? widget.palette.onSurface;
+  Color get _bodyColor =>
+      widget.config.bodyColor ?? widget.palette.onSurfaceVariant;
+
   @override
   Widget build(BuildContext context) {
     final cfg = widget.config;
     return Material(
-      color: cfg.sheetBackgroundColor,
+      color: cfg.sheetBackgroundColor ?? widget.palette.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -76,9 +90,9 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    cfg.sheetTitle,
+                    cfg.sheetTitle ?? widget.strings.itemsScanned,
                     style: TextStyle(
-                      color: cfg.titleColor,
+                      color: _titleColor,
                       fontSize: 16,
                       fontWeight: FontWeight.w600,
                     ),
@@ -86,16 +100,16 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
                   const SizedBox(height: 2),
                   Text(
                     cfg.mode == SupyMultipleScanMode.counting
-                        ? '$total scans · $rowCount unique'
-                        : '$rowCount unique',
-                    style: TextStyle(color: cfg.bodyColor, fontSize: 12),
+                        ? widget.strings.scanCountSummary(total, rowCount)
+                        : widget.strings.uniqueSummary(rowCount),
+                    style: TextStyle(color: _bodyColor, fontSize: 12),
                   ),
                 ],
               ),
             ),
             Icon(
               _expanded ? Icons.expand_more : Icons.expand_less,
-              color: cfg.titleColor,
+              color: _titleColor,
             ),
           ],
         ),
@@ -116,8 +130,8 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
                   ? Padding(
                     padding: const EdgeInsets.fromLTRB(20, 0, 20, 16),
                     child: Text(
-                      'No items yet',
-                      style: TextStyle(color: cfg.bodyColor, fontSize: 13),
+                      widget.strings.noItemsYet,
+                      style: TextStyle(color: _bodyColor, fontSize: 13),
                     ),
                   )
                   : ListView.separated(
@@ -127,7 +141,7 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
                     separatorBuilder:
                         (_, _) => Divider(
                           height: 12,
-                          color: cfg.bodyColor.withValues(alpha: 0.1),
+                          color: _bodyColor.withValues(alpha: 0.1),
                         ),
                     itemBuilder: (_, i) => _row(items[i]),
                   ),
@@ -140,10 +154,12 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
                 child: TextButton(
                   onPressed: items.isEmpty ? null : widget.onClear,
                   style: TextButton.styleFrom(
-                    foregroundColor: cfg.clearButtonForegroundColor,
+                    foregroundColor:
+                        cfg.clearButtonForegroundColor ??
+                        widget.palette.onSurface,
                     minimumSize: const Size.fromHeight(48),
                   ),
-                  child: Text(cfg.clearButtonText),
+                  child: Text(cfg.clearButtonText ?? widget.strings.clear),
                 ),
               ),
               const SizedBox(width: 12),
@@ -152,14 +168,18 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
                 child: ElevatedButton(
                   onPressed: items.isEmpty ? null : widget.onSubmit,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: cfg.submitButtonBackgroundColor,
-                    foregroundColor: cfg.submitButtonForegroundColor,
+                    backgroundColor:
+                        cfg.submitButtonBackgroundColor ??
+                        widget.palette.primary,
+                    foregroundColor:
+                        cfg.submitButtonForegroundColor ??
+                        widget.palette.onPrimary,
                     minimumSize: const Size.fromHeight(48),
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(cfg.submitButtonText),
+                  child: Text(cfg.submitButtonText ?? widget.strings.submit),
                 ),
               ),
             ],
@@ -181,11 +201,11 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
                 item.barcode.rawValue,
                 maxLines: 1,
                 overflow: TextOverflow.ellipsis,
-                style: TextStyle(color: cfg.titleColor, fontSize: 14),
+                style: TextStyle(color: _titleColor, fontSize: 14),
               ),
               Text(
                 item.barcode.format.name,
-                style: TextStyle(color: cfg.bodyColor, fontSize: 11),
+                style: TextStyle(color: _bodyColor, fontSize: 11),
               ),
             ],
           ),
@@ -194,13 +214,13 @@ class _SupyMultipleScanSheetState extends State<SupyMultipleScanSheet> {
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
             decoration: BoxDecoration(
-              color: cfg.bodyColor.withValues(alpha: 0.08),
+              color: _bodyColor.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(10),
             ),
             child: Text(
               'x${item.count}',
               style: TextStyle(
-                color: cfg.titleColor,
+                color: _titleColor,
                 fontSize: 12,
                 fontWeight: FontWeight.w600,
               ),

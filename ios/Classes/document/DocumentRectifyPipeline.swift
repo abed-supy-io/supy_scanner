@@ -18,6 +18,13 @@ struct DocumentRectifyOutput {
 /// warps via CIPerspectiveCorrection. Pure w.r.t. Flutter — callers own
 /// threading, encoding, and channel errors.
 enum DocumentRectifyPipeline {
+  /// Fraction each corner is pushed outward from the quad centroid before the
+  /// warp. Edge/segmentation detection lands a hair *inside* the true page
+  /// border, so an un-expanded warp slices off the outermost text and corners
+  /// ("cuts into the document"). A small outward bleed recovers that sliver;
+  /// the expanded quad is clamped to the image so it can never sample outside.
+  static let edgeExpansion: CGFloat = 0.02
+
   static func rectify(
     still: CIImage,
     analyzerQuad: [CGPoint],
@@ -51,9 +58,13 @@ enum DocumentRectifyPipeline {
     //    (always 4 points) instead of failing the capture.
     let refinement = refiner(oriented, mapped)
     let refinedAccepted = refinement.quad.count == 4
-    let quad = refinedAccepted ? refinement.quad : mapped
+    let detected = refinedAccepted ? refinement.quad : mapped
 
-    // 3. Warp. Quad is top-left-origin; CIImage is bottom-left — flip Y once.
+    // 3. Bleed the quad outward so the warp keeps the page's outermost edge
+    //    instead of clipping into it. Clamped to [0,1] in step 1's space.
+    let quad = expandQuad(detected, by: edgeExpansion)
+
+    // 4. Warp. Quad is top-left-origin; CIImage is bottom-left — flip Y once.
     guard let filter = CIFilter(name: "CIPerspectiveCorrection") else {
       return nil
     }
@@ -77,5 +88,21 @@ enum DocumentRectifyPipeline {
       quad: quad,
       quadSource: refinedAccepted && refinement.refined ? "refined" : "preview"
     )
+  }
+
+  /// Scales `quad` outward from its centroid by `ratio` (0.02 == 2% bleed),
+  /// clamping every corner back into the [0,1] normalized image bounds. A
+  /// non-4-point quad or a zero ratio is returned unchanged.
+  static func expandQuad(_ quad: [CGPoint], by ratio: CGFloat) -> [CGPoint] {
+    guard quad.count == 4, ratio != 0 else { return quad }
+    let cx = quad.reduce(0) { $0 + $1.x } / CGFloat(quad.count)
+    let cy = quad.reduce(0) { $0 + $1.y } / CGFloat(quad.count)
+    let scale = 1 + ratio
+    return quad.map { p in
+      CGPoint(
+        x: min(max(cx + (p.x - cx) * scale, 0), 1),
+        y: min(max(cy + (p.y - cy) * scale, 0), 1)
+      )
+    }
   }
 }

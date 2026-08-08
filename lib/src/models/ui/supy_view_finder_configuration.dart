@@ -50,7 +50,7 @@ sealed class SupyFinderStyle {
 class SupyFinderCorneredStyle extends SupyFinderStyle {
   /// Creates a cornered finder style.
   const SupyFinderCorneredStyle({
-    required this.strokeColor,
+    this.strokeColor,
     this.strokeWidth = 3.0,
     this.cornerLength = 24.0,
     this.cornerRadius = 4.0,
@@ -58,8 +58,8 @@ class SupyFinderCorneredStyle extends SupyFinderStyle {
        assert(cornerLength > 0, 'cornerLength must be > 0'),
        assert(cornerRadius >= 0, 'cornerRadius must be >= 0');
 
-  /// Color of the corner brackets.
-  final Color strokeColor;
+  /// Color of the corner brackets. Resolves to the palette `primary` when null.
+  final Color? strokeColor;
 
   /// Stroke width of the corner brackets, in logical pixels.
   final double strokeWidth;
@@ -100,7 +100,7 @@ class SupyViewFinderConfiguration {
   const SupyViewFinderConfiguration({
     this.visible = true,
     this.aspectRatio = const SupyAspectRatio(16, 9),
-    this.style = const SupyFinderCorneredStyle(strokeColor: Color(0xFF1AC0E5)),
+    this.style = const SupyFinderCorneredStyle(),
   });
 
   /// Whether the finder is drawn over the camera preview.

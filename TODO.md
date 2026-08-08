@@ -1,390 +1,1528 @@
-# TODO — supy_scanner v1.0.0
-
-Live tracker. Check items off as work lands. Source of truth for sprint progress.
-
-## Sprint 1 — Foundations & Android Embedded Barcode
-
-- [x] S1-01 — Repo scaffold (`pubspec.yaml`, lints, example skeleton) — 2026-06-13
-- [x] S1-02 — Dart public API types (`SupyBarcode`, `SupyBarcodeFormat`, `SupyDocumentData`, `SupyDocumentPage`, `SupyScanError`) — 2026-06-13
-- [x] S1-03 — MethodChannel + EventChannel boundary + mock tests — 2026-06-13
-- [x] S1-04 — Android plugin skeleton + manifest camera permission — 2026-06-13
-- [x] S1-05 — iOS plugin skeleton + `Info.plist` template doc — 2026-06-13
-- [x] S1-06 — CI: analyze, format, test, build both platforms — 2026-06-13
-- [x] S1-07 — Android PlatformView shell + factory — 2026-06-13
-- [x] S1-08 — Android CameraX preview lifecycle + torch — 2026-06-13
-- [x] S1-09 — Android ML Kit barcode analyzer + format mapper — 2026-06-13
-- [x] S1-10 — Dart `SupyBarcodeScannerView` + finder overlay + 2s cooldown — 2026-06-13
-
-## Sprint 2 — iOS Embedded Barcode + Symbology Parity
-
-- [x] S2-01 — iOS `BarcodeScannerPlatformView` (AVCaptureSession) — 2026-06-13
-- [x] S2-02 — iOS Vision barcode detection + symbology mapper — 2026-06-13
-- [x] S2-03 — iOS torch + `flashAvailable` event — 2026-06-13
-- [x] S2-04 — Per-view MethodChannel parity (`pause`/`resume`/`setTorch`/`setFormats`) — 2026-06-13
-- [x] S2-05 — Permission helper (`SupyPermissions.requestCamera()`) — 2026-06-13
-- [x] S2-06 — Error code normalization — 2026-06-13
-- [x] S2-07 — Publish `docs/SYMBOLOGIES.md` matrix verified against printed sheet — 2026-06-13
-- [x] S2-08 — Begin Phase 3: Android `GmsDocumentScanning` intent — 2026-06-13
-
-## Sprint 3 — Document Scan + OCR + Batch Barcode
-
-- [x] S3-01 — iOS `VNDocumentCameraViewController` integration — 2026-06-13
-- [x] S3-02 — Android `TextRecognition` OCR pass — 2026-06-13
-- [x] S3-03 — iOS `VNRecognizeTextRequest` OCR pass (en + ar) — 2026-06-13
-- [x] S3-04 — Palette + locale plumbing (accepted at wire boundary; VisionKit & GMS scanner UIs are system-owned, so palette/locale are no-ops on-device — documented in `docs/MIGRATION.md`) — 2026-06-13
-- [x] S3-05 — `maxPages` (0 = unlimited) + `jpegQuality` re-encode — 2026-06-13
-- [x] S3-06 — `SupyDocumentScanner.prewarm()` — 2026-06-13
-- [x] S3-07 — Android batch barcode session — 2026-06-13
-- [x] S3-08 — iOS batch barcode session — 2026-06-13
-- [x] S3-09 — Example app: document & batch screens — 2026-06-13
-- [ ] S3-10 — Memory profile pass + recorded numbers in `docs/QA.md`
-
-## Sprint 4 — Compat Shim, Hardening, v1.0.0
-
-- [x] S4-01 — `supy_scanner_scanbot_compat` package + smoke compile against retailer call shapes (2026-06-13)
-- [x] S4-02 — Reliability harness (100 open/close, 50-iter scan loop) — authored 2026-06-13; device run pending sign-off
-- [x] S4-03 — Perf bench numbers recorded — harness authored 2026-06-13; numbers pending device run
-- [x] S4-04 — Localized strings pass (en + ar, RTL) — audit clean; `docs/LOCALIZATION.md` published; compat AppBar string removed (2026-06-13); device verification pending sign-off
-- [x] S4-05 — README polish + dartdoc — README rewritten for v1.0.0; lib/ analyzer clean incl. `public_member_api_docs` (2026-06-13)
-- [x] S4-06 — `CHANGELOG.md` for v1.0.0 — 2026-06-13
-- [x] S4-07 — Tag `v1.0.0` — repo initialized; commit 8724f68 + local annotated tag `v1.0.0` (2026-06-13). **Remote push + internal pub publish pending — needs remote URL from mobile lead.**
-- [ ] S4-08 — Mobile-lead sign-off walkthrough
-
-## v1.1 Sprint 1 — Native core scaffold
-
-See `docs/V1.1_PLAN.md`.
-
-- [x] V1-S1-01 — `native/` C++ core skeleton (`supy_scanner_core.h/.cpp`, CMake, `SUPY_CORE_ABI_VERSION = 1`) — 2026-06-13
-- [x] V1-S1-02 — Android JNI bridge + `SupyNativeCore.kt` + Gradle externalNativeBuild (NDK r26, c++17, c++_static) — 2026-06-13
-- [x] V1-S1-03 — iOS pod source_files glob over `../native/` + `SupyNativeCore.swift` — 2026-06-13
-- [x] V1-S1-04 — `nativeCoreProbe` MethodChannel method on both platforms — 2026-06-13
-- [x] V1-S1-05 — Dart `nativeCoreProbe()` + `SupyNativeCoreProbe` + mocked unit test — 2026-06-13
-- [x] V1-S1-06 — `useNativeCore` feature flag on barcode + document options (default `false`) — 2026-06-13
-- [x] V1-S1-07 — Example-app debug toggle (AppBar `memory` icon → SnackBar) — 2026-06-13
-- [x] V1-S1-08 — `docs/ARCHITECTURE.md` channel-method table row — 2026-06-13
-- [ ] V1-S1-09 — On-device probe verification (one Android + one iPhone)
-
-## v1.1 Sprint 1.5 — Embedded UI parity with Scanbot
-
-See `docs/V1.1_PLAN.md` Sprint 1.5. Embedded `SupyBarcodeScannerView` only — native Document & Batch screens stay GMS/VisionKit.
-
-- [x] V1-S1_5-01 — `SupyScannerPalette` (16 tokens) + `scanbotDark` / `scanbotLight` defaults — type done 2026-06-13; 11 unit tests pass (preset stability, dark-vs-light divergence, translucent modal overlay, light-surface luminance ≥200, per-token equality discrimination across all 16 tokens, full copyWith) — 2026-06-13
-- [x] V1-S1_5-02 — `SupyTopBarConfiguration` + `SupyTopBar` widget (solid + gradient) — 2026-06-13
-- [x] V1-S1_5-03 — `SupyViewFinderConfiguration` + cornered-finder `CustomPainter` — type + painter done 2026-06-13; 9 paint-behavior tests pass (invisible→no-op, exactly 4 corner paths, stroke style + configured color/width applied to every path, centered fit-rect ≤85% of canvas, aspect-ratio honored, shouldRepaint true on visibility/color/aspect change and false on identical config) — recording-canvas approach over image goldens to dodge platform/Skia flakiness — 2026-06-13
-- [x] V1-S1_5-04 — `SupyUserGuidanceConfiguration` + guidance-card widget — 2026-06-13
-- [x] V1-S1_5-05 — Per-view channel methods: `setZoom`, `flipCamera`, `setMinFocusDistanceLock` (Dart + Android + iOS + mocked tests) — 2026-06-13
-- [x] V1-S1_5-06 — `SupyActionBarConfiguration` + `SupyActionBar` widget (flash/zoom/flip-camera/close-focus) wired to controller — 2026-06-13
-- [x] V1-S1_5-07 — `SupyCameraConfiguration` (`minFocusDistanceLock`, `initialZoom`, `scanRange`) + factory plumbing — Dart value type, `SupyBarcodeScanOptions.camera`, Android `applyInitialCameraConfig` (zoom), iOS `applyInitialCameraConfig` (zoom + `.near` AF restriction), 6 unit tests — 2026-06-13
-- [x] V1-S1_5-08 — `SupySingleScanUseCaseConfiguration` + `SupySingleScanConfirmationSheet` widget (title, format chip, raw value, submit/retry buttons) — 9 unit + widget tests — 2026-06-13
-- [x] V1-S1_5-09 — `SupyMultipleScanUseCase` (counting/unique) + collapsible sheet + `countingRepeatDelay` — `SupyMultipleScanUseCaseConfiguration` + `SupyMultipleScanMode { counting, unique }`, headless `SupyMultipleScanAccumulator` (ChangeNotifier with debounce + injectable `now`), `SupyMultipleScanSheet` collapsible widget, 13 tests pass — 2026-06-13
-- [x] V1-S1_5-10 — `SupyFindAndPickUseCase` + expected-barcodes sheet — `SupyExpectedBarcode` value type, `SupyFindAndPickUseCaseConfiguration` (pick-list + `allowUnexpected`), `SupyFindAndPickAccumulator` (per-row progress, cap at `expectedCount`, `isComplete`), `SupyFindAndPickSheet` (per-row check icons, X/Y picked header, submit gated on completion), 18 tests pass — 2026-06-13
-- [x] V1-S1_5-11 — `SupyArOverlayConfiguration` + bounding-box overlay — `SupyArOverlayConfiguration` value type (stroke/fill/label knobs, validation asserts), `SupyArOverlay` widget paints filled+stroked RRects + label chips over normalized `[0..1]` boxes via `CustomPaint`, label auto-flips inside-box when above-box has no room, 11 tests pass — 2026-06-13
-- [x] V1-S1_5-12 — `SupyBarcodeScannerScreen` full-screen composite widget — sealed `SupyScanUseCase` (Single/Multiple/FindAndPick) drives sheet selection + result-callback routing; full-screen `Stack` composes preview + finder painter + AR overlay + top bar + guidance card + action bar + use-case sheet; owns its own controller unless one is supplied; 10 widget+unit tests pass; analyzer clean on lib/supy_scanner.dart and the new screen file — 2026-06-13
-- [x] V1-S1_5-13 — Example app: demo gallery (single / multi-counting / find-and-pick) + palette picker — added 4th "Gallery" tab to `example/lib/main.dart` listing 5 demos (single+confirm, single-immediate, multi-counting, multi-unique, find-and-pick) that launch full-screen `SupyBarcodeScannerScreen` via `Navigator.push`; `SegmentedButton` palette picker toggles `scanbotDark` / `scanbotLight`; result callbacks pop the route and surface via SnackBar; `SupyScannerPalette` added to barrel exports; analyzer clean — 2026-06-13
-- [x] V1-S1_5-14 — `docs/UI_CONFIGURATION.md` + `docs/MIGRATION.md` Scanbot-RTU-UI mapping — published `docs/UI_CONFIGURATION.md` (anatomy diagram, per-layer config catalog covering all 11 UI value types, use-case variants, palette tokens, 3 quick recipes) + appended "Scanbot RTU-UI → supy_scanner mapping" section to `docs/MIGRATION.md` (1:1 mapping table + non-1:1 caveats: per-config strings vs. localization registry, sealed use-case vs. enum, no image-result event in v1.1) — 2026-06-13
-- [x] V1-S1_5-15 — `docs/ARCHITECTURE.md` channel + module updates — added `models/ui/` row enumerating all v1.1 UI value types (palette, top bar, view finder, user guidance, action bar, AR overlay, camera, sealed `SupyScanUseCase` + per-variant configs); added `widgets/` rows for the v1.1 composite screen, AR overlay, and the three use-case sheets + accumulators; updated layering diagram to expose the new `widgets/` shape and the `models/ui/` band between widgets and the channel — 2026-06-13
-
-## v1.1 Sprint 2 — Barcode pipeline lift
-
-See `docs/V1.1_PLAN.md` Sprint 2. Exit gate: decode-rate uplift ≥ 8 pp vs v1.0 path at p50 latency ≤ +25 ms on the 20-SKU retailer sheet (low-end Android, 200 lux + 50 lux). Numbers recorded in `docs/QA.md`.
-
-- [x] V1-S2-01 — Vendor zxing-cpp into `native/` — CMake `FetchContent` pinned to v2.2.1, gated behind `SUPY_WITH_ZXING_CPP` (default OFF) so the Sprint 1 build path is unchanged until the decode wire-through lands. **Known unknown:** iOS pod consumption — current `source_files` glob over `../native/` would try to compile zxing-cpp sources through CocoaPods flags; needs either a `prepare_command`-driven CMake build producing a static .a the pod links, or a restricted `source_files` glob plus a separate iOS build script. Track as V1-S2-02. **Not verified on device** — no Android NDK / iOS toolchain available in this session; CI build needs to be the first signal. — 2026-06-13
-- [x] V1-S2-02 — iOS consumption strategy for zxing-cpp — **decided 2026-06-13:** podspec `prepare_command` shell-invokes `cmake --build` with `-DSUPY_WITH_ZXING_CPP=ON` against `../native/` for `iphoneos` + `iphonesimulator` archs, produces a fat static `libZXing.xcframework` under `ios/Vendor/`, pod vendors it via `s.vendored_frameworks`. Rejected alternatives: (B) per-file warning suppressions inside `source_files` (too fragile across zxing-cpp tag bumps), (C) committing a pre-built `.xcframework` binary (defeats the source-of-truth goal). **Landed 2026-06-14:** (1) `tools/build_zxing_xcframework.sh` — idempotent (stamp file vs. `GIT_TAG` extracted from `native/CMakeLists.txt`), two-arch CMake builds (iphoneos arm64 + iphonesimulator arm64;x86_64), iOS 16.0 deploy target, `xcodebuild -create-xcframework` assembly, `--force` flag. (2) `ios/supy_scanner.podspec` gates `s.vendored_frameworks = 'Vendor/ZXing.xcframework'` + `SUPY_WITH_ZXING_CPP=1` preprocessor define on `ENV['SUPY_SCANNER_ENABLE_ZXING']=='1' || File.directory?(Vendor/ZXing.xcframework)`; `s.prepare_command` only fires when the env flag is set AND the framework is absent, so the default `pod install` path stays untouched. (3) `.gitignore` excludes `ios/Vendor/ZXing.xcframework/` + `build/ios-zxing/`. **Build verification still blocked** on Mac + Xcode 15 + CMake — needs one CI run to confirm xcframework assembly and pod consumption before flipping `SUPY_WITH_ZXING_CPP=ON` for real (V1-S2-03). — 2026-06-14
-- [x] V1-S2-03 — C++ core decode surface (zxing-cpp wrapper, C ABI, gated on `SUPY_WITH_ZXING_CPP`) — **Dart wire side locked 2026-06-13:** `test/models/supy_scan_options_test.dart` pins `useNativeCore` propagation through `SupyBarcodeScanOptions.toWire()` + `SupyDocumentScanOptions.toWire()` (5 tests pass). **Landed 2026-06-14:** (1) `native/include/supy_scanner_core.h` C ABI grown with `supy_core_has_zxing`, `supy_core_decode`, opaque `supy_core_decode_result_t*` handle + `_count` / `_text` / `_format` / `_corners` accessors + `supy_core_decode_results_free`. Format bitmask covers all 18 zxing-cpp v2.2.1 formats (Aztec, Codabar, Code39/93/128, DataMatrix, EAN8/13, ITF, PDF417, QRCode, UPCA/E, DataBar/Expanded, MicroQR, RMQR, MaxiCode). (2) `native/barcode/barcode_decoder.{h,cpp}` C++ wrapper translates bitmask ↔ `ZXing::BarcodeFormat`, calls `ZXing::ReadBarcodes` with `setTryHarder`/`setTryRotate`/`setMaxNumberOfSymbols(8)`, returns TL/TR/BR/BL pixel-space corners. When `SUPY_WITH_ZXING_CPP` is undefined the impl is a no-op returning empty vector — Sprint 1 build path stays green. (3) `native/src/supy_scanner_core.cpp` bridges C ABI to C++ impl with NULL-on-invalid-input contract enforced at the boundary. (4) `native/barcode/barcode_decoder_test.cpp` host gtest: ABI contract tests (null inputs, invalid dims, free(NULL), accessor bounds) pass with zxing OFF; decode tests (blank-frame, synthetic QR via `MultiFormatWriter`, format-mask filtering on synthetic EAN13) gated on zxing ON. CMakeLists.txt flips `BUILD_WRITERS ON` only when `SUPY_BUILD_TESTS` is also ON so device/xcframework builds stay lean. (5) `docs/ARCHITECTURE.md` documents the C ABI symbol table and the three-layer gate (CMake flag → podspec env → `useNativeCore` PV arg). **Build verification still blocked** on Mac/Xcode 15/CMake CI. **JNI + Swift wire-through is V1-S2-03a/b** — see follow-up tickets. — 2026-06-14
-- [x] V1-S2-03a — Android JNI bridge into `supy_core_decode` + `useNativeCore=true` path in `SupyBarcodeScannerView` / `BatchBarcodeScannerActivity`. **Landed 2026-06-14:** (1) `cpp/supy_scanner_core_jni.cpp` — `nativeHasZxing()` probe + `nativeDecodeBarcodes(yBuffer, w, h, rowStride, formats, tryHarder, tryRotate)` returning packed `Object[3] = { String[] texts, int[] formats, float[8*N] corners }` (one ABI crossing; opaque `supy_core_decode_result_t*` freed before return; `noexcept` wrapper around the C++ entry). (2) `SupyNativeCore.kt` — `hasZxing()` + `decodeBarcodes(...)` unpacker + `NativeBarcode` value type. Null JNI return → fall through to ML Kit on this frame; empty list → native owned the frame, nothing visible. (3) `FormatMapper.toSupyFormatMask` mirroring the 18-bit `SUPY_FORMAT_*` table from `native/include/supy_scanner_core.h`, plus `supyBitToWire(bit)`. (4) `SupyBarcodeScannerView` — `nativeCoreEnabled` resolved at PV init via three-layer gate (`useNativeCore` arg && `hasZxing()`), `nativeFormatMask` refreshed by `setFormats`, `AnalyzerImpl.analyze` branches to `tryNativeDecode(image)` before ML Kit with `pixelStride==1`/`isDirect`/dims guards, `emitNativeDetections` derives axis-aligned bbox via min/max sweep over 8 corner floats and emits the same wire shape as the ML Kit `detection` event. (5) `BatchBarcodeScannerLauncher` forwards `useNativeCore` via `EXTRA_USE_NATIVE_CORE`. (6) `BatchBarcodeScannerActivity` — companion const, lazy single-thread background `ExecutorService` swapped in for `ContextCompat.getMainExecutor` when native is on (CPU-bound decode must not block UI), `tryNativeDecode` + `handleNativeDetections` mirroring the PV path with `runOnUiThread { ... }` for `counterLabel` / `fireFeedback` / `finishOk`, executor shut down in `onDestroy`. **Build verification still blocked** on Android NDK CI before flipping `SUPY_WITH_ZXING_CPP=ON`. — 2026-06-14
-- [x] V1-S2-03b — iOS Swift bridge into `supy_core_decode` (via `SupyNativeCoreBridge`) + `useNativeCore=true` path in `BarcodeDetector` / `BatchBarcodeScannerPresenter`. **Landed 2026-06-16:** (1) `ios/Classes/nativecore/SupyNativeCoreBridge.{h,mm}` — new `SupyNativeBarcode` Obj-C value class (`rawValue`, `format`, TL/TR/BR/BL `CGPoint` corners) + `+hasZxing` mirroring `supy_core_has_zxing` + `+decodeBarcodesFromLuma:width:height:rowStride:formats:tryHarder:tryRotate:` returning `NSArray<SupyNativeBarcode *> *` (nil when zxing-cpp not linked or input invalid; empty array when decode ran and found nothing). `SupyFormatBitToWire(uint32_t)` static helper mirrors `FormatMapper.kt#supyBitToWire`. `SUPY_FORMAT_NONE → SUPY_FORMAT_ALL` coercion at the boundary belt-and-braces matches the Android JNI contract. (2) `ios/Classes/nativecore/SupyNativeCore.swift` — Swift facade grown with `hasZxing()`, `decodeBarcodes(...)`, `NativeBarcode` value type (with `boundingBox` min/max-sweep derivation matching Android `emitNativeDetections`), and `SupyFormatMask` OptionSet (`FormatMapper.toSupyFormatMask` mirror: empty list or `"all"` → `.all`; unknowns skipped; empty result coerces to `.all`). (3) `ios/Classes/barcode/BarcodeDetector.swift` — new `nativeCoreEnabled: Bool` + `nativeFormatMask: SupyFormatMask` state, `setUseNativeCore(_:formats:)` setter dispatched onto `detectionQueue`, `captureOutput` early-returns through `tryNativeDecode(_:)` immediately after `shouldSkipFrame`. The native path rejects non-`420YpCbCr8BiPlanar{Video,Full}Range` pixel formats (Vision fallback), locks the CVPixelBuffer with `CVPixelBufferLockBaseAddress(_, .readOnly)` + `defer { CVPixelBufferUnlockBaseAddress }` (no-leak soak guarantee), reads `CVPixelBufferGet{BaseAddress,Width,Height,BytesPerRow}OfPlane(_, 0)`, and calls the bridge. Non-nil result short-circuits Vision; emits `DetectedBarcode` only when non-empty. (4) `ios/Classes/barcode/SupyBarcodeScannerView.swift` — `nativeCoreEnabled` resolved at PV init via three-layer gate (`creationParams["useNativeCore"] && SupyNativeCore.hasZxing()`); `detector.setUseNativeCore(...)` wired right after `setSymbologies(...)`; `setFormats` method-channel handler re-syncs the native mask alongside Vision symbologies. (5) `ios/Classes/barcode/BatchBarcodeScannerPresenter.swift` — `useNativeCore` extracted from `args`, three-layer gate resolved in the presenter, threaded through new `BatchBarcodeScannerViewController` init params (`wireFormats: [String]`, `useNativeCore: Bool`); `viewDidLoad` calls `detector.setUseNativeCore(useNativeCore, formats: wireFormats)` immediately after `setSymbologies(symbologies)`. (6) CHANGELOG `### Added` bullet under `[Unreleased]`. **Build verification still blocked** on V1-S2-02 xcframework CI assembly before the end-to-end zxing-cpp decode path can be exercised on device. — 2026-06-16
-- [x] V1-S2-04 — libdmtx Data Matrix locator (decode still via zxing-cpp). **Landed 2026-06-16:** (1) `native/include/supy_scanner_core.h` — `SUPY_CORE_ABI_VERSION` bumped 2 → 3. New locator C ABI block: opaque `supy_core_locate_result_t*` handle + `supy_core_has_libdmtx`, `supy_core_locate_datamatrix`, `_count`, `_corners`, `_results_free`. Corner convention is TL,TR,BR,BL in input-image pixel space — same as `supy_core_decode_corners`. Rationale documented inline: libdmtx is the most permissive open-source DM finder (catches symbols zxing-cpp misses on noisy/perspective frames), but zxing-cpp's decode on a clean ROI crop is consistently better — hence the locator+decoder split. (2) `native/barcode/datamatrix_locator.{h,cpp}` — C++ wrapper. `cornersFromRegion` samples `reg.fit2raw` at the four unit-square corners and flips y back to image-origin (libdmtx uses bottom-left raw coords, we emit top-left). Honors row-stride padding via `dmtxImageSetProp(DmtxPropRowPadBytes, row_stride - width)`. Bounded by `max(1, max_regions)` and an optional `timeout_ms` via `dmtxTimeAdd(dmtxTimeNow(), timeout_ms)`. When `SUPY_WITH_LIBDMTX` is undefined the impl returns `{}` so the Sprint 1 build path stays untouched. (3) `native/src/supy_scanner_core.cpp` — five `extern "C"` bridges, opaque-handle definition kept in the .cpp so callers never see the underlying `std::vector`. Boundary validation returns NULL on bad input or when libdmtx isn't linked, matching the existing decode contract. (4) `native/barcode/datamatrix_locator_test.cpp` — host gtest. Six ABI contract tests pass regardless of flags. `BlankFrameYieldsEmptyHandle` gates on `SUPY_WITH_LIBDMTX`. `FindsSyntheticDataMatrix` + `RespectsRowStridePadding` further gate on `SUPY_WITH_ZXING_CPP` for the `MultiFormatWriter` fixture renderer. (5) `native/CMakeLists.txt` — new `SUPY_WITH_LIBDMTX` option, libdmtx v0.7.7 FetchContent block (mirroring the zxing-cpp pattern), test-target define when libdmtx is ON. (6) `docs/ARCHITECTURE.md` — symbol table grown with the five new locator entries. (7) `docs/DEPENDENCIES.md` — libdmtx v0.7.7 (BSD-2-Clause) added next to zxing-cpp under the v1.1 vendoring table. **Build verification still blocked** on the Mac+CMake CI run that's also gating V1-S2-02/03. **JNI + Swift wire-through deferred to V1-S2-04a (Android) and V1-S2-04b (iOS)** — same precedent as the V1-S2-03/03a/03b zxing rollout. — 2026-06-16
-- [x] V1-S2-04a — Android JNI bridge into `supy_core_locate_datamatrix`. **Landed 2026-06-16:** (1) `android/src/main/cpp/supy_scanner_core_jni.cpp` — `nativeHasLibdmtx()` probe + `nativeLocateDatamatrix(yBuffer, w, h, rowStride, maxRegions, timeoutMs)` returning packed `float[8*N]` TL,TR,BR,BL corners. Same address-validation / overflow guards as `nativeDecodeBarcodes` (rejects non-direct buffers, oversized strides, invalid dims). Empty result is a zero-length `float[]` (not null) so callers distinguish "locator ran, no regions" from "locator unavailable / failed". (2) `android/src/main/kotlin/io/supy/scanner/nativecore/SupyNativeCore.kt` — `hasLibdmtx(): Boolean` probe + `locateDatamatrix(y, w, h, rowStride, maxRegions=4, timeoutMs=30): List<FloatArray>?`. Returns `null` on JNI/native failure or build flag off, `emptyList()` when the locator reported zero regions, and an N-element list of 8-float quads on hit — same null/empty contract as `decodeBarcodes`. Wire-through into the live-preview `BarcodeAnalyzer` (locate→bbox-crop→decode-with-DM-mask assist hop) split out to V1-S2-04a.2 since it needs a reusable luma-crop helper + format-mask gate that deserve their own review pass. — 2026-06-16
-- [x] V1-S2-04a.2 — Android Data-Matrix ROI assist path in `SupyBarcodeScannerView`. **Landed 2026-06-16:** (1) `FormatMapper` gained `SUPY_FORMAT_DATA_MATRIX_BIT` (public), `maskIncludesDataMatrix(mask)`, and `maskWithoutDataMatrix(mask)` helpers. (2) `SupyBarcodeScannerView` gained `nativeDmLocateEnabled = nativeCoreEnabled && hasLibdmtx()`. The analyzer's `tryNativeDecode` now runs the locator first when the format mask includes DM, axis-aligned-bbox-crops each region (with ~6% padding clamped to the frame), and re-enters `decodeBarcodes` with a DM-only mask + `tryHarder=true`. Located corners are translated back into input-image pixel space so the emitted `boundingBox` contract is unchanged. The full-frame `decodeBarcodes` still runs for the non-DM bits of the mask (skipped only when DM was the only requested format and the assist was eligible). A reusable per-analyzer direct `cropBuffer` grows lazily with ×1.5 slack so the hot path doesn't re-allocate frame-to-frame. (3) `BatchBarcodeScannerActivity` is unchanged this turn — see V1-S2-04a.3. — 2026-06-16
-- [x] V1-S2-04a.3 — Mirror the libdmtx ROI assist into `BatchBarcodeScannerActivity`. **Landed 2026-06-16:** `nativeDmLocateEnabled = nativeCoreEnabled && hasLibdmtx()` resolved in `onCreate`. `AnalyzerImpl.tryNativeDecode` now runs the locator first when the format mask includes DM, axis-aligned-bbox-crops each region with ~6% padding (≥2 px, clamped, 12×12 minimum), and re-enters `decodeBarcodes` with a DM-only mask + `tryHarder=true`. Corners are translated back into input-image pixel space. Full-frame `decodeBarcodes` still runs for the non-DM bits (skipped only when DM was the only requested format and the assist was eligible). Reuses a per-analyzer direct `cropBuffer` with ×1.5 slack growth so the hot path doesn't reallocate. `handleNativeDetections` contract unchanged — merged hits dispatched via `runOnUiThread`. — 2026-06-16
-- [x] V1-S2-04b — iOS Swift bridge into `supy_core_locate_datamatrix` (via `SupyNativeCoreBridge`) + Data-Matrix ROI assist path in `BarcodeDetector` / `BatchBarcodeScannerPresenter`. Routes `CVPixelBuffer` Y-plane through the locator when Data Matrix is enabled; same fallback semantics as the Android path. **Landed 2026-06-16:** (1) `SupyNativeCoreBridge.{h,mm}` — new `+hasLibdmtx` and `+locateDatamatrixFromLuma:width:height:rowStride:maxRegions:timeoutMs:` Obj-C entry points wrapping `supy_core_has_libdmtx` + the locator handle/`_count`/`_corners`/`_results_free` quartet. Returns `nil` when libdmtx isn't linked or input is invalid; empty array means locator ran and found nothing. (2) `SupyNativeCore.swift` — `hasLibdmtx() -> Bool`, `locateDatamatrix(...) -> [[CGPoint]]?` returning TL/TR/BR/BL pixel-space quads, plus `includesDataMatrix(_:)` / `maskWithoutDataMatrix(_:)` helpers on `SupyFormatMask` mirroring `FormatMapper.maskIncludesDataMatrix` / `maskWithoutDataMatrix` on Android. `.all` is explicitly lowered to the union-of-known-bits-minus-DM so the C ABI's NONE→ALL coercion can't re-introduce DM. (3) `BarcodeDetector.swift` — new `nativeDmLocateEnabled = nativeCoreEnabled && SupyNativeCore.hasLibdmtx()` resolved alongside the existing `nativeCoreEnabled` in `setUseNativeCore(_:formats:)`. Reusable `cropBuffer: [UInt8]` per detector, grown ×1.5 as needed. `tryNativeDecode` now: when DM is in the mask, runs the locator first (max 4 regions, 20 ms timeout); per region, axis-aligned-bbox-crops with ~6% padding clamped to image bounds and a ≥12×12 minimum into `cropBuffer`, re-enters `supy_core_decode` on the crop with a DM-only mask + `tryHarder=true`, translates corners back to input pixel space. Full-frame decode still runs for the non-DM portion of the mask, skipped only when DM was the sole requested format AND the locator pass ran (authoritative for DM). (4) Wire-through in `SupyBarcodeScannerView.swift` (PV creation + `setFormats` re-sync) and `BatchBarcodeScannerPresenter.swift` (VC arg-extraction + `viewDidLoad`) is unchanged — both already call `detector.setUseNativeCore(_:formats:)`, which now resolves `nativeDmLocateEnabled` internally. (5) CHANGELOG `### Added` bullet under `[Unreleased]`. **Build verification still blocked** on the V1-S2-02 xcframework CI run.
-- [x] V1-S2-05.1 — Sauvola (2D) / Wolf-Jolion (1D) adaptive binarization kernel behind the stable `supy_core_binarize_luma` C ABI, wired into the libdmtx ROI assist path on both Android entry points. **Landed 2026-06-16:** (1) `native/include/supy_scanner_binarize.h` — new public C ABI. `supy_binarize_mode_t` enum (`SAUVOLA_2D=0`, `WOLF_JOLION_1D=1`); `supy_core_binarize_luma(luma, w, h, row_stride, mode) -> int` returning 1 on success, 0 on failure. Reentrant, no globals, in-place over a packed luma buffer. (2) `native/barcode/binarize.{h,cpp}` — integral-image impl (`Y` + `Y²`, int64 `(w+1)×(h+1)`) so the per-pixel cost is O(1) regardless of window radius. Window radius = `clamp(min(w,h)/16, 5, 25)` with collapse for tiny crops. Sauvola: `T = mean·(1 + k·(stdev/R − 1))` with k=0.34, R=128. Wolf-Jolion: image-wide min scan + windowed max-stddev pre-pass, then `T = (1−k)·mean + k·minGlobal + k·(stdev/maxStd)·(mean − minGlobal)` with k=0.34 and a `maxStd ≤ 0 → 1` guard. Variable named `stdev` (not `std`) to dodge the C++ in-scope-of-own-initializer namespace-shadow bug. In-place write is safe: integrals freeze every original pixel before any write, and the per-row scan reads `dst[x]` strictly before overwriting it. (3) `native/include/supy_scanner_core.h` — `SUPY_CORE_ABI_VERSION` bumped 3 → 4. (4) `native/src/supy_scanner_core.cpp` — added `supy_core_binarize_luma` extern "C" forwarder. (5) `native/CMakeLists.txt` — added `barcode/binarize.cpp` to `SUPY_CORE_SOURCES`. (6) `android/src/main/cpp/supy_scanner_core_jni.cpp` — `nativeBinarizeLumaCrop(yBuffer, w, h, rowStride, mode)` JNI bridge with the standard direct-buffer guards (`rowStride > 65536` rejected) + noexcept catch-all. (7) `android/src/main/kotlin/io/supy/scanner/nativecore/SupyNativeCore.kt` — `BinarizeMode` enum mirroring the C enum + `binarizeLumaCrop(y, w, h, rowStride, mode): Boolean` wrapper. `ensureLoaded()` failure returns `false`. (8) `SupyBarcodeScannerView.kt` + `BatchBarcodeScannerActivity.kt` — both `tryDatamatrixRoiAssist` paths now call `binarizeLumaCrop(...SAUVOLA_2D)` between `copyLumaCrop` and `decodeBarcodes`. Wrapped in try/catch so a false return falls back to a raw-luma decode rather than dropping the frame. Wolf-Jolion 1D is shipped but unused on this path — reserved for V1-S2-06+ when 1D codes enter the assist. — 2026-06-16
-- [ ] V1-S2-05.2 — Halide AOT swap behind the same `supy_core_binarize_luma` ABI. Vendored prebuilt Halide tarball under `native/third_party/halide-<ver>/`, host-side generator build, AOT codegen for 4 ABIs (Android arm64-v8a + armeabi-v7a + x86_64 + iOS arm64). Drop-in replace the integral-image impl — same return contract, ABI version unchanged. Depends on V1-S2-05.1. **Scaffolding landed 2026-06-16 (default OFF — no behavior change):** Locked scope to `SAUVOLA_2D` only (Wolf-Jolion 1D stays on integral-image — split out as V1-S2-05.3); pinned Halide 17.0.1; host-vendored tarballs under `native/third_party/halide-17.0.x/{darwin-arm64,darwin-x86_64,linux-x86_64}/`. New files: `docs/V1-S2-05.2-HALIDE.md` (design + decision log), `native/third_party/halide-17.0.x/README.md` (vendoring procedure — sha256 table TBD), `native/halide/sauvola_2d_generator.cpp` (Halide `Generator<>` — separable 2D box-sums of Y and Y² via two 1D `sum()` reductions, `mean·(1 + k·(stdev/R − 1))` → 0/255 select; estimates set for autoscheduler; manual tile(64,32)+vectorize(8)+parallel fallback), `native/halide/targets.cmake` (ABI → Halide Target string), `native/cmake/FindHalide.cmake` (resolves vendor tree by host triple, defines `Halide::Halide` IMPORTED SHARED, fails loudly when the tarball isn't extracted), `native/cmake/HalideAot.cmake` (`add_halide_aot_kernel()` — builds a host-arch generator binary linking `Halide::Halide` + `GenGen.cpp`, runs it via `add_custom_command` to emit `.o`+`.h` for the active Target, wraps both in `supy_halide_<NAME>` OBJECT IMPORTED GLOBAL). Modified: `native/CMakeLists.txt` (new `option(SUPY_USE_HALIDE OFF)` + gated block linking the OBJECT library + defining `SUPY_HAVE_HALIDE_SAUVOLA=1`), `native/barcode/binarize.cpp` (under `#if SUPY_HAVE_HALIDE_SAUVOLA`: conditional include of `HalideRuntime.h`+generated `sauvola_2d.h`, anonymous-namespace `runHalideSauvola2d()` bridge building a `halide_buffer_t` in-place over the caller's luma — src==dst is safe because the threshold is fully memoized before the final select — and an early-dispatch inside `binarizeLuma()` for `SUPY_BINARIZE_SAUVOLA_2D` so Wolf-Jolion stays on the existing path). Anonymous-namespace ordering bug caught + fixed in-flight (bridge placed AFTER the existing `}  // namespace` closer so `kSauvolaK`/`kSauvolaR` are reachable from the same TU). Couldn't run `cmake -S native -B …` locally (no cmake binary on this machine); OFF-path is review-by-inspection — every new code path is gated by `SUPY_USE_HALIDE` (CMake) or `SUPY_HAVE_HALIDE_SAUVOLA` (preprocessor), both unset by default. **Still pending for ticket completion:** (1) extract the three Halide 17.0.1 tarballs into the vendor tree and record sha256s in the README; (2) configure with `-DSUPY_USE_HALIDE=ON` against the Android NDK and iOS toolchain to flush out any cross-compile breakage in the host-vs-target split (flagged in HalideAot.cmake comments as a possible ExternalProject lift if it shows up — that lift becomes V1-S2-05.4); (3) parity test (±1 px vs integral-image impl) + microbench bar of ≥1.5× on Pixel 8 + iPhone 15 Pro; (4) move the vendored libHalide to Git LFS (V1-S2-05.5). — scaffolding 2026-06-16
-- [x] V1-S2-05.1.ios — iOS wire-through of `supy_core_binarize_luma(SAUVOLA_2D)` into the DM ROI crop. **Landed 2026-06-16:** (1) `ios/Classes/nativecore/SupyNativeCoreBridge.h` — `SupyBinarizeMode` NS_ENUM (`Sauvola2D=0`, `WolfJolion1D=1`) + `+binarizeLumaInPlace:width:height:rowStride:mode:` class method. (2) `ios/Classes/nativecore/SupyNativeCoreBridge.mm` — `#import "supy_scanner_binarize.h"` + implementation forwarding to `supy_core_binarize_luma` with input validation (luma non-null, w/h ≥1, row_stride ≥ width). (3) `ios/Classes/nativecore/SupyNativeCore.swift` — `BinarizeMode { sauvola2D, wolfJolion1D }` Swift enum + `binarizeLumaInPlace(luma:width:height:rowStride:mode:) -> Bool` static facade. (4) `ios/Classes/barcode/BarcodeDetector.swift#decodeDmRegion` — call `SupyNativeCore.binarizeLumaInPlace(...mode: .sauvola2D)` between the cropBuffer fill and the DM-only `SupyNativeCore.decodeBarcodes(tryHarder: true)` re-entry. A false return falls through to a raw-luma decode rather than dropping the frame (matches Android V1-S2-05.1 try/catch fallback). Wolf-Jolion 1D shipped but unused — reserved for a later 1D assist path. Build verification still gated on V1-S2-02 xcframework CI. — 2026-06-16
-- [ ] V1-S2-05.3 — Port `WOLF_JOLION_1D` to Halide once a 1D code path consumes it. Out of scope for V1-S2-05.2; existing integral-image impl stays as the sole path.
-- [ ] V1-S2-05.4 — Halide autoscheduler pass + per-ABI schedule overrides for Sauvola 2D. Likely depends on V1-S2-05.2 ON-path verification surfacing the manual schedule's hot spots. May also absorb an ExternalProject lift if the in-tree host-generator-vs-target-toolchain split breaks under the Android NDK CMake driver.
-- [ ] V1-S2-05.5 — Move `native/third_party/halide-17.0.x/` to Git LFS once tarballs are vendored. Each host triple is ~50–80 MB; checking them into Git directly would balloon the repo.
-- [x] V1-S2-06.1 — Native C ABI kernel + JNI bridge + Kotlin wrapper for 3-frame temporal-median luma fusion. **Landed 2026-06-16:** (1) `native/include/supy_scanner_temporal.h` — new public C ABI. `supy_core_temporal_median_luma(f0, f1, f2, out, w, h, row_stride) -> int` returning 1 on success, 0 on validation failure. Reentrant, no globals; all four buffers must share geometry; `out` may not alias any input (trivial pointer-equality alias check). (2) `native/barcode/temporal.{h,cpp}` — branch-free `median3 = max(min(a,b), min(max(a,b), c))` on bytes promoted to int. Two-loop per-row scan, no allocations. (3) `native/src/supy_scanner_core.cpp` — added `supy_core_temporal_median_luma` extern "C" forwarder plus the two new includes. (4) `native/CMakeLists.txt` — added `barcode/temporal.cpp` to `SUPY_CORE_SOURCES`. (5) `android/src/main/cpp/supy_scanner_core_jni.cpp` — `nativeTemporalMedianLuma3(f0, f1, f2, out, w, h, rowStride)` JNI bridge with the standard direct-buffer guards (`rowStride > 65536` rejected) + noexcept catch-all. (6) `android/src/main/kotlin/io/supy/scanner/nativecore/SupyNativeCore.kt` — `temporalMedianLuma3(...)` wrapper + missing `nativeBinarizeLumaCrop` extern (closing the V1-S2-05.1 gap) + new `nativeTemporalMedianLuma3` extern. No live-preview wiring yet — that lands in V1-S2-06.2. — 2026-06-16
-- [x] V1-S2-06.2 — Wire the temporal-median kernel into the Android live-preview path. **Landed 2026-06-16:** (1) New `android/src/main/kotlin/io/supy/scanner/barcode/DatamatrixTemporalRing.kt` — analyzer-thread-only helper holding the last 2 locator-hit frames (`Slot(w, h, rowStride, lumaCopy: ByteBuffer, boxes: List<Box>)`). `tryFuse(curLuma, w, h, rowStride, curBox, iouThreshold=0.5)` finds best-IoU matches in both priors, takes the union bbox clamped to the frame, copies the same source-coord crop from all 3 lumas into 3 pooled packed-stride ByteBuffers, calls `SupyNativeCore.temporalMedianLuma3` into a 4th pooled output, returns `FusedCrop(luma, w, h, srcX0, srcY0)`. Returns null when either prior is missing / geometry-mismatched / IoU-fail or the native call fails. `push(luma, w, h, rowStride, boxes)` shifts the ring; the slot we're evicting donates its luma buffer back to a 2-buffer pool so steady-state has zero allocations. Geometry change (resolution swap) evicts stale slots. (2) `SupyBarcodeScannerView.kt` + `BatchBarcodeScannerActivity.kt` — both analyzers now own a `DatamatrixTemporalRing` instance. `tryDatamatrixRoiAssist` per-region path first calls `temporalRing.tryFuse(...)`; on success it feeds the fused crop through `binarizeLumaCrop(SAUVOLA_2D)` → `decodeBarcodes(DM-only, tryHarder)`, translating corners back via the union bbox `(srcX0, srcY0)`. On no-match it falls through to the V1-S2-05.1 raw-crop path unchanged. At end-of-frame, `temporalRing.push(buf, w, h, rowStride, frameBoxes)` records this frame's bboxes for the next analyzer tick. Skip-on-no-match design (locked in V1-S2-06 brainstorm): no behavior regression on transient hits — fusion only fires on 3-frame held streaks. iOS bridge is V1-S2-06.3 (blocked on V1-S2-02 xcframework CI). — 2026-06-16
-- [x] V1-S2-06.3 — Wire the temporal-median kernel into the iOS live-preview path. **Landed 2026-06-16:** (1) `ios/Classes/nativecore/SupyNativeCoreBridge.h`/`.mm` — new `+temporalMedianLuma3:frame1:frame2:out:width:height:rowStride:` Obj-C entry point forwarding to `supy_core_temporal_median_luma` (the V1-S2-06.1 C ABI). Null-pointer and degenerate-geometry rejection before the call. (2) `ios/Classes/nativecore/SupyNativeCore.swift` — `SupyNativeCore.temporalMedianLuma3(frame0:frame1:frame2:out:width:height:rowStride:) -> Bool` Swift facade. (3) New `ios/Classes/barcode/DatamatrixTemporalRing.swift` — Swift mirror of Android's `DatamatrixTemporalRing.kt`. `Box`, `FusedCrop`, private `Slot { w, h, rowStride, luma: [UInt8], boxes: [Box] }`. Pooled `cropA/B/C/cropOut: [UInt8]` grown ×1.5. `tryFuse(...)` IoU-matches against prev1/prev2 (≥0.5), takes the union bbox clamped to the current frame, ≥12×12 min, row-copies each crop, calls `temporalMedianLuma3`. `push(...)` recycles prev2's `[UInt8]` storage when possible and stores the full luma. (4) `ios/Classes/barcode/BarcodeDetector.swift` — analyzer owns one `DatamatrixTemporalRing`. `tryNativeDecode` per-region path first calls `temporalRing.tryFuse(...)`; on hit it feeds the fused crop through the new `decodeFusedCrop(_:)` helper (Sauvola-binarize → DM-only `decodeBarcodes(tryHarder: true)` with corner translation by `(srcX0, srcY0)`). On miss it falls through to the existing `decodeDmRegion(...)` raw-crop path unchanged. At end-of-frame, `temporalRing.push(...)` records full luma + per-region bboxes; frames without locator hits are not pushed so held-region streaks are preserved. New private helpers `boxFromQuad(_:width:height:)` (pre-pad clamped bbox from a locator quad) and `decodeFusedCrop(_:)`. Build verification still gated on V1-S2-02 iOS xcframework CI. — 2026-06-16
-- [x] V1-S2-08 — Debug-only tier override (`infra-tier-debug-override` from `docs/backlog/PRIORITY.md`, P1.1). **Landed 2026-06-16:** `SupyScannerChannel.debugForceTier(SupyDeviceTier?)` channel method (`io.supy.scanner/v1` `debugForceTier`, arg `{tier: 'high'|'mid'|'low'|null}`). Three independent gates — Dart `kDebugMode` early-return, Android `ApplicationInfo.FLAG_DEBUGGABLE` check in `SupyScannerPlugin.onMethodCall`, iOS `#if DEBUG` compile-time wrap in the Swift handler. Native overrides live as separate `@Volatile`/`private static` `debugOverride` fields on `io.supy.scanner.perf.DeviceTier` and `SupyDeviceTier`; `detect()` short-circuits on the override; cache untouched so clearing is a single assignment. `SupyDeviceTier.unknown` is treated as a clear (write-only for the three real tiers). Channel-method row added to `docs/ARCHITECTURE.md`; three mocked unit tests added to `test/channel/supy_scanner_channel_test.dart` (13/13 green); example app `SupyDebugHud` panel header gains a `_TierOverridePicker` popup (AUTO/HIGH/MID/LOW). Unblocks per-shard tier pinning in perfgate and tier-low repro on CI flagships. — 2026-06-16
-- [x] V1-S2-07 — Perf-gate harness: decode-rate + p50 latency on the 20-SKU sheet (200 lux + 50 lux); record numbers in `docs/QA.md`. **Landed 2026-06-16:** `tools/perfgate/` Dart CLI wraps `example/integration_test/perf_bench_test.dart` — spawns `flutter test --machine`, parses `BENCH_RESULT` / `BENCH_TIER` JSON lines, compares per-tier baselines under `tools/perfgate/baselines/<tier>/<metric>.json`, fails CI on any p95 regression >15% (`kP95RegressionTolerance = 0.15`). Pure-Dart `lib/baseline_compare.dart` is unit-testable (9/9 tests pass). Added `getDeviceTier()` channel method (`io.supy.scanner/v1`) so the bench self-reports tier via `setUpAll`; native handlers wrap existing `io.supy.scanner.perf.DeviceTier` + iOS `SupyDeviceTier`. CI jobs: `perfgate-unit` (blocking) and `perfgate-emulator` (`continue-on-error: true` until measured baselines land — see H3-04). Devices/policy in `tools/perfgate/README.md`. 20-SKU lux numbers themselves will be recorded under `docs/QA.md` Phase 5 once the emulator job has produced two clean runs.
-
-## v1.1 Performance — device-class adaptive, thermal, idle
-
-See `docs/PERFORMANCE.md`. Lands on top of v1.0.0 as `v1.1.x`. No public API changes — additive EventChannel payloads only.
-
-- [x] V1-PERF-P1 — DeviceTier + tier-adaptive analyzer config (resolution + FPS caps) — 2026-06-13
-- [x] V1-PERF-P2 — `ThermalGovernor` (Android API 29+) + `SupyThermalGovernor` (iOS); emits `{type:'thermal', state, paused, throttled}` event — 2026-06-13
-- [x] V1-PERF-P3 — Idle pause via luma-variance gate (`IdleDetector` + `SupyIdleDetector`); emits `{type:'idle_pause'|'idle_resume'}` on transition; HIGH tier opt-out — 2026-06-13
-- [x] V1-PERF-P4 — OCR image downscale (1600px long edge) + tier-aware JPEG quality (LOW: 75, MID/HIGH: 85) — 2026-06-13
-- [ ] V1-PERF-P5 — Re-bench Moto G Power + Pixel 8 + iPhone SE 3 + 15 Pro; record `## Results (v1.1.x)` table in `docs/PERFORMANCE.md`; tag `v1.1.0`
-
-## v1.0.x Hardening — Sprints H0–H4
-
-See `/Users/abdalqaderalnajjar/.claude/plans/gimme-plan-to-make-vast-gray.md` for the full plan. Sequenced BEFORE v1.1 Sprint 2.
-
-### H0 — Discovery & baseline (3 days)
-
-- [x] H0-01 — Stale-TODO sweep + sprint scaffold added (this commit) — 2026-06-13
-- [x] H0-EX1 — Example: Supy-branded showcase tab (4 flows: single / batch / embedded / document + OCR) — 2026-06-13
-- [ ] H0-02 — S4-02 reliability harness on Moto G Power + iPhone SE 2; record into `docs/QA.md` `## Baseline — v1.0.0` (device-blocked)
-- [ ] H0-03 — S4-03 perf bench on both devices; record (device-blocked)
-- [ ] H0-04 — V1-S1-09 native-core probe verification on both devices (device-blocked)
-- [ ] H0-05 — Memory profile: 10-page doc + 50-iter batch + 100 open/close (device-blocked)
-- [x] H0-06 — Stricter analyzer lints + fix new warnings in `lib/` — analyzer block in `analysis_options.yaml` extended with `prefer_const_constructors_in_immutables`, `avoid_catches_without_on_clauses`, `only_throw_errors`, `unnecessary_await_in_return`, `avoid_slow_async_io`, `prefer_relative_imports`, `use_late_for_private_fields_and_variables`, `throw_in_finally`, `no_adjacent_strings_in_list`, `avoid_returning_this`, `join_return_with_assignment`, `parameter_assignments`. `flutter analyze lib/` → 0 issues.
-- [ ] H0-07 — Baseline section reviewed with mobile lead (sign-off-blocked)
-
-### H1 — Stability hardening (1.5 weeks)
-
-- [x] H1-01 — Android camera-lifecycle audit + fixes. Both PlatformViews (`SupyBarcodeScannerView`, `SupyDocumentScannerView`) tear down correctly in `dispose()`: `clearImageAnalysisAnalyzer()` → `unbind()` → `previewView.controller = null` → `cameraController = null`. Both host activities (`BatchBarcodeScannerActivity`, `CameraXDocumentScannerActivity`) bind via `LifecycleCameraController.bindToLifecycle(this@Activity)` so CameraX auto-unbinds on `onDestroy`. Real defect fixed: `SupyDocumentScannerView.startCamera()` was passing `ContextCompat.getMainExecutor(context)` to `setImageAnalysisAnalyzer`, forcing `DocumentFrameAnalyzer.analyze()` onto the main thread (violates CLAUDE.md + the `@WorkerThread` annotation from H1-03). Replaced with a single-thread daemon `analyzerExecutor` mirroring the barcode view, with `shutdown()` on dispose. `### Lifecycle invariants` already covers the contract in `docs/ARCHITECTURE.md` — no new invariants emerged.
-- [x] H1-02 — iOS `AVCaptureSession` lifecycle audit + fixes. Audited 3 session owners: `SupyBarcodeScannerView`, `SupyDocumentScannerView`, `BatchBarcodeScannerViewController`. All three correctly: (a) start/stop on a per-owner `sessionQueue` (never `.main`), (b) register `AVCaptureSessionWasInterrupted/InterruptionEnded/RuntimeError` notifications with `safeStartRunning()` gating on `sessionInterrupted` to avoid the FigCaptureSource NSGenericException, (c) remove observers in `deinit`. Real defect fixed: `SupyBarcodeScannerView.deinit` and `BatchBarcodeScannerViewController.deinit` weren't calling `videoDataOutput.setSampleBufferDelegate(nil, queue: nil)` before the async `stopRunning()`, leaving a window where AVFoundation could dispatch one more `captureOutput(_:didOutput:from:)` against a deinitialized view (the document view already had this clear). Added in both, matching the document-view pattern. `runningObservation` invalidation, eventSink end-of-stream, channel-handler detach were already in place.
-- [x] H1-03 — Threading audit + `@MainThread`/`@WorkerThread` (Kotlin) + `dispatchPrecondition` (Swift). Android: imports + annotations on 3 analyzers (`@WorkerThread`) and 6 lifecycle/channel surfaces (`@MainThread`) across barcode + document views/activities. iOS: `dispatchPrecondition(.onQueue(.main))` at MethodChannel handler entries (`SupyBarcodeScannerView.handle`, `SupyDocumentScannerView.handle`, `DocumentScannerPresenter.present`) and `BatchBarcodeScannerPresenter.viewDidLoad`; `.notOnQueue(.main)` immediately before `VNImageRequestHandler.perform(...)` in `BarcodeDetector` and `DocumentDetector`. `docs/ARCHITECTURE.md` gained a `### Lifecycle invariants` block under Threading.
-- [x] H1-04 — ML Kit / Vision client lifetime; 100× open/close == 100× close (no orphan). Audit + 1 leak fixed. **Android close-call map:** `SupyBarcodeScannerView.barcodeScanner.close()` on analyzer rebuild (line 739) and `dispose()` (line 782); `BatchBarcodeScannerActivity.barcodeScanner?.close()` on activity teardown (line 117); `OcrRunner.recognizer.close()` exposed via `OcrRunner.close()`. `GmsDocumentScanning.getClient()` returns a one-shot, non-Closeable Task producer — no leak surface. **Leak found and fixed:** `DocumentScannerLauncher` held a `private val ocrRunner: OcrRunner` whose `TextRecognizer` was never released; the plugin's `onDetachedFromEngine` only detached the MethodChannel handler. Fix: added `DocumentScannerLauncher.close()` wrapping `ocrRunner.close()`, called from `SupyScannerPlugin.onDetachedFromEngine`. With this, 100× engine-attach / engine-detach cycles release the recognizer 100×. **iOS:** Vision side has no persistent client to leak. `OcrRunner.swift` constructs `VNRecognizeTextRequest` + `VNImageRequestHandler` per call (lines 76/82) — ARC releases on scope exit. `BarcodeDetector.swift` keeps a single `VNDetectBarcodesRequest` field reused across frames (line 57) and builds a fresh `VNImageRequestHandler` per frame (line 118); both die with the detector. `DocumentDetector.swift` builds requests per call (line 223). No `VNCoreMLRequest`, no persistent CIContext.
-- [x] H1-05 — Error-boundary review: every `Result.error`/`FlutterError` uses a known `SupyScanError` code — 4 strays folded to canonical `unknown` with detail preserved in `message` (Android: `SupyScannerPlugin.nativeCoreProbe`, `SupyBarcodeScannerView.setZoom`; iOS: `SupyScannerPlugin.nativeCoreProbe`, `SupyDocumentScannerView.onError`). Native wire set is now exactly `{cancelled, permission_denied, camera_unavailable, model_unavailable, unknown}` — `format_unsupported` is reserved for future use.
-- [x] H1-06 — MethodChannel arg validation on every handler; typed error on malformed input — Added `expectMapArgs` helpers on both platforms (`SupyScannerPlugin.kt`, `SupyScannerPlugin.swift`) gating `scanDocument` / `scanBarcodesBatch`. Null/missing args pass through as an empty map (preserves caller ergonomics); a non-null payload that isn't a `Map<String, Any?>` / `[String: Any]` now surfaces the canonical `unknown` wire code with a message naming the method and the actual runtime type, instead of being silently dropped to `null`. Per-view channel handlers (`SupyBarcodeScannerView`, `SupyDocumentScannerView`) already cast per-arg with safe defaults — no malformed-payload-as-Map exposure surface there.
-- [x] H1-07 — Permission revocation mid-session surfaces `SupyScanError.permissionDenied`. **iOS:** All three `AVCaptureSession` owners (`SupyBarcodeScannerView`, `SupyDocumentScannerView`, `BatchBarcodeScannerPresenter`) previously emitted `camera_unavailable` blanket from `handleSessionRuntimeError`, swallowing the user's Settings → Privacy → Camera off action behind a generic hardware-failure code. Now classify the `AVCaptureSessionErrorKey` payload: when `error.domain == AVFoundationErrorDomain && error.code == AVError.deviceIsNotAuthorizedForMediaType.rawValue` (-11852), emit `permission_denied`; otherwise unchanged. Retailer code now sees the same wire code mid-session as it does at launch (`configureSessionAsync` / `BatchBarcodeScannerPresenter.preflightAuthorization`). **Android:** System policy kills the process when the user revokes a granted runtime permission via Settings — mid-session in-process revocation is not a reachable scenario on Android, the embedded view restarts cold and routes through the existing launch-time `CameraPermissionHandler`. Documented; no Android-side code change needed.
-- [x] H1-08 — Backgrounding mid-scan: preview pauses, resumes cleanly on foreground. Audit-only — already covered by existing lifecycle pipelines on both platforms. **iOS:** All three `AVCaptureSession` owners (`SupyBarcodeScannerView`, `SupyDocumentScannerView`, `BatchBarcodeScannerPresenter`) observe `AVCaptureSessionWasInterrupted` (sets `sessionInterrupted = true`) and `AVCaptureSessionInterruptionEnded` (calls `safeStartRunning()` on `sessionQueue`). AVFoundation posts `WasInterrupted` with reason `.videoDeviceNotAvailableInBackground` automatically on background — camera is not accessible to backgrounded apps — and posts `InterruptionEnded` on foreground. The session is stopped by the OS, the resume re-arms via `safeStartRunning` which is gated by `sessionInterrupted` to avoid the `FigCaptureSource` race. No app-lifecycle observers needed. **Android:** Both `SupyBarcodeScannerView.kt` and `SupyDocumentScannerView.kt` call `LifecycleCameraController.bindToLifecycle(activityLifecycleOwner)`. CameraX automatically unbinds the camera on `Lifecycle.Event.ON_STOP` and re-binds on `ON_START`. The analyzer executor (`H1-01`) is a daemon single-thread executor that survives the pause and accepts work again on resume. `BatchBarcodeScannerActivity` is itself an `Activity` whose CameraX use cases bind to its lifecycle — same pause/resume semantics. No additional handlers needed; verified no `onPause`/`onStop` overrides force-tear-down ML Kit clients.
-- [x] H1-09 — Low-storage / low-memory paths; typed error, no crash. **Storage (ENOSPC):** `PageReencoder.reencodeOne` already wraps `FileOutputStream.use { bitmap.compress(...) }` in an `IOException` catch — disk-full mid-write returns null which the outer `reencode` maps to a per-page fallback to the GMS source Uri. `SupyDocumentScannerView.captureFullFrame` wraps `File.createTempFile` in `try/catch (IOException)` and emits a wire code on failure. iOS `SupyDocumentScannerView.processCaptureBuffer` / `processFullFrameCapture` wrap `jpeg.write(to:)` in `do/catch` and emit a wire code on failure. No crash paths found. **Memory (OOM):** Three crash paths fixed in `PageReencoder.kt`: (a) `decoded.copy(Bitmap.Config.ARGB_8888, true)` allocates a fresh ARGB buffer for non-ARGB decoder fallbacks — now wrapped in `OutOfMemoryError` catch, page falls back to the source Uri; (b) `ByteBuffer.allocateDirect(byteCount)` in `runEnhance` — now wrapped, skips enhancement and leaves bitmap untouched; (c) same in `scorePage` — now wrapped, returns null (no quality score). `BitmapFactory.decodeStream` returns null on OOM rather than throwing (Android documented behavior) — already handled. iOS `UIImage.jpegData` returns nil under pressure — already nil-checked at every call site. ML Kit `TextRecognizer.process` handles internal pressure via its own failure listener. Outcome: every memory/storage pressure path either degrades gracefully (best-effort fallback) or surfaces an existing wire code; no uncaught `OutOfMemoryError` or `IOException` left.
-- [x] H1-10 — `EventChannel.EventSink` discipline: null-check + `endOfStream` on dispose — Both platform views now signal stream completion before detaching the handler so Dart subscribers see a clean `onDone` instead of a silent drop. Android: `SupyBarcodeScannerView.dispose()` and `SupyDocumentScannerView.dispose()` call `eventSink?.endOfStream()` (wrapped in `runCatching`) before nulling and detaching — safe because `dispose()` runs on the platform/main thread. iOS: `deinit` on both views captures the sink, nils the field, then sends `FlutterEndOfEventStream` on `.main` (marshalling if deinit fires off-main). Null-checks on every `sendEvent` call site were already in place on both platforms — verified.
-- [ ] H1-11 — H0 reliability harness re-run; SLO targets must hit (device-blocked)
-
-### H2 — Test rigor (1.5 weeks)
-
-- [x] H2-01 — Android Robolectric + JUnit 4 unit suite (`android/src/test/`) — initial slice: `FormatMapperTest` (8 cases: empty/all-sentinel/unknown-filter/all-wires round-trip) + `DeviceTierTest` (5 cases: HIGH/MID/LOW dials + jpegQuality cap), wired into `android/build.gradle` (testOptions + JUnit/Robolectric/androidx-test/kotlin-test deps), runs in CI via `gradle :supy_scanner:testDebugUnitTest`. UI/AVCapture-bound classes (Activities, Presenters, OcrRunner, DocumentFrameAnalyzer, ThermalGovernor, IdleDetector, GmsAvailability) deferred — need fake-injection refactor or instrumented coverage. — 2026-06-14
-- [x] H2-02 — iOS XCTest unit suite (`ios/Tests/`) — initial slice: `SymbologyMapperTests` (9 cases incl. UPC-A leading-zero disambiguation + ITF dual mapping) + `SupyDeviceTierTests` (5 cases incl. jpegQuality 0.75 cap on low). Wired via `s.test_spec 'Tests'` in `ios/supy_scanner.podspec`; runs in CI via `pod lib lint`. Same scope caveat as H2-01 for UI/AVCapture-bound classes. — 2026-06-14
-- [x] H2-03 — Dart channel-boundary property-based fuzz (`test/channel/fuzz_test.dart`, 10k frames) — deterministic seed `0xDEC0DE`; 10 groups covering `SupyDocumentPage`/`SupyDocumentData`/`SupyBarcode`/`SupyBatchBarcodeResult` `fromMap` round-trip (8.5k well-formed), one-mutation-per-payload malformed fuzz (4.5k), `SupyScanErrorCode.fromWire` (500), and 600 channel round-trips. Invariant on malformed input: throws only `TypeError` / `ArgumentError` / `SupyScanError` — anything else fails the test. Full suite green (216 tests). — 2026-06-14
-- [x] H2-04 — Widget golden-test backfill for Sprint 1.5 widgets — structural tests (project convention rejects pixel goldens for Skia/platform flakiness, per `supy_finder_painter_test` precedent) added for the three uncovered internal widgets: `supy_top_bar` (6 cases — text, omit-when-empty, tap-callback, solid/gradient decoration, text-style), `supy_user_guidance_card` (5 cases — invisible/empty hide, text/style/pill-radius), `supy_action_bar` (7 cases — visibility, all-four-default, per-button-hide, all-hidden empty, inactive paint, flash tap routes to `setTorch` via mocked channel, zoom label rerenders on controller notify). Full suite green (234 tests, +18). — 2026-06-14
-- [x] H2-05 — Integration tests (`integration_test/`) — one per use-case. Harness scaffolded under `example/integration_test/`: `app_smoke_test.dart` (boots app, asserts all 4 demo tiles + dev-tabs button), and per-use-case drivers for single-barcode, batch-barcode, embedded (live camera), and document. Each driver has a headless `navigate:` case (pump app → tap tile → assert destination Page widget mounted) and a `device-only:` case gated behind `runOnDevice` (`SUPY_SCANNER_DEVICE_TEST=true` dart-define) so the suite compiles and passes in headless CI but unlocks the real native-call path on emulator/device runners. `support/runner.dart` centralises the flag; `README.md` documents host vs device-runner usage and how to add new drivers. `dart analyze integration_test/` clean. H2-06 (compat-shim) still blocked on retailer-repo access. — 2026-06-14
-- [x] H2-06 — Compat-shim pinned to real retailer call sites — Inventoried the 7 retailer files under `supy-mobile/apps/retailer/lib/{core/services/scanbot,features/{inventory,invoice}}/...`; added `compat/supy_scanner_scanbot_compat/test/retailer_call_sites_test.dart` with one `group()` per retailer file pinning the exact `BarcodeScannerController.bind(pause:, resume:, pausedNotifier:)` shape, `BarcodeScanbotView` full-arg ctor (incl. `findBarcodeAtCenter: false` + `footer:` from `scan_barcode_counting_page.dart`), `BarcodeItem.text` getter, and `IInvoiceScannerService` / `InvoiceScannerService` const ctor / `scanWithCamera(BuildContext) → Future<List<File>>`. Snapshot drift: `tool/regen_api_snapshot.dart` parses `lib/src/*.dart` and emits `test/api_snapshot.txt`; matching extractor in `test/api_signature_snapshot_test.dart` diffs against it and fails on any shim API change. Two retailer files (`scanbot_sdk_manager.dart`, `scanning_bot.dart`) touch Scanbot v2 document-UI types not surfaced by the shim — documented under MIGRATION.md "Retailer call-site inventory / Out-of-shim retailer references" with consumer-side cutover instructions. All 11 compat tests green. — 2026-06-16
-- [x] H2-07 — Coverage measurement: lcov + Kover + llvm-cov, CI-gated. **Dart**: `flutter test --coverage` produces `coverage/lcov.info`; CI step parses with awk and fails if line coverage drops below 70% — locally measured baseline is 76.34% (1407/1843 lines) giving ~6pp safety margin. lcov.info uploaded as `dart-coverage-lcov` artifact. **Android**: Kover 0.8.3 plugin added in `android/build.gradle` (classpath + `apply plugin` + filter for `BuildConfig` / `$Companion`); CI runs `:supy_scanner:koverXmlReportDebug` alongside the existing test task and uploads `example/build/supy_scanner/reports/kover/` as `android-kover-coverage` artifact. **iOS**: `-enableCodeCoverage YES` added to xcodebuild; CI runs `xcrun xccov view --report --json` against the xcresult and uploads `ios-coverage.json` artifact. Native gates are artifact-only for v1.0.x — once CI publishes a real baseline, a follow-up PR can set `koverVerify` minBound + an iOS awk threshold. Dart suite still green (241 tests), yaml validates. — 2026-06-14
-- [x] H2-08 — `test/widgets/` completion sweep — audited `lib/src/widgets/` against `test/widgets/`; one widget (`supy_barcode_scanner_view`) had no test file. Backfilled with 7 structural cases routing `debugDefaultTargetPlatformOverride` to linux/macOS to bypass real PlatformView hosts: default-config stack has preview+finder (2 children), `showFinder:false` strips overlay (1 child), header/footer positioned to stack top/bottom, extreme combo (header+footer, finder off → 3 children), unsupported-platform placeholder renders with platform name, dispose path with attached controller throws nothing. All other 13 widget tests already have default+extreme coverage (verified by test-count spot check + reading 3-case `supy_multiple_scan_sheet` which already covers default+counting-mode+empty/full). Full suite green (241 tests, +7). — 2026-06-14
-
-### H3 — Soak, perf-regression, security (1 week)
-
-- [x] H3-01 — 24h soak harness (`tools/soak.sh`) *(2026-06-16: Added `tools/soak.sh <device_id> [hours] [output_dir]` — bash harness (`set -euo pipefail`) that drives the existing `example/integration_test/reliability_harness_test.dart` (100× push/pop + 50× pause/resume = 150 cycles per iteration block) on a real device for a configurable wall-clock duration, default 24h. Platform detected from `flutter devices --machine` (fallback: `adb get-state` → Android, otherwise iOS). Per-platform RSS samplers: Android `adb shell dumpsys meminfo <pkg>` TOTAL PSS column; iOS `xcrun devicectl device info processes` RSS column. Background sampler appends `samples.csv` (`iso_ts,uptime_sec,rss_kb,iteration_block`) every `SOAK_SAMPLE_INTERVAL_SEC` (default 60s). Device logs streamed to `logs.txt` via `adb logcat -v time '*:W'` or `idevicesyslog` (when available). Foreground loop spawns `flutter test integration_test/reliability_harness_test.dart --profile -d <id> --dart-define=SUPY_SCANNER_DEVICE_TEST=true` until the deadline, intentionally **not** fail-fast on per-block failures (the goal is finding drift, not flake-fast). On finish or SIGINT writes `summary.json` with `device, platform, started_at, finished_at, duration_seconds, iteration_blocks, total_cycles, first_rss_kb, peak_rss_kb, final_rss_kb, leak_delta_kb, leak_budget_kb, samples_csv, iterations_log, device_logs, errors[]`. Exits non-zero if `leak_delta_kb > SOAK_LEAK_BUDGET_KB` (default 50 MB) — objective pass/fail for H3 sign-off. Artifacts land under `.build/soak/<UTC-ts>/` which `.gitignore` already excludes. Invocation example: `tools/soak.sh ZY223QXXXX 24`. Manual leak diagnosis still needs Studio Profiler / Instruments attached — soak.sh measures working-set, not native-heap fragmentation. H3-02/H3-03 (the actual 24h runs on Moto G Power + iPhone SE 2) remain device-blocked.)*
-- [ ] H3-02 — Soak run on Moto G Power (device-blocked)
-- [ ] H3-03 — Soak run on iPhone SE 2 (device-blocked)
-- [x] H3-04 — Perf-regression harness (`tools/perf_bench.dart`) vs `docs/perf/baseline.json`. **Landed 2026-06-16** as `tools/perfgate/` rather than `tools/perf_bench.dart` — name/path settled during V1-S2-07 to match the gate semantics. Per-tier baselines committed at `tools/perfgate/baselines/{low,mid,high}/*.json` (4 metrics × 3 tiers), seeded from `docs/PLAN.md §6` ceilings; see `baselines/SEED_NOTES.md` for the seeding policy and 1.0/0.7/0.5 tier multipliers. `regen-baselines.dart` refuses overwrites without `--force --justification "<reason>"` and writes a sibling `<metric>.justification.md`. First clean emulator + iOS-device runs will replace seeded values with measured ones via the regen flow.
-- [ ] H3-05 — Perf-regression run on both devices (device-blocked)
-- [x] H3-06 — Security review of channel boundary; output `docs/SECURITY.md`. 12-section review covering scope, threat model (A1 in-process host, A2 malicious scan target, A3 malicious image, A4 side-channel), full `io.supy.scanner/v1` MethodChannel + per-view EventChannel surface, in/outbound argument validation (Dart toWire + `expectMapArgs` on both natives + H2-03 fuzz invariant cited), zero-network posture (lib manifest has only CAMERA+VIBRATE; example debug INTERNET is tooling-only; ML Kit + Vision are on-device; GMS Document Scanner downloads model via Play Services, not our process), permission inventory (what we declare and what we deliberately don't — no INTERNET / no storage / no location / no audio), filesystem surface (cacheDir on Android, NSTemporaryDirectory on iOS — app-private only, atomic writes, no user-data in paths), sensitive-data rules (OCR + barcode payloads never logged), zero-secret policy, pinned dep versions, known gaps with tracking, and review-trigger criteria. Sources cross-referenced with file:line. — 2026-06-14
-- [x] H3-07 — Dependency audit; output `docs/DEPENDENCIES.md`. 9-section audit: (1) acceptance criteria — every shipped dep gets version + origin + license + network behaviour + cadence; (2) Dart — library declares only `meta ^1.15.0` runtime, dev `flutter_lints ^4.0.0`, all lock-file transitives are first-party Dart team test-only and never reach the consumer runtime graph; (3) Android — pinned exact strings: CameraX 1.3.4 (core/camera2/lifecycle/view), `androidx.lifecycle:lifecycle-common:2.7.0`, ML Kit Barcode 17.3.0, GMS Document Scanner 16.0.0-beta1 (model fetched via Play Services, not our process; CameraX fallback bypasses GMS), ML Kit Text Recognition 16.0.1, test-only JUnit 4.13.2 / Robolectric 4.12.2 / androidx.test.core 1.6.1 / kotlin-test 1.9.24; build-time AGP 8.3.2 / Kotlin 1.9.24 / Kover 0.8.3; manual CVE scan recorded (we are on the JUnit 4.13.2 fix for CVE-2020-15250); (4) iOS — podspec depends only on `Flutter`, no third-party pods, Apple-only frameworks (AVFoundation, Vision, VisionKit, UIKit) at iOS 16 / Swift 5.9; (5) native C++ core has no vendored deps in v1.0.x — zxing-cpp v2.2.1 lives under the V1-S2 build flag; (6) CI uses `actions/checkout@v4`, `actions/setup-java@v4`, `subosito/flutter-action@v2` (Flutter 3.22.3), `actions/upload-artifact@v4`; (7) network footprint summary confirms zero runtime calls in the scan path, grep verified across `lib/` / `android/src/` / `ios/Classes/`; (8) update cadence — exact-pin policy, audit on every minor release, plus triggers (advisory, new dep, Flutter bump); (9) license inventory shows Apache-2.0 / BSD-3-Clause / MIT / EPL only — no copyleft on the redistributed binary. Follow-ups captured: SHA-pin `subosito/flutter-action`, bump GMS DocScan past beta1, add `gradle dependencies` CI artifact upload, automate SBOM (CycloneDX) generation. — 2026-06-14
-- [x] H3-08 — Reproducible-build verification; output `docs/REPRODUCIBLE_BUILDS.md`. 9-section doc: (1) scoped "reproducible" to 4 claims (pinned sources, pinned toolchain, deterministic plugin outputs, deterministic test outputs) — explicitly NOT byte-identical host APK/IPA since signing is host-owned; (2) full pinned-inputs table for Dart (Flutter 3.22.3, pubspec.lock committed, meta ^1.15.0), Android (AGP 8.3.2, Kotlin 1.9.24, Kover 0.8.3, NDK 26.1.10909125, CMake 3.22.1, c++17 + static libc++, JVM 17, ABIs armeabi-v7a/arm64-v8a/x86_64, exact dep strings), iOS (iOS 16, Swift 5.9, c++17 libc++, Flutter-only pod dep), and native C++ core (sources shared, same standard, libc++); (3) manual repro procedure with concrete shell commands hashing `pubspec.lock`, `flutter pub deps --json`, `./gradlew :supy_scanner:dependencies` output, and `Podfile.lock`; (4) per-artifact determinism table — yes/yes-ish/no with reasons; (5) accepted nondeterminism (macos-14 Xcode drift, `subosito/flutter-action@v2` tag pin, host-owned signing timestamps, test report timestamps, GMS DocScan model fetch is runtime not build); (6) CI as the reference build; (7) verification log with first row 2026-06-14; (8) informal follow-ups (SHA-pin action, xcode-select pin, `tools/repro.sh` digest tool, `--no-daemon --offline` gradle pass); (9) re-verification triggers (Flutter bump, dep bump, CocoaPods/Xcode major bump, ABI add, pubspec.lock change). Cross-referenced with `docs/DEPENDENCIES.md` and CI yaml. — 2026-06-14
-
-### H4 — Release ops, lite observability, ship (1 week)
-
-- [x] H4-01 — `SupyLogSink` interface + default sink (`lib/src/log/`); route all `print`/`debugPrint`/`Log.d`/`os_log` *(2026-06-14: Added `lib/src/log/supy_log.dart` — `SupyLogLevel`, immutable `SupyLogRecord`, `SupyLogSink` interface, `SupyDebugPrintLogSink` (release-mode no-op), `SupyNullLogSink`, static `SupyLog` facade with `installSink`/`debug`/`info`/`warn`/`error`/`@visibleForTesting resetForTest`. Exported from `lib/supy_scanner.dart`. Added native parallels: `android/.../log/SupyLog.kt` (Kotlin `object` over `android.util.Log` with `@JvmStatic @Volatile enabled` toggle) and `ios/Classes/log/SupyLog.swift` (`@objc public final class` over `os.Logger` with per-tag cache + `privacy: .public`). Replaced the four pre-existing native log sites (`DocumentScannerLauncher.kt` ×2, `CameraXDocumentScannerActivity.kt` ×1, `DocumentScannerPresenter.swift` ×1) to route through `SupyLog`. Unit tests in `test/log/supy_log_test.dart`; `dart analyze --fatal-infos` on `lib/src/log/` + `test/log/` is clean. Native log routing is platform-loggers-only for v1.0.x — channel-forwarded native→Dart sink override is a deferred follow-up.)*
-- [x] H4-02 — Debug HUD in example app (togglable, off by default) *(2026-06-14: Added `example/lib/debug/supy_debug_hud.dart` — `SupyDebugHud` widget wraps `child` in a Stack with a bottom-anchored overlay panel that paints the last 200 `SupyLogRecord`s; `SupyDebugHudScope` is a debug-mode-only wrapper that tree-shakes the HUD path out of release builds (`if (!kDebugMode) return child`). HUD installs a `_HudSink` that delegates to the previously installed `SupyLog.sink` and pushes records to a `ValueNotifier`, restoring the prior sink on dispose. AppBar gains a bug_report_outlined toggle (visible only when the HUD scope is mounted, so release builds show nothing). Default visibility is false. `flutter analyze --fatal-infos` clean on the new file + `main.dart`.)*
-- [x] H4-03 — `tools/release.sh <version>` automation *(2026-06-14: Added `tools/release.sh` — single-arg bash script (`set -euo pipefail`). Pre-flight gates: semver shape `X.Y.Z`, branch must be `main`, working tree clean, tag `vX.Y.Z` must not exist, `CHANGELOG.md` must already contain `## [X.Y.Z]`. Bumps the three version sources in lock-step via `sed -i.bak`: `pubspec.yaml` (`version: X.Y.Z`), `ios/supy_scanner.podspec` (`s.version = 'X.Y.Z'`), `android/build.gradle` (`version = 'X.Y.Z'`). Post-bump grep verification on each file. Runs `flutter analyze --fatal-infos` then `flutter test` (skippable via `SKIP_TESTS=1`). Stages only the three bumped files (never `git add -A`), creates `release: vX.Y.Z` commit + annotated tag. Does NOT push and does NOT publish — prints the manual `git push` / `flutter pub publish --dry-run` next-step commands. Idempotent on re-run: if files already at target, commit step is skipped (still tags). Smoke-tested: missing arg → usage exit 64; malformed version → error exit 64.)*
-- [x] H4-04 — `docs/RELEASE.md` symbolication discipline *(2026-06-14: Added `docs/RELEASE.md` — release runbook + symbolication contract. §1 pre-release gates (CHANGELOG entry, QA walk, phase scope, local gates, clean tree on `main`), §2 cut-the-release flow paired with `tools/release.sh`, §3 symbolication discipline: split-side responsibility model (library tags source state, retailer retains per-build artifacts), retailer-side artifact retention table (R8 `mapping.txt`, un-stripped Android `.so`s, iOS dSYMs, Flutter `--split-debug-info` symbols, ≥12mo retention), mandatory retailer build flags (`--obfuscate --split-debug-info`, `debugSymbolLevel "FULL"`, `dwarf-with-dsym`, R8 mapping upload), post-hoc symbolication recipe (`llvm-addr2line`/`atos`/`flutter symbolize`), and v1.1 native-core `-g -O2 -fno-omit-frame-pointer` parity rule. §4 hot-fix branch flow, §5 deprecation policy, §6 release-time risk checklist. Cross-links `tools/release.sh` and `docs/REPRODUCIBLE_BUILDS.md`.)*
-- [x] H4-05 — CI matrix expansion *(2026-06-14: Hardened `.github/workflows/ci.yml`. Workflow-level: `concurrency` group cancels superseded PR runs (keeps `main` runs un-cancellable); `permissions: contents: read` least-privilege default; explicit `timeout-minutes` per job (analyze 20, build-android 25, build-ios 30, android-native-test 30, ios-native-test 40) so a hung runner can't burn the whole matrix budget. Added two non-blocking canary jobs (both `continue-on-error: true` — they surface upstream breakage early without gating merges): `analyze-and-test-stable-canary` runs `dart analyze --fatal-infos` + `flutter test` against the Flutter `stable` channel (no version pin); `android-native-test-jdk21-canary` runs the plugin gradle tests under JDK 21 (vs the JDK 17 floor) to catch forward-compat regressions. Convention captured in inline comment: two consecutive canary failures on `main` → open a follow-up ticket, don't silently ignore. YAML syntax-validated via `yaml.safe_load`.)*
-- [x] H4-06 — `CHANGELOG.md` entry for `v1.0.1` *(2026-06-14: Inserted `## [1.0.1] — 2026-06-14` block in `CHANGELOG.md` between the `[1.1.0] — Unreleased` perf entry and the `[1.0.0]` entry. Header explicitly notes "No public API changes" — Dart, MethodChannel (`io.supy.scanner/v1`), and native error-code surface are byte-compatible with v1.0.0. Grouped per project convention into `Hardened` (error-code normalization across both platforms, MethodChannel arg validation via `expectMapArgs`, EventSink end-of-stream discipline — covers H1-05/06/10), `Testing` (Robolectric + JUnit Android suite, XCTest iOS suite, 10k-iter Dart channel fuzz with seed `0xDEC0DE`, widget structural backfill, integration-test harness scaffold, Dart lcov ≥70% gate with 76.34% baseline — covers H2-01..05/07/08), `Observability` (`SupyLogSink` Dart facade + Kotlin `SupyLog` + Swift `SupyLog`, example-app debug HUD — covers H4-01/02), `Tooling` (`tools/release.sh`, `docs/RELEASE.md`, CI matrix expansion with concurrency/timeouts/canaries — covers H4-03/04/05), `Docs` (`SECURITY.md`, `DEPENDENCIES.md`, `REPRODUCIBLE_BUILDS.md` — covers H3-06/07/08), and `Channel` (unchanged, `io.supy.scanner/v1`). v1.1.0 perf workstream entries deliberately NOT folded in — they stay under the `[1.1.0] — Unreleased` heading pending P5 re-bench. Version-source bump (`pubspec.yaml`/`podspec`/`build.gradle` from 0.1.0 → 1.0.1) deferred to `tools/release.sh 1.0.1` at H4-08 so the bump is one logical commit at release-cut time.)*
-- [ ] H4-07 — `docs/QA.md` re-walk; mobile-lead sign-off (sign-off-blocked); close S4-08 *(2026-06-14: Unblocked prep landed. Added a per-release scenario-scope table to `docs/QA.md` §Sign-off making it explicit that v1.0.x walks cover `B1–B12, NC1–NC2, D1–D11, Bt1–Bt2` while B13 (v1.1) and D12 (v1.2) are out-of-scope until those release lines ship. Added regression-only framing for patch releases (v1.0.1 over v1.0.0): public Dart/MethodChannel/native-error-code surface is byte-compatible with v1.0.0, so the criterion is "tester notices no behavioral change vs. prior tag." Performance table explicitly carved out of per-release sign-off — only blocks the first release that closes the S3-09 perf-numbers debt. Added a copy-pasteable `## Sign-off (v1.0.1)` template with all 27 in-scope scenarios as a 2-column Android/iPhone checklist plus decision block. Still pending: actual human walk on Android + iPhone — ticket stays open.)*
-- [ ] H4-08 — Tag `v1.0.1` via `tools/release.sh`
-
-## v1.1 Sprint 6 — Embedded document auto-capture API
-
-See `docs/V1.1_PLAN.md` §8 — Sprint 6. Depends on Sprint 4 (`warpPerspective` + DoQA gate).
-
-- [x] V1-S6-01 — Add `SupyDocumentFrameState.capturing` + `.captured`; painter + hint card transitions for both states
-- [x] V1-S6-02 — `captureAndRectify` channel method (Android + iOS); consumes last smoothed quad → returns JPEG URI + corrected quad — **design landed** (2026-06-14) — archived in `docs/HISTORY.md` § "Archived: V1-S6-02 — `captureAndRectify` channel-method design". Reconciles three-way drift between `docs/ARCHITECTURE.md:156`, `docs/V1.1_PLAN.md` §6, and the canonical Dart shape in `SupyDocumentScannerController` — Dart wins; native MUST emit `path`/`widthPx`/`heightPx`/`quad`. Covers Android (`DocumentFrameAnalyzer.lastSmoothedQuad` + worker executor) and iOS (`DocumentScannerPresenter.pendingCapture` + `quadAccessQueue`) handler flow, error mapping (`captureUnsupported` / `capture_failed` / `unknown`), threading invariants per `CLAUDE.md`, and documents the second method (`captureFullFrame`) the Dart layer already exposes but neither doc mentioned. **iOS `captureAndRectify` implementation landed** (2026-06-14): `CIPerspectiveCorrection` + `AVCapturePhotoOutput` in `SupyDocumentScannerView.swift`; `captureFullFrame` also implemented on iOS. **Android `captureAndRectify` implementation landed** (2026-06-26, Sprint 4): the UNIMPLEMENTED stub is replaced by the hand-rolled OpenCV-free native warp (`native/document/perspective_warp.{h,cpp}`, exposed via the C ABI + JNI `nativeWarpPerspective`). It takes the full-res still from `captureFullFrame`'s `ImageCapture` path + the last smoothed quad from `DocumentFrameAnalyzer`, warps to a flat rect, then runs `PageReencoder.reencodeBitmap` (decode-free enhance+score+encode), returning `path`/`widthPx`/`heightPx`/`quad` to match the iOS payload. Both platforms now produce equivalent dewarped geometry.
-- [x] V1-S6-03 — `SupyDocumentScannerController.capture()` + `SupyDocumentScanOptions.autoCaptureDelayMs` + mocked unit tests
-- [x] V1-S6-04 — `docs/ARCHITECTURE.md` channel-method row + `docs/UI_CONFIGURATION.md` auto-capture recipe
-
-## v1.1 Sprint 7 — Per-page quality grade + export breadth
-
-See `docs/V1.1_PLAN.md` §8 — Sprint 7. Depends on Sprint 4 (quality scorer in native core).
-
-- [x] V1-S7-01 — `SupyDocumentPageQuality` enum + `quality` + `qualityScore` fields on `SupyDocumentPage` + `fromMap` parsing + tests
-- [x] V1-S7-02 — Native per-page quality scorer (variance-of-Laplacian + luma → enum + 0..1 score) on Android + iOS — standalone `supy_core_score_page` C symbol (parallel to enhance); JNI `nativeScorePage` + `SupyNativeCore.scorePage` on Android (wired into `PageReencoder` → `OcrRunner`); `SupyNativeCoreBridge.scoreImage` Obj-C++ + `DocumentScannerPresenter` per-page call on iOS; gtest covers NULL input, invalid dims, sharp→excellent, flat→veryPoor.
-- [x] V1-S7-03 — `SupyDocumentOutputFormat { jpg, png, pdf }` on `SupyDocumentScanOptions` + channel plumbing
-- [x] V1-S7-04 — Android PDF (via `RESULT_FORMAT_PDF` from GMS) + PNG (`Bitmap.CompressFormat.PNG`) output paths — `PageReencoder` (replaces `JpegReencoder`) handles JPG/PNG; launcher reads `outputFormat` from wire, ORs `RESULT_FORMAT_PDF` into GMS options on `pdf`, and surfaces `scanResult.pdf.uri` as `pdfUri` on the response.
-- [x] V1-S7-05 — iOS PDF (PDFKit `PDFDocument` assembly from `UIImage`s) + PNG (`UIImage.pngData()`) output paths — `DocumentScannerPresenter` reads `outputFormat`, persists per-page as JPG/PNG via `image.jpegData`/`pngData`, and on `pdf` additionally assembles a `PDFDocument` to `NSTemporaryDirectory()`; finish payload includes `pdfUri` only when assembled.
-- [x] V1-S7-06 — `docs/ARCHITECTURE.md` + `docs/MIGRATION.md` rows: Scanbot quality buckets → `SupyDocumentPageQuality`, Scanbot output formats → `SupyDocumentOutputFormat`
-
-## v1.1 Sprint 8 — Supy-owned multi-page review (decision-gated)
-
-See `docs/V1.1_PLAN.md` §8 — Sprint 8. **Blocked on decision in the decisions log below before kickoff.**
-
-- [ ] V1-S8-DECISION — Mobile lead decides: do we replace VisionKit / GMS hand-off with owned capture? Log answer + rationale in decisions log dated.
-- [ ] V1-S8-01 — (post-decision) Tickets authored from §8 sketch — owned capture, controller, review sheet, channel methods, model fields, example app, docs.
-
-## QA scenarios
-
-See `docs/QA.md`. Track per-release sign-off there.
-
-## v1.2 — Phase CXD: CameraX document fallback (non-GMS Android)
-
-See `docs/PLAN.md` § "v1.2 — Active phases" and `docs/CAMERAX_FALLBACK.md`. Activation is auto-detect via `GoogleApiAvailability`; no public API change. Capture UX is manual tap-to-capture by default; auto-snap activates when `autoCaptureDelayMs > 0` (see CXD-AS1).
-
-- [x] CXD1 — `GmsAvailability` helper + branch in `DocumentScannerLauncher.launch` (auto-detect bypasses GMS client when Play services is unavailable) — 2026-06-13
-- [x] CXD2 — `CameraXDocumentScannerActivity` (Kotlin): CameraX `Preview` + `ImageCapture`, tap-to-capture FAB, thumbnail strip with delete (retake = delete + retap), done CTA, `maxPages` cap, returns JPEG URIs in `EXTRA_RESULT_URIS`; uses `startActivityForResult` for parity with `BatchBarcodeScannerLauncher`; `Theme.AppCompat.NoActionBar` registered in manifest — 2026-06-13 (device build verification pending)
-- [x] CXD3 — CameraX result piped through `PageReencoder.reencode(...)` (tier-aware quality from `DeviceTier`) + `ocrRunner.run(...)`; response shape identical to GMS path (`pages`, `ocrText`); `pdfUri` always `null` on fallback path (logged in `launch()` when `outputFormat=pdf` requested) — 2026-06-13
-- [x] CXD4 — Camera permission re-checked at activity start → `RESULT_PERMISSION_DENIED` (0x5601) → `permission_denied` error; `ProcessCameraProvider` bind failure → `RESULT_CAMERA_UNAVAILABLE` (0x5602) → `camera_unavailable` error; back/cancel → `RESULT_CANCELED` → `pending.success([])` matching D4 / iOS VisionKit cancel — 2026-06-13
-- [x] CXD5 — `docs/CAMERAX_FALLBACK.md` landed; `docs/ARCHITECTURE.md` Android module rows added for `CameraXDocumentScannerActivity` + `GmsAvailability` (and `DocumentScannerLauncher` row updated with the v1.2 branch behavior); `docs/QA.md` D10 revised (no longer expects `model_unavailable` on non-GMS) + D12 added (10-step Huawei/AOSP fallback walkthrough covering capture, delete, OCR result, cancel→[], permission/camera errors, retailer-no-op) — 2026-06-13
-- [ ] CXD6 — Sign-off on one non-GMS device (Huawei P30 or GMS-stripped emulator); D1/D2/D4/D10/D12 pass; tag `v1.2.0`
-- [x] CXD-PDF1 — P2 `core-cxd-camerax-activity` (CXD2 PDF parity): new internal `PdfAssembler` (`android/src/main/kotlin/io/supy/scanner/document/PdfAssembler.kt`) walks the re-encoded JPEG pages through Android `PdfDocument` so `outputFormat=pdf` populates `pdfUri` on the CameraX path. CXD3's "always null pdfUri" caveat retired; the corresponding launch-time log line removed. Compile-only verification (`./gradlew :supy_scanner:compileDebugKotlin` green); instrumentation + `pdftotext` smoke deferred to CXD6 device sign-off. Out of scope for this delta: `LifecycleCameraController` migration and `DocumentOverlayView` — current `ProcessCameraProvider` binding is already lifecycle-correct (`bindToLifecycle(this, ...)`) per H1-01 audit; the overlay only becomes meaningful with the Phase 4 auto-snap path and will land there. — 2026-06-16
-- [x] DIE6 — P2 `core-document-image-enhance-bench`: wire the document enhance pipeline into perfgate. Extended `native/enhance/bench_enhance.cpp` with `--json` + `--tier {low,mid,high}` so its stdout matches `BENCH_TIER` / `BENCH_RESULT { "metric": "enhance_<mode>_ms", ... }` parsed by `tools/perfgate/lib/baseline_compare.dart`. New Dart driver `tools/perfgate/enhance/run_enhance_bench.dart` (CMake build + bench invocation, `--tier --iter --log --skip-build`); parser test `tools/perfgate/test/enhance_bench_test.dart` (3 cases, green). CI gains `enhance-bench-low` job on `ubuntu-latest` (mirrors `perfgate-emulator`, `continue-on-error: true`, installs `cmake build-essential`, runs driver + `tools/perfgate/run.dart --tier low`, uploads `perfgate-enhance-low` artifact). Tier → long-edge profile in `tierLongEdge`: low 1280, mid 1920, high 2400. Plan deviation: no FFI driver — `lib/src/native/` doesn't exist yet; wrapping the host C++ harness is the path that compiles today. Baselines under `tools/perfgate/baselines/low/enhance_*.json` pending: first green `enhance-bench-low` run produces the numbers, promote via `tools/perfgate/regen-baselines.dart`. MID/HIGH deferred to `infra-device-runner-matrix` (P3) — `ubuntu-latest` p95 would bake CI hardware noise into the gate. — 2026-06-16
-- [x] CXD-AS1 — P2 `core-cxd-auto-snap`: drive auto-snap in `CameraXDocumentScannerActivity` via the C++ guidance state machine (`native/document/document_guidance_classifier.{h,cpp}`, commit `c4e4650`). Activity migrated off `ProcessCameraProvider` onto `LifecycleCameraController` bound to the host activity lifecycle (CLAUDE.md rule — no `FragmentActivity` cast); `IMAGE_CAPTURE | IMAGE_ANALYSIS` enabled with `KEEP_ONLY_LATEST` backpressure. `DocumentFrameAnalyzer` is attached on a dedicated `supy-cxd-analyzer` executor only when `autoCaptureDelayMs > 0` (manual-only when `== 0`, matching iOS semantics). New JNI surface `nativeGuidanceCreate/Destroy/Reset/Classify` + Kotlin facade `SupyNativeCore.guidance*` and data classes `GuidanceFrameMetrics`, `GuidanceConfig`, `GuidanceFrameState` (`android/src/main/cpp/supy_scanner_core_jni.cpp`, `android/src/main/kotlin/io/supy/scanner/nativecore/SupyNativeCore.kt`). The guidance handle is owned by the Activity, created in `onCreate` when auto-snap is on and freed in `onDestroy`. Tier-aware dwell via `GuidanceConfig.readyStableFrames` = 18/12/9 for LOW/MID/HIGH (iOS tier still returns `unknown` → MID fallback; tracked separately in S3-05). Capture fires on the main thread once `now - readyDwellStartMs >= effectiveDwellMs`, where `effectiveDwellMs = max(autoCaptureDelayMs, autoSnapFloorMsForTier(tier))` and the per-tier floor is 1200 / 800 / 600 ms for LOW / MID / HIGH — so callers can request a tighter dwell on tier-high, but tier-low never auto-fires under 1.2 s even if asked. New on-preview `hintLabel` TextView renders bilingual (en/ar — wired via new `EXTRA_LOCALE`) guidance copy for the 8 `GuidanceFrameState` values; label is hidden when auto-snap is off. `DocumentScannerLauncher` forwards `autoCaptureDelayMs` and `locale` via new `EXTRA_AUTO_CAPTURE_DELAY_MS` / `EXTRA_LOCALE` intent extras. Channel additive — no `v1` bump; no new public scan option (existing `autoCaptureDelayMs == 0` is the off switch per backlog). Out-of-scope (deferred): `strings.xml` extraction of inline hint copy, JVM-runnable `AutoSnapStateTest.kt` (blocked on JNI lib availability in unit-test classpath — table-driven test of the C++ classifier exists at `native/document/document_guidance_classifier_test.cpp`). Manual D13 walkthrough deferred to CXD6 device sign-off. — 2026-06-17
-- [x] CXD-AG1 — P2 `core-cxd-availability-gate`: surface backend resolution to Dart. New `SupyDocumentScannerBackend { gms, cameraX, unknown }` enum (`lib/src/models/supy_document_scanner_backend.dart`), `SupyDocumentScanOptions.preferredBackend?` hint (Android only — iOS ignores; null = auto), `SupyDocumentData.resolvedBackend` always populated (older Dart builds get `unknown` via `fromWire` fallback). `SupyNativeCoreProbe.gmsDocumentScannerAvailable` exposes `GmsAvailability.isUsable(context)` so retailer code can pre-flight. Android: extracted `DocumentScannerLauncher.shouldUseCameraX(preferredBackend, gmsUsable)` to companion; `cameraX` forces fallback even when GMS usable (tests/dogfood), `gms` only resolves when usable otherwise falls through. iOS: always reports `resolvedBackend: gms` and `gmsDocumentScannerAvailable: false` for symmetry. Coverage: 4 new Dart unit tests + 4 Kotlin unit tests for the backend gate matrix; `docs/ARCHITECTURE.md` `scanDocument` + `nativeCoreProbe` rows updated. Channel additive — no `v1` bump. — 2026-06-16
-- [x] CXD-IG1 — P2 `core-cxd-ios-guidance-bridge`: make the C++ guidance classifier reachable from Swift on iOS, mirroring the Android JNI surface. New stateful Obj-C++ instance class `SupyDocumentGuidance` (`ios/Classes/nativecore/SupyNativeCoreBridge.{h,mm}`) heap-allocates the `GuidanceState` in `-init` / frees it in `-dealloc` (ARC-safe equivalent of Android's Kotlin-owned `jlong` handle); Swift facade `GuidanceClassifier` + value types `GuidanceFrameState` / `GuidanceConfig` / `GuidanceFrameMetrics` / `GuidanceClassifyResult` (`SupyNativeCore.swift`). 18-float config packing (`GuidanceConfig.toNumberArray()`) and `[stateOrdinal, liveQualityScore]` return mirror the JNI shim byte-for-byte. New XCTest `ios/Tests/nativecore/SupyGuidanceClassifierTests.swift` pins Swift→Obj-C++→C++ marshalling. Internal native bridge only — no channel method, no `v1` bump, no public API change. — 2026-06-17
-- [x] CXD-IG2 — P2 `core-cxd-ios-guidance-embedded`: wire `GuidanceClassifier` (CXD-IG1) into the embedded streaming preview `SupyDocumentScannerView` so iOS guidance is computed by the shared C++ core, not the Dart FSM. Dart: `SupyDocumentGuidanceConfiguration.toConfigFloatArray()` packs the 18-float wire order, handed to the `UiKitView` as a `guidanceConfig` creation param. iOS: `SupyDocumentScannerView.swift` parses it (`GuidanceConfig(wireArray:)`), classifies each frame on the detector's analyzer queue in `emitFrameMetrics`, adds `state` (wire ordinal 0–11) + `liveQualityScore` to the internal `frame_metrics` payload, and calls `GuidanceClassifier.reset()` on `resume`. Dart: `SupyDocumentEvent.fromMap` decodes optional `state` → `SupyDocumentFrameMetricsEvent.nativeState` via `kSupyDocumentFrameStateWireIndex` (out-of-range → null); `SupyDocumentScannerView` widget consumes `nativeState` when present, falling back to the Dart `SupyDocumentStateMachine` only when absent. Net: the three documented Dart-FSM hysteresis quirks (glare/occluded/handShake not un-latching via exit-margin) are gone on iOS. Coverage: 3 event-channel tests (`state` absent → null; ordinal 7→ready / 8→glare via wire index; out-of-range 99 → null) + `toConfigFloatArray` wire-order/length tests. Additive — internal channel only, no `v1` bump, no public Dart/Swift API change. — 2026-06-18
-- [ ] CXD-IG3 — P2 follow-up: route the **Android** embedded `SupyDocumentScannerView` through its JNI `GuidanceClassifier` (as `CameraXDocumentScannerActivity` already does) and emit `state` on `frame_metrics`, retiring the temporary iOS/Android embedded-view divergence introduced by CXD-IG2. Until this lands, the Android embedded view runs the Dart FSM and retains the three documented hysteresis quirks while iOS does not. Decision logged: divergence accepted for the CXD-IG2 slice — see `docs/ARCHITECTURE.md` § "Document guidance classifier".
-
-## v1.3 — Phase CSU: Custom scanner UI (own VisionKit + GMS replacement)
-
-See `docs/PLAN.md` § "Phase CSU". Replaces `VNDocumentCameraViewController` (iOS) and the GMS Document Scanner default (Android) with a first-party UI so we own the embedded hint capsule + brackets end-to-end. Reuses the C++ classifier landed in `native/document/document_guidance_classifier.{h,cpp}` (commit `c4e4650`). Channel stays at `io.supy.scanner/v1`; `SupyDocumentData` shape unchanged.
-
-- [ ] CSU0 — Plan sign-off (this entry) — surface PLAN.md + TODO.md additions to user before any scanner code is written
-- [ ] CSU1 — iOS `CustomDocumentScannerViewController` (Swift): background-queue `AVCaptureSession`, `VNDetectRectanglesRequest` analyzer, hint capsule (UILabel) + bracket overlay (`CAShapeLayer`) driven by `supy::scanner::document::classify` via `SupyNativeCoreBridge`. Replaces `VNDocumentCameraViewController` in `DocumentScannerPresenter.swift`
-- [ ] CSU2 — Promote `CameraXDocumentScannerActivity` to default Android path; gate GMS Document Scanner behind `supyUseGmsDocumentScanner=true` gradle prop (escape hatch for one release, removed in v1.4); add hint capsule (TextView) + bracket overlay (`View`) driven via JNI
-- [ ] CSU3 — Classifier ↔ camera plumbing: add `nativeClassifyGuidance` JNI shim in `android/src/main/cpp/supy_scanner_core_jni.cpp`; iOS feeds `VNRectangleObservation` + per-frame luma/blur metrics through the bridge; both consume `SupyDocumentGuidanceConfiguration` thresholds
-- [ ] CSU4 — Dart: extend `SupyDocumentScanOptions` with `guidance: SupyDocumentGuidanceConfiguration?`; serialize under `guidance` map key in `toWire()`; both native handlers parse it; update `docs/ARCHITECTURE.md` `scanDocument` arg table same PR; mocked unit test pins wire shape
-- [ ] CSU5 — Result-contract parity: pages still flow through existing `PageReencoder` / `OcrRunner` / PDFKit; integration tests in `example/integration_test/` pin `SupyDocumentData` shape unchanged on both platforms; cancel resolves `success([])` (D4); permission/camera errors keep current codes
-- [ ] CSU6 — Docs + QA + sign-off: `ARCHITECTURE.md` module rows + routing flip; `MIGRATION.md` GMS-dep-removal note + escape-hatch flag; `QA.md` D13 (hint capsule visible) + D14 (auto-capture timing); manual walkthrough on iPhone SE 3 + Pixel 8 + Huawei P30; tag `v1.3.0`
-
-## v1.2 — Phase IXP: Invoice eXtraction Prototype (iOS lab feature)
-
-See `docs/PLAN.md` § "Phase IXP". On-device structured invoice extraction (vendor, date, invoice #, total, tax, currency, line items) via Vision text recognition + heuristic post-processing. **Example-app-only surface** — no public `Supy*` API in `lib/` until the promotion gate is met. Channel stays at `io.supy.scanner/v1`; additive `parseInvoice` method. iOS-first; Android stub returns `unimplemented`.
-
-- [ ] IXP1 — iOS `InvoiceParser.swift`: `VNRecognizeTextRequest` (`.accurate` revision, `usesLanguageCorrection: false`, custom-words seeded with currency codes + invoice keywords); pre-process input through existing `DocumentEnhancer`; run on `DispatchQueue.global(qos: .userInitiated)`
-- [ ] IXP2 — Heuristic extractors: vendor (largest font near top), date (multi-format regex), invoice number (keyword + alphanumeric), currency (symbol + ISO dictionary), total (keyword anchor + largest numeric below), tax/VAT (keyword anchor), line items (row clustering by Y-band + X-percentile column inference)
-- [ ] IXP3 — Wire `parseInvoice` MethodChannel handler in `SupyScannerPlugin.swift` (iOS) + Android stub returning `FlutterError("unimplemented", "parseInvoice is iOS-only in v1.2", nil)`; add row to `docs/ARCHITECTURE.md` MethodChannel table
-- [ ] IXP4 — Experimental Dart wrapper `lib/src/experimental/supy_invoice_parser.dart` with `SupyInvoiceData` value type; `@experimental` annotation; **NOT exported** from `package:supy_scanner/supy_scanner.dart`
-- [ ] IXP5 — Example app: add "Invoice (Lab)" tab that runs `SupyInvoiceParser`, surfaces parsed fields + raw OCR text for verification (imports via internal path)
-- [ ] IXP6 — Tests: `ios/Tests/invoice/InvoiceParserTests.swift` (pure-logic field extraction on fixture OCR text) + Dart mocked-channel wire-shape test
-- [ ] IXP-promotion-gate — Capture ≥20 labeled invoices, measure header-field accuracy (>80%) and line-item accuracy (>70%) before promoting to public `lib/` API. Owner: user — requires real invoice corpus.
-
-## v1.2 — Phase FQS: Frame Quality Score (shared C++ scorer)
-
-See `docs/PLAN.md` § "Phase FQS". Pulls per-frame mean luma + variance-of-Laplacian out of Swift/Kotlin into shared C++ (`native/quality/frame_scorer.{h,cpp}`) so the existing C++ guidance classifier gets identical numbers on both platforms. **Native-internal only** — no Dart change, no MethodChannel addition.
-
-- [x] FQS1 — `native/quality/frame_scorer.{h,cpp}` + wire into `native/CMakeLists.txt` (sources + tests)
-- [x] FQS2 — iOS bridge: `SupyNativeCoreBridge.scoreLumaPlane:width:height:rowStride:` returning `{meanLuma, blurScore}` dict; `DocumentDetector.computeLumaMetrics` now delegates; pod paths updated (`preserve_paths`, `HEADER_SEARCH_PATHS`, `SupyNativeCoreImpl.mm`)
-- [x] FQS3 — Host gtest suite: `native/quality/frame_scorer_test.cpp` covers null/bad-dim guard, uniform→zero blur, edges > gradient > flat ordering, row-stride padding insensitivity
-- [ ] FQS4 — Android JNI parity: replace Kotlin Laplacian in `DocumentFrameAnalyzer` with JNI into `compute_luma_metrics`. **Deferred** until iOS validation lands per decisions log.
-- [ ] FQS5 — Manual QA on `docs/QA.md` Phase FQS scenarios on one iPhone. Owner: user.
-
-## v1.2 — Phase DIE: Document image enhancement
-
-See `docs/PLAN.md` § "Phase DIE" and `docs/ENHANCEMENT.md`. Shared native C++ pipeline (blur gate + illumination flatten + tone curve + unsharp) applied to captured pages before persistence / OCR / PDF assembly. Channel stays at `io.supy.scanner/v1`; additive only.
-
-- [x] DIE1 — Native C ABI + pipeline (`supy_scanner_enhance.h`, `native/enhance/*`)
-- [x] DIE2 — Android JNI + `PageReencoder` integration (default `balanced`)
-- [x] DIE3 — iOS Obj-C++ bridge + `DocumentScannerPresenter` integration (default `off`)
-- [x] DIE4 — Dart `SupyDocumentEnhanceMode` enum + nullable `enhanceMode` option + per-page `enhancedStages` / `enhanceMs`
-- [x] DIE5 — Host GoogleTest suite (`native/enhance/enhance_test.cpp`), `docs/ENHANCEMENT.md`, `docs/ARCHITECTURE.md` updates
-- [x] DIE6a — `native/enhance/bench_enhance.cpp` host micro-benchmark (build with `cmake -S native -B build -DSUPY_BUILD_TOOLS=ON && cmake --build build --target bench_enhance`; reports min/p50/p95/max per mode). Acceptance target ≤ 250 ms @ 2400 px on a 2020-era mid-tier device — must be validated on-device.
-- [ ] DIE6b — Manual QA on the 5 enhancement scenarios in `docs/QA.md` (backlit receipt, glossy menu, wrinkled invoice, dark restaurant, clean A4) on one Android + one iPhone. Owner: user — requires physical hardware.
-
-### v2 enhancement roadmap (not started)
-
-- [x] DIE7 — iOS `DocumentEnhancer.swift` Core Image post-VisionKit chain (paper-anchored tone curve at 0.96, illumination flatten, unsharp mask) + `SupyDocumentFilter` enum (`color` default, `grayscale`, `blackAndWhite`, `original`) wired through `SupyDocumentScanOptions` and `DocumentScannerPresenter`. Fixes VisionKit's bleached-to-white default. **Android parity follow-up below.**
-- [ ] DIE8 — Android parity for `SupyDocumentFilter`: add `grayscale` + `blackAndWhite` + `original` variants to the native-core pipeline (`color` is already the implicit default through `enhanceMode = balanced`). Currently Android ignores the `filter` wire arg.
-- [x] Sprint 4 Phase B — `SUPY_ENHANCE_MAX` now diverges from `balanced`: specular/glare clamp + morphological top-hat flatten + tile-based CLAHE layered on the balanced stack, all hand-rolled / OpenCV-free (`native/enhance/{morphology,tophat,clahe}.{h,cpp}` + `suppressSpecular` in `illumination.cpp`); new stage bits `SUPY_ENHANCE_STAGE_SPECULAR/TOPHAT/CLAHE` (`0x10/0x20/0x40`). Host gtest coverage in `enhance_test.cpp`; benched in `bench_enhance.cpp`. Docs: `docs/ENHANCEMENT.md` / `docs/ARCHITECTURE.md` / `CHANGELOG.md`. — 2026-06-26
-- [ ] Bilateral / guided denoise — wire into `SUPY_ENHANCE_MAX` (ahead of unsharp) for an even heavier denoise variant; denoise softens text, so it stays opt-in beyond the current `max` stack
-- [ ] Sauvola adaptive binarization — B&W output mode (`SupyDocumentScanOptions.outputMode` extension)
-- [ ] Grayscale variant — for OCR-only consumers that want smaller payloads
-- [ ] Multi-output URIs per page — return color + B&W from a single capture without re-running the pipeline
-- [ ] ML-based rotation detection — defer; rely on EXIF + OCR-confidence voting first
-
-## Out-of-scope (do not start here)
-
-- Retailer-app cutover (separate plan).
-- MRZ / ID-card recognition.
-- Web/desktop support.
-
-## Decisions log
-
-- **2026-06-13** — Embedded PlatformView is **in scope** for v1 (required for drop-in compatibility with `BarcodeScanbotView`). Earlier draft scoped this out — corrected before any code shipped.
-- **2026-06-13** — iOS deployment target jumps from 13 to 16. Confirm retailer iOS-15 fleet share is < 1% before cutover.
-- **2026-06-13** — Compat shim package (`supy_scanner_scanbot_compat`) ships alongside v1 to allow import-only migration.
-- **2026-06-13** — v1.1 Sprint 1.5 inserted between native-core scaffold (Sprint 1, done) and the CV pipeline lift (Sprint 2, next): embedded `SupyBarcodeScannerView` gains a Scanbot-RTU-UI-inspired configuration surface (palette tokens, top bar, action bar, view finder, user guidance, use-case modes, AR overlay). Native Document & Batch screens stay GMS/VisionKit per stakeholder. The "scan from far / needs more resources" memory is addressed by `SupyCameraConfiguration.scanRange = extended` + `minFocusDistanceLock`, both wired to the v1.1 native core when `useNativeCore` is on.
-- **2026-06-13** — Scanbot document-parity audit: three new v1.1 sprints scoped (Sprint 6 — embedded auto-capture API; Sprint 7 — per-page quality grade + PNG/PDF export; Sprint 8 — Supy-owned multi-page review). Sprints 6 + 7 layer on Sprint 4's native core. **Sprint 8 is decision-gated** (per `CLAUDE.md`: sacrifices the v1.0 "system scanner does the heavy lifting" property — needs explicit go/no-go before kickoff). TIFF export deferred — no first-party encoder on either platform. Full plan in `docs/V1.1_PLAN.md` §8.
-- **2026-06-13** — v1.0.x **hardening sprints (H0–H4)** sequenced BEFORE v1.1 Sprint 2. Target release `v1.0.1` for retailer cutover. Public API + symbology + decode algorithms FROZEN for v1.0.x. Telemetry out of scope (local `SupyLogSink` only). Device CI local-only. Plan file: `/Users/abdalqaderalnajjar/.claude/plans/gimme-plan-to-make-vast-gray.md`.
-- **2026-06-17** — **iOS document post-processing landed first** (Phase DIE7). VisionKit's auto-enhanced output bleaches paper toward pure white, so the iOS default is now to re-process each captured page through a Core Image chain (`DocumentEnhancer.swift`) anchored to preserve paper tone (tone-curve endpoint 0.96, not 1.0). New `SupyDocumentFilter` enum exposes `color` (default) / `grayscale` / `blackAndWhite` / `original`. **Android parity is deferred** to DIE8 — Android's existing native-core `balanced` enhance pipeline already produces comparable output, so Android currently ignores the `filter` arg. Compat-shim surface unchanged — retailer code automatically inherits the new default.
-- **2026-06-13** — **v1.2 Phase CXD promoted** from candidate sketch to active phase: CameraX document fallback for non-GMS Android. Activation = **auto-detect** via `GoogleApiAvailability` (no public API change; existing retailer code unchanged); capture UX = **manual tap-to-capture only** for v1.2 (auto-snap deferred to v1.3). The captured JPEGs reuse the existing `JpegReencoder` + `OcrRunner`, so OCR coverage stays Latin-script. Risk R2 (non-GMS Android) closes when v1.2.0 ships. Replaces the `model_unavailable` failure mode on Huawei/AOSP devices documented in D10.
-- **2026-06-17** — `docs/V1.1_PLAN.md` readiness pass. (1) Sprint math reconciled — plan now covers S1, S1.5, S2–S7 (core ~9.5 wks) + decision-gated S8 (~2 wks); earlier "5 sprints / ~6 wks" header was stale after the S1.5 and S6/S7/S8 inserts. (2) Binary-size gate default applied — Sprint 5 checks ≤22 MB per ABI on Android, ≤25 MB iOS; escalate if exceeded. (3) OCR corpus default applied — bootstrap 100 labelled invoice pages in the Sprint 4 lead-in week as a Sprint 4 prerequisite. (4) Telemetry firehose question struck from §7 — already covered by the 2026-06-13 "Telemetry out of scope" decision. (5) Sprint 8 recommendation: **defer until retailer requests post-capture editing**; keep `V1-S8-DECISION` open, no pre-written S8 tickets. (6) Model sourcing locked: HED-int8 from `s9xie/hed` (BSD-3) and FSRCNN-int8 from `Saafke/FSRCNN_Tensorflow` (MIT), quantized in-house to CoreML/TFLite, blobs pinned in-repo, no runtime download. Only §7 question still open: iOS A12 retailer-fleet share (hard dependency on retailer telemetry).
-- **2026-06-18** — **Public API addition: `SupyDocumentScanner.startMultiPage(context, {...})`** (new file `lib/src/document/supy_document_scanner.dart`, exported from `lib/supy_scanner.dart`). Thin facade over the existing `SupyScannerChannel.instance.scanDocument(SupyDocumentScanOptions)` — no channel change, channel stays `io.supy.scanner/v1`. Reason: `docs/MIGRATION.md` documented this exact drop-in entry point for the retailer's `InvoiceScannerService.scanWithCamera(context)` wrapper, but no such symbol existed in `lib/` — the migration sample wouldn't compile. Chose **build the facade to match the doc** (code→doc) over rewriting the doc. Defaults mirror Scanbot parity: `maxPages: 0` (unlimited), `ocrLanguages: ['en','ar']`, palette `#6448C3`/`#FFFFFF`, and **`intent: SupyDocumentScanIntent.generic`** so each page persists as an image (preserving the `List<File>`-of-images contract — `invoice` intent would switch output to multi-page PDF). `locale` defaults from ambient `Localizations` (`'ar'`→`'ar'`, else `'en'`) and an explicit `locale` arg wins. Purely additive — no existing Scanbot-compat surface changed. Also corrected `docs/MIGRATION.md` §4 which referenced a non-existent `SupyUserGuidance`/`SupyDocumentScanOptions.userGuidance`; the launcher takes no per-string guidance overrides in v1 (platform-owned localized copy; custom hints only on the embedded `SupyDocumentScannerView`).
-- **2026-06-17** — **Phase IXP (Invoice eXtraction Prototype)** opened as a v1.2 lab feature. Scope: on-device structured invoice parsing (vendor, date, invoice #, total, tax, currency, line items) via Vision text recognition + heuristic post-processing, layered on the just-landed `DocumentEnhancer` Core Image chain. **Surface is example-app-only** — no public `Supy*` API in `lib/` until promotion gate (≥20 labeled invoices, >80% header-field accuracy, >70% line-item accuracy). Channel stays at `io.supy.scanner/v1` with an additive `parseInvoice` method; Android handler returns `FlutterError("unimplemented", ...)` so iOS can ship without blocking on parity. Rationale: keeps an unstable contract out of the public API while letting us iterate against real invoices in the lab.
-- **2026-06-17** — **Phase FQS opened** (Frame Quality Score). Per-frame mean luma + variance-of-Laplacian moved out of Swift/Kotlin into shared C++ (`native/quality/frame_scorer.{h,cpp}`) so the existing `document_guidance_classifier` sees identical numbers on iOS and Android. Native-internal only — no Dart, no MethodChannel surface change, channel stays `io.supy.scanner/v1`. iOS landed first (Swift `DocumentDetector.computeLumaMetrics` is now a bridge call); **Android JNI parity (FQS4) is deferred** until iOS validation on-device. Rationale: one platform at a time keeps the bring-up cost low and lets us catch any algorithmic drift before doubling the change surface.
-- **2026-06-14** — Embedded document scanner gains **smart guidance + auto-snap + interior-variance false-positive gate** (`feat/document-scanner-smart-guidance` branch). Summary of what landed: (1) `SupyDocumentFrameState.holdSteady` new FSM state between failing and `ready`; (2) `quadStability` + `interiorVariance` added to `frame_metrics` EventChannel payload (additive — old consumers ignore new keys); (3) iOS detector hardened: confidence ≥ 0.7, aspect 0.4–1.0, interior-variance gate rejects laptop-screen false positives; (4) iOS `captureAndRectify` implemented (`CIPerspectiveCorrection` + JPEG write); (5) `captureFullFrame` implemented on iOS and Android (CameraX `ImageCapture`); (6) Overlay redesigned: corner reticles / brackets / ring countdown / capture flash, all palette-driven via `SupyScannerPalette`; (7) Android native C++ document-edge detector (`supy_scanner_core` JNI, adaptive Canny + Hough pipeline) replacing the empty-quad v1 path; (8) Auto-capture countdown (600 ms default) owned by the widget — widget cancels if state drops below `holdSteady` during countdown. **Channel is additive — no v2 bump** (`io.supy.scanner/v1` unchanged). Android `captureAndRectify` body stays UNIMPLEMENTED until Sprint 4 `warpPerspective`; widget always falls back to `captureFullFrame` so users never hit a dead button. Spec: `docs/superpowers/specs/2026-06-14-document-scanner-smart-guidance-design.md`. *(Superseded 2026-06-26: Android `captureAndRectify` is now implemented via the hand-rolled native warp — see the 2026-06-26 Phase-A decision below.)*
-- **2026-06-18** — **Off-center recenter guidance added natively** (single source of truth in the C++ classifier, mirrored — not re-implemented — in Dart/Kotlin/Swift). New `FrameState::kOffCenter` (wire ordinal 12, priority 10) fires *after* all hard framing checks pass but before `holdSteady`/`ready`, when the document centroid sits beyond `maxCenterOffset` half-extent from frame center. Drives a directional "center the page" prompt. Wire config grew **18 → 19 floats** (19th = `maxCenterOffset`; Dart sends sentinel `-1.0` when `centerGuidanceEnabled == false`, classifier gates on `> 0`). `frame_metrics` payload gains additive `centerOffsetX`/`centerOffsetY` (signed half-extent offset, `(centroid − 0.5) × 2`). Off-center is a **quick-clear-family** state: while in-state the ceiling is *raised* to `maxCenterOffset · (1 + exitMargin)` so the prompt doesn't re-arm on hand jitter. Channel stays additive — **no `v1` bump**. Parity pinned by the C++ gtest (6 off-center cases), `SupyGuidanceClassifierTests.swift` (4 cases), and the Dart FSM tests (6 cases — all green). Directional priority chosen as "after framing is OK" per product call. **Rationale for native-first:** the launcher path (Android `CameraXDocumentScannerActivity` → JNI) and the embedded iOS path both consume the C++ verdict, so implementing in Dart alone would have left the launcher path blind to off-center.
-- **2026-06-26** — **Sprint 4 Phase A landed: hand-rolled perspective warp (OpenCV-free), both platforms.** New native module `native/document/perspective_warp.{h,cpp,_test.cpp}`: 8-DOF homography from 4 quad correspondences (Gaussian elimination on the 8×8 system) + inverse-map bilinear sampling, no OpenCV, no deps. Exposed via the C ABI (`native/include/supy_scanner_core.h` + `native/src/supy_scanner_core.cpp`; `SUPY_CORE_ABI_VERSION` bumped to 5) and JNI (`nativeWarpPerspective` → packed RGBA `byte[]` + `[w,h]` out-param). Android `captureAndRectify` stub replaced (see V1-S6-02): full-res still + last smoothed quad → native warp → `PageReencoder.reencodeBitmap`. iOS stays on `CIPerspectiveCorrection` for now (geometry-equivalent; shared-warp adoption on iOS is optional and deferred — divergence flagged in `docs/ARCHITECTURE.md`). Confirmed decisions (per the approved plan): build-only (no paid SDK), hand-roll CV, defer HED int8 model, target the custom embedded `SupyDocumentScannerView` (not VisionKit/GMS). **Channel stays additive — no `v1` bump.** Native suite: 8/8 `PerspectiveWarp` tests green. **Two pre-existing native test reds (NOT warp regressions) deferred** out of Phase A scope: (1) `EnhancePipeline.UnsharpBoostsStepEdge` — unsharp is a no-op on a synthetic step edge; resolve in **Phase B** (enhance overhaul) when `MAX` becomes a real mode. (2) `GuidanceClassifier.HigherPriorityPreemptsImmediately` — EMA smoothing (`smoothingAlpha`) prevents a single dark frame from crossing the luma floor in one frame, so immediate preemption can't fire; resolve in **Phase C** (guidance port) and cross-check against the Dart FSM parity tests before changing the smoothing/preemption contract. The `FrameScorer.BlurScoreOrdersByContent` red was a test-fixture aliasing bug (1px stripes decimated to flat under stride-2 subsampling) and is **fixed** (8px stripes); suite now 63/65, the 2 remaining reds are the deferred ones above.
-
-- **2026-06-26** — **Sprint 4 Phase B landed: advanced enhancement stages, `MAX` is now a real mode.** `SUPY_ENHANCE_MAX` no longer aliases `BALANCED`; it runs gate → illumination → **specular clamp** → **top-hat flatten** → tone → **CLAHE** → unsharp. Three new hand-rolled, OpenCV-free stages: (1) specular/glare clamp `suppressSpecular` (`native/enhance/illumination.cpp`) — morphological-opening diffuse estimate, caps near-white hotspots toward `diffuse + 24`; (2) morphological top-hat `applyTopHatFlatten` (`native/enhance/tophat.{h,cpp}`) — closing with an SE larger than the largest glyph (~5% short side, `[12,96]`), lifts the local paper deficit; (3) tile-based CLAHE `applyClahe` (`native/enhance/clahe.{h,cpp}`) — 8×8 clipped-histogram grid with bilinear inter-tile interpolation. A shared separable-morphology helper (`native/enhance/morphology.{h,cpp}`, monotonic-deque O(n) min/max, reflect-clamp borders) backs them and is reused by illumination. New stage bits `SUPY_ENHANCE_STAGE_SPECULAR/TOPHAT/CLAHE` = `0x10/0x20/0x40` (`native/include/supy_scanner_enhance.h`), surfaced on `SupyDocumentPage.enhancedStages`. **Pragmatic-CV decision (per the approved plan):** the pure-papers Finlayson-Drew-Lu shadow removal and Yang dichromatic specular models stay deferred — the cheap clamp + top-hat + CLAHE combo is OpenCV-free and ML-Kit-friendly; revisit only if measured CER doesn't move. **OCR input policy holds:** OCR still gets denoised/deskewed grayscale, never binarized. **No Dart/channel change** — `enhanceMode: 'max'` already flowed end-to-end; no `v1` bump. **Resolved the deferred Phase-A red** `EnhancePipeline.UnsharpBoostsStepEdge`: root cause was that `BALANCED`/`MAX` run illumination's morphological closing first, which flattens a lone synthetic step edge toward the page mean and leaves unsharp nothing to overshoot — the test asserted a false contract. Replaced with an isolated `EnhanceStage.UnsharpWidensStepEdge` calling `applyUnsharpMask` directly (the true contract holds) plus `MaxAppliesAdvancedStages` for orchestration-level coverage. (Testable internals are exported past `-fvisibility=hidden` via a new `SUPY_ENHANCE_STAGE_EXPORT` macro in `buffer.h`, matching the existing `SUPY_WARP_EXPORT` pattern.) Full native suite green except the one remaining deferred red `GuidanceClassifier.HigherPriorityPreemptsImmediately` (Phase C scope). Docs updated same-PR: `docs/ENHANCEMENT.md`, `docs/ARCHITECTURE.md`, `docs/V1.1_PLAN.md`, `CHANGELOG.md`, `docs/QA.md`. Phase C (post-capture quality grade) follows.
-
-## Decisions
-
-- **2026-07-03 — Supy scanner becomes the default document backend (Phase CSU).**
-  Spec: `docs/superpowers/specs/2026-07-03-supy-document-scanner-replaces-scanbot-design.md`.
-  System modals (GMS/VisionKit) stay reachable via the existing
-  `preferredBackend` values `gms`/`cameraX` as the kill-switch; a new additive
-  `supy` backend value lands in Sprint 2. Scanbot-compat call sites are
-  unchanged (additive-only surface).
-- **2026-07-03 — No `navigatorKey`; route via the caller's `BuildContext`.**
-  `SupyDocumentScanner.startMultiPage()` already receives a `BuildContext`, so
-  the supy screen is pushed with `Navigator.maybeOf(context)`; if no navigator
-  is reachable we warn once and fall back to the system backend. Zero retailer
-  integration steps.
-- **2026-07-03 — `captureAndRectify` quad semantics.** The `quad` payload key
-  now carries the final still-space quad actually warped (previously the raw
-  analyzer-space quad); additive `quadSource` reports `refined`/`preview`.
-  Same normalized top-left-origin convention; consumers unaffected.
-- **2026-07-05 — Sprint 1 final review: two-pass still re-detection accepted
-  (plan deviation, B3).** Task 3's plan sketched a single-pass detection
-  fixture; the implementation runs two passes —
-  `VNDetectDocumentSegmentationRequest` followed by a geometric
-  `VNDetectRectanglesRequest`. Ruled **accept**: `VNDetectDocumentSegmentationRequest`
-  returns no results on synthetic flat-color simulator images, so the
-  geometric pass is required for the real-Vision `DocumentStillRefiner` test
-  to pass on the simulator. Public interfaces are unchanged and the code is
-  committed and green (`DocumentStillRefinerTests` 7/7). Surfaced by the
-  inline whole-branch review (`.superpowers/sdd/final-review-report.md`),
-  which found no Critical or Important code defects; the review's B2 (pipeline
-  returns nil on a non-4-point refiner quad vs. the L48-49 comment's stronger
-  promise) stands as a Minor, non-blocking item with an optional one-line
-  defensive fix, and B1 (the segmentation-cast "always nil" claim) was refuted
-  (`VNDetectDocumentSegmentationRequest.results` is `[VNRectangleObservation]`).
-
-## Phase CSU — Supy scanner replaces Scanbot
-
-Spec: `docs/superpowers/specs/2026-07-03-supy-document-scanner-replaces-scanbot-design.md`
-
-### Sprint 1 — iOS capture completion (plan: `docs/superpowers/plans/2026-07-03-csu-sprint1-ios-capture-completion.md`)
-- [x] CSU-S1-01 `QuadGeometry` convex-quad IoU + tests
-- [x] CSU-S1-02 `PreviewPhotoQuadMapper` analyzer→still aspect mapping + tests
-- [x] CSU-S1-03 `DocumentStillRefiner` on-still re-detection (IoU ≥ 0.8 gate, preview fallback) + tests
-- [x] CSU-S1-04 `DocumentRectifyPipeline` wired into `captureAndRectify`; additive `quadSource` payload key
-- [x] CSU-S1-05 `SupyDocumentCapture.quadSource` Dart passthrough + tests
-- [x] CSU-S1-06 Docs: ARCHITECTURE channel row, CHANGELOG, decisions log, QA scenario
-
-### Sprint 2 — Dart scanner screen (plan at sprint boundary)
-- [ ] CSU-S2 `SupyDocumentScannerScreen`, `startMultiPage` BuildContext routing, minimal review UI, additive `supy` backend value, system fallback, `docs/MIGRATION.md` + `docs/PLAN.md` phase docs
-
-### Sprint 3 — Android parity (plan at sprint boundary)
-- [ ] CSU-S3 C++ guidance on embedded view, seeded still refinement, `filter` native mapping, GMS kill-switch
-
-### Sprint 4 — Proof & Scanbot removal (plan at sprint boundary)
-- [ ] CSU-S4 Side-by-side bench vs Scanbot, QA walkthrough, retailer pilot, Scanbot removal
-
-## DSQ — Document Scan Quality program (spec: docs/superpowers/specs/2026-07-16-doc-scan-quality-design.md)
-
-### DSQ0 — bench harness + corpus (plan: docs/superpowers/plans/2026-07-16-dsq0-bench-harness.md)
-- [x] DSQ0-01 corpus schema, LFS rules, loader/validator (`tools/bench/lib/corpus.dart`)
-- [x] DSQ0-02 quad IoU (`tools/bench/lib/quad_iou.dart`)
-- [x] DSQ0-03 output metrics: sharpness/uniformity/DPI/CER (`tools/bench/lib/metrics.dart`)
-- [x] DSQ0-04 synthetic seed corpus ×6 (`tools/bench/gen_seed_corpus.dart`)
-- [x] DSQ0-05 bench_detect host harness (`native/bench/bench_detect.cpp`)
-- [x] DSQ0-06 bench_pipeline host harness (`native/bench/bench_pipeline.cpp`)
-- [x] DSQ0-07 Vision OCR CLI (`tools/bench/ocr/vision_ocr.swift`)
-- [x] DSQ0-08 aggregation + report + ±2% gate (`tools/bench/lib/report.dart`)
-- [x] DSQ0-09 run_bench driver (`tools/bench/run_bench.dart`)
-- [x] DSQ0-10 dsq-bench CI job (macos-14, non-blocking until baselines pin)
-- [ ] DSQ0-11 real corpus ~120 scenes + Scanbot outputs (USER-OWNED, see bench/corpus/CAPTURE_GUIDE.md)
-- [ ] DSQ0-12 pin scanbot.json baseline after DSQ0-11
-
-### DSQ1–DSQ4
-Planned per-phase; each phase gets its own implementation plan once the
-previous phase's bench results are in. DSQ1 requires a TODO decisions-log
-entry for the embedded-iOS `enhanceMode` default flip (spec §DSQ1).
+# supy_scanner: master specification and refactor guide
+
+**Audience:** an AI coding agent executing this work, plus the engineers reviewing it.
+**Purpose:** define the target architecture completely, and give an executable path from the current `supy_scanner` implementation to it.
+**Status:** authoritative. Where this document and older specs, tickets, or code comments disagree, this document wins.
+
+---
+
+# PART 0: HOW TO USE THIS DOCUMENT
+
+Read this part fully before touching any code.
+
+## 0.1 Your operating rules
+
+1. **Discovery before change.** Part 2 is a discovery protocol. Run it and produce the inventory artifact before editing anything. Do not assume the repository matches any tree shown in this document.
+2. **Strangler pattern, always.** Never delete a working path before its replacement proves parity on the corpus. Old and new coexist behind an Unleash flag until the new path wins on measured metrics. This matches the pattern already used for the order module refactor in `supy-mobile`.
+3. **One phase per branch, one phase per PR.** Phases are defined in Part 3. Do not batch them. A phase that touches 40 files is unreviewable and will be rubber-stamped, which defeats the point.
+4. **Every phase has an acceptance gate.** They are written as runnable commands. A phase is not done until its gate passes. Do not proceed to the next phase with a red gate.
+5. **Stop and ask on the open questions.** Part 8 lists decisions you must not make unilaterally. If a phase depends on one, stop, state which question blocks you, and wait. Guessing here produces weeks of rework.
+6. **Never invent metrics.** If this document says "mean IoU at least 0.95", that number comes from a real harness run on the real corpus. Do not report a number you did not measure. If the harness is not built yet, say the gate cannot be evaluated.
+7. **Follow Supy Flutter standards** for all Dart: Clean Architecture with dependencies pointing inward, `Bloc` never `Cubit`, `Either<Failure, T>` from repositories and usecases, the domain never throws, `context.push` with path constants, `get_it` (singletons for services/repos/usecases/datasources, factory for BLoCs), design tokens only with no raw hex or inline `TextStyle`.
+8. **Supy writing rule:** no em dashes or en dashes in any output, including code comments, commit messages, PR descriptions, and UI copy. Use a hyphen, a comma, a colon, or split the sentence.
+
+## 0.2 What "done" means for the whole programme
+
+The refactor is complete when all of these hold:
+
+- One C++ core produces every processed pixel on every platform.
+- A native Android app with zero Flutter on its classpath can consume the SDK, and CI proves it.
+- A native iOS app with zero Flutter can consume the SDK, and CI proves it.
+- The Flutter app consumes the same core and produces byte-identical output to both.
+- The scanner UI carries Supy brand identically on all three, enforced by a pixel-level brand assertion in CI.
+- Every legacy scanner code path is deleted, not merely disabled.
+
+## 0.3 Document map
+
+| Part | Contents |
+|---|---|
+| 1 | Target architecture, in brief |
+| 2 | Discovery protocol: inventory the current implementation |
+| 3 | Migration phases with acceptance gates |
+| 4 | Target spec: the image processing pipeline |
+| 5 | Target spec: multi-platform distribution |
+| 6 | Target spec: UI and Supy branding |
+| 7 | Anti-patterns: known ways this goes wrong |
+| 8 | Open questions you must not answer alone |
+
+---
+
+# PART 1: TARGET ARCHITECTURE
+
+## 1.1 The core decision
+
+Detection and enhancement both live in one platform-free C++ core. Platform code is a thin binding.
+
+```
+   L3  UI          ┌──────────────┬─────────────┬──────────────┐
+   optional        │ Compose      │ SwiftUI     │ Flutter      │
+                   │ screens      │ screens     │ widgets      │
+                   └──────┬───────┴──────┬──────┴──────┬───────┘
+   L2  Public SDK  ┌──────▼───────┬──────▼──────┬──────▼───────┐
+   idiomatic       │ io.supy:     │ SupyScanner │ supy_scanner │
+   per language    │  scanner     │ SPM+Pods    │ pub.dev      │
+                   │ Kotlin       │ Swift       │ Dart         │
+                   │ coroutines   │ async/await │ Either       │
+                   └──────┬───────┴──────┬──────┴──────┬───────┘
+   L1  Platform    ┌──────▼──────────────▼─────────────▼───────┐
+   detection       │ VisionDetector (iOS only, optional)       │
+   adapters        │ MlKitTurnkey   (Android only, optional)   │
+                   └──────────────────┬────────────────────────┘
+   L0  Core        ┌──────────────────▼────────────────────────┐
+   C++17 + OpenCV  │ C ABI: supy_scanner.h                     │
+                   │ detect, rectify, enhance, encode          │
+                   │ ZERO platform dependencies                │
+                   │ Compiles and tests on Linux CI            │
+                   └───────────────────────────────────────────┘
+```
+
+**Two rules govern everything:**
+
+- **L0 has no platform dependencies at all.** No JNI, no Objective-C, no Dart. This is what lets the pipeline be unit tested on Linux in seconds, and it is what makes the SDK consumable without Flutter.
+- **The three L2 surfaces are siblings, not a chain.** Flutter binds to the C ABI directly. It does not call the Kotlin SDK. A chain would add a JNI hop per call and inherit every Kotlin-side bug.
+
+## 1.2 Correction to earlier assumptions
+
+If any existing ticket, spec, or code comment says ML Kit Document Scanner provides per-frame quad detection on Android, that is wrong and must be corrected wherever found.
+
+ML Kit Document Scanner is a **full-UI activity flow**. It ships its own viewfinder and preview screens and returns finished JPEG or PDF pages. There is no API to hand it a CameraX frame and receive four corners. It also requires at least 1.7 GB device RAM (throws `MlKitException(UNSUPPORTED)` below that), requires Google Play Services, and downloads its models and UI on first use.
+
+**Consequences:**
+
+| | Wrong assumption | Reality |
+|---|---|---|
+| Android live detection | ML Kit | Shared C++ classical detector, the only option |
+| iOS live detection | Vision | Correct, `VNDetectDocumentSegmentationRequest` is a real per-frame API |
+| ML Kit role | Primary detector | Optional turnkey fallback only |
+
+This makes the C++ detector production-critical rather than a fallback. It also makes the core genuinely standalone-useful, which is what the multi-platform requirement needs.
+
+## 1.3 Effort
+
+| Track | Weeks |
+|---|---|
+| Pipeline core (detect, rectify, enhance, encode) | 8 |
+| Multi-platform packaging and conformance | 3 |
+| UI on three platforms, branded, with parity gate | 5 net |
+| **Total** | **~16 weeks** |
+
+---
+
+# PART 2: DISCOVERY PROTOCOL
+
+Run this first. Produce `docs/refactor/00-inventory.md` and stop for review before any code changes.
+
+## 2.1 Inventory the current implementation
+
+```bash
+# Locate every scanner-related source file
+rg -l --type dart -i 'scanner|scanbot|docutain|perspective|crop|ocr' lib/ packages/
+rg -l --type kotlin -i 'scanner|camera|mlkit|document' android/
+rg -l --type swift  -i 'scanner|camera|vision|document' ios/
+
+# Existing dependencies that matter
+rg -n 'scanbot|docutain|opencv|image|camera|mlkit|google_ml' pubspec.yaml
+rg -n 'scanbot|docutain|opencv|mlkit|camerax' android/**/build.gradle*
+rg -n 'Scanbot|Docutain|OpenCV' ios/Podfile ios/**/*.podspec
+
+# Any existing native code
+fd -e cpp -e cc -e h -e hpp . --exclude build
+fd 'CMakeLists.txt|\.podspec|ffigen' .
+
+# Existing ports and adapters
+rg -n 'abstract (class|interface class).*Scanner|ScannerPort|implements Scanner' lib/
+
+# Feature flags already in play
+rg -n 'unleash|isEnabled\(' lib/ | rg -i 'scan|camera|ocr'
+```
+
+## 2.2 Fill in the inventory artifact
+
+Answer each question with file paths and line references, not prose. Write "not present" where nothing exists. Do not speculate.
+
+```markdown
+# Scanner refactor: current state inventory
+
+## A. Entry points
+- Where does a scan start today? (route, widget, method)
+- How many distinct entry points exist? (invoice capture, gallery import, share sheet, other)
+
+## B. Abstraction layer
+- Does a `ScannerPort` or equivalent exist? Path:
+- What is its exact method signature list?
+- How many concrete adapters implement it? Paths:
+- Do repositories/usecases return `Either<Failure, T>`, or do they throw?
+
+## C. Processing
+- What performs perspective correction today? (vendor SDK, Dart package, native, nothing)
+- What performs enhancement today?
+- What performs binarisation today?
+- Is any processing done in pure Dart? Paths and image sizes:
+- How many times is an image encoded/decoded per capture? Trace it:
+
+## D. Detection
+- What detects the document today?
+- Is detection live (per frame) or only post-capture?
+- Is there a manual crop editor? Path:
+
+## E. Vendor SDKs
+- Scanbot present? Version, where initialised, license key handling:
+- Docutain present? Same:
+- ML Kit present? Which modules:
+- What is each vendor SDK's current contribution to APK/IPA size?
+
+## F. State management
+- Which Bloc(s) own scanner state? Paths:
+- Any Cubit in the scanner path? (must be migrated to Bloc)
+- Where is captured-page state held? Are full-resolution bytes in Bloc state?
+
+## G. UI
+- How many scanner screens exist? Paths:
+- Is any hex literal, `Colors.*`, or inline `TextStyle` present in them? Count and paths:
+- Is there Arabic localisation for scanner strings? Coverage:
+- Is RTL handled in the crop overlay?
+
+## H. Native
+- Any existing Kotlin/Swift scanner code? Paths:
+- Is there an existing AAR/xcframework/podspec published from this repo?
+
+## I. Tests
+- Existing scanner test files and what they cover:
+- Is there any labelled image corpus? Path and size:
+- Current Dart coverage on scanner paths:
+
+## J. Memory and performance
+- Are full-resolution images held in memory? Where:
+- Any known OOM reports or crash clusters on the scan path? (check Sentry)
+- Current measured shutter-to-preview latency, if known:
+```
+
+## 2.3 Produce the mapping table
+
+For every file found in 2.1, assign exactly one disposition:
+
+| Disposition | Meaning |
+|---|---|
+| `KEEP` | Already matches target. No change. |
+| `MOVE` | Correct code, wrong layer or package. Relocate only. |
+| `REWRITE` | Concept survives, implementation is replaced. |
+| `WRAP` | Becomes an adapter behind the new port. |
+| `DELETE` | Removed after the replacement proves parity. |
+
+Output `docs/refactor/01-mapping.md` as a table: current path, disposition, target path, phase number, one-line rationale.
+
+**Stop here and wait for review.** The mapping table is the contract for everything that follows. Getting it wrong is expensive; getting it reviewed costs an hour.
+
+---
+
+# PART 3: MIGRATION PHASES
+
+Ten phases. One branch and one PR each. Commit with Conventional Commits per `commitlint` (never the `hotfix` type).
+
+## Phase 0: Corpus and harness
+
+**Why first:** without measurement, every parameter change afterwards is a coin flip, and there is no way to prove the new path beats the old one. This feels like a two-week detour and it is the difference between tuning on evidence and tuning on opinion.
+
+**Do:**
+1. Create `supy-scanner-corpus` (separate repo, git-lfs). Collect and label 250+ images per the matrix in section 4.15.
+2. Build the metrics harness: quad IoU in the rectified frame (ICDAR SmartDoc 2015 protocol), SSIM, OCR character error rate.
+3. Run the harness against the **current** implementation. This baseline is what the refactor must beat.
+
+**Gate:**
+```bash
+./tools/harness run --impl=legacy --corpus=../supy-scanner-corpus
+# must emit docs/refactor/02-baseline.md with IoU, SSIM, CER per category
+test -f docs/refactor/02-baseline.md
+```
+
+**Blocked by:** open question Q5 (corpus consent).
+
+## Phase 1: Monorepo skeleton and native build
+
+**Do:**
+1. Create the target tree (section 5.5). Do not move existing code yet.
+2. Write `core/include/supy_scanner.h` exactly as section 4.2 defines. This header is a contract; changing it later is expensive.
+3. Stub every function to return `SC_OK` with a passthrough.
+4. Build OpenCV trimmed per section 4.1. Produce `.so` x 3 ABIs, `.xcframework`, host `.dylib`/`.so`.
+5. Create three sample apps: Android (Kotlin, zero Flutter), iOS (Swift, zero Flutter), Flutter example. Each calls `sc_version()` and prints it.
+6. Wire CI: all three sample apps build on every PR.
+
+**Gate:**
+```bash
+./tools/build-core.sh --all
+llvm-readelf -l android/scanner-core/src/main/jniLibs/arm64-v8a/libsupy_scanner_core.so | grep -q 'LOAD.*0x4000'   # 16 KB alignment
+./tools/check-sizes.sh   # .so <= 3.5 MB/ABI, .xcframework <= 4 MB
+./gradlew :sample-app:assembleDebug
+xcodebuild -project ios/SampleApp/SampleApp.xcodeproj build
+cd flutter/example && flutter build apk --debug
+./tools/assert-no-flutter.sh android/sample-app ios/SampleApp   # must exit 0
+```
+
+The last check is load-bearing. It locks the "no Flutter on the classpath" constraint into CI **before** any code exists to violate it. Retrofitting standalone-consumability onto a Flutter-first plugin is a rewrite, not a refactor.
+
+## Phase 2: Core detection and rectification
+
+**Do:** implement pipeline stages 0 through 4 (section 4.3 to 4.7): decode-once, classical detector with LSD fallback, corner ordering, homography with aspect-ratio recovery, anti-aliased warp, resolution policy, JPEG encode.
+
+**Gate:**
+```bash
+cmake --build build --target core_tests && ctest --test-dir build --output-on-failure
+./tools/harness run --impl=core --corpus=../supy-scanner-corpus
+# mean IoU >= 0.93, P95 >= 0.88, catastrophic (IoU < 0.80) <= 3%
+./tools/harness compare --baseline=docs/refactor/02-baseline.md --new=core
+```
+
+## Phase 3: Flutter binds to the core
+
+**Do:**
+1. `ffigen` bindings from the header. Commit as generated, never hand-edit.
+2. Worker isolate with the request/response protocol and `NativeFinalizer` handle lifecycle.
+3. `DocumentProcessorPort` in `domain/ports/`, `NativeProcessorAdapter` in `data/adapters/`.
+4. `WRAP` the existing implementation as `LegacyScannerAdapter` behind the same port.
+5. Unleash flag `mobile.scanner.native_core` selects between them. Default off.
+
+**Gate:**
+```bash
+flutter test --coverage   # >= 80% on new code
+flutter test integration_test/ffi_lifecycle_test.dart   # 1000 cycles, RSS flat
+dart format --set-exit-if-changed lib test && flutter analyze
+```
+Both adapters must satisfy the identical port test suite.
+
+## Phase 4: Core enhancement
+
+**Do:** stages 5 through 11 (section 4.8 to 4.14): deskew, orientation, illumination (morphological and guided filter), background whitening with colour preservation, tone-curve contrast, denoise, unsharp with halo control, Sauvola via integral images.
+
+**Gate:**
+```bash
+ctest --test-dir build --output-on-failure
+./tools/harness run --impl=core --metric=cer
+# CER must improve >= 25% vs the Phase 0 legacy baseline
+./tools/bench --op=refilter   # <= 50 ms
+./tools/bench --op=process --size=2200   # <= 900 ms
+```
+
+## Phase 5: Flip the flag, delete the legacy path
+
+**Do:**
+1. Ramp `mobile.scanner.native_core` to 100% via Unleash, staged.
+2. Watch Sentry and the retake-rate metric for one full release cycle.
+3. **Only then** delete `LegacyScannerAdapter` and every file marked `DELETE` in the mapping table.
+4. Remove the now-unused vendor SDK dependencies and their license key handling.
+
+**Gate:**
+```bash
+rg -n 'LegacyScannerAdapter|scanbot|docutain' lib/ android/ ios/   # must return nothing
+./tools/check-sizes.sh --report-delta   # net APK/IPA change documented
+```
+
+Do not run this phase until Phase 4's gate is green in production telemetry, not just in CI.
+
+## Phase 6: Android native SDK
+
+**Blocked by:** open question Q9. If no native Android consumer exists, skip Phase 6 and Phase 7 entirely and record the decision.
+
+**Do:** JNI bridge, `SupyScannerProcessor` Kotlin API with coroutines, module split (`scanner-core`, `scanner-camera`, `scanner-ui`, `scanner-mlkit`, `scanner-ocr`, `scanner-bom`), CameraX capture. Flutter plugin declares `api "io.supy:scanner-core"` and ships **no** `.so` of its own (section 5.3.1).
+
+**Gate:**
+```bash
+./gradlew :scanner-core:test :scanner-camera:test connectedAndroidTest
+./tools/harness run --impl=android-sdk
+./tools/conformance --targets=core,android   # byte-identical encoded output
+./tools/assert-single-so.sh   # hybrid app loads exactly one libsupy_scanner_core.so
+```
+
+## Phase 7: iOS native SDK
+
+**Do:** Swift wrapper with async/await, module split, AVFoundation capture, `VisionDetector`, SPM `binaryTarget` plus CocoaPods podspec. The Flutter podspec declares `s.dependency 'SupyScannerCore'` and never vendors the framework (section 5.3.2). Dart FFI uses `DynamicLibrary.process()` on iOS because the framework is static.
+
+**Gate:**
+```bash
+swift test && xcodebuild test -scheme SupyScannerCore
+./tools/conformance --targets=core,android,ios   # all three byte-identical
+```
+
+## Phase 8: Design tokens and UI config
+
+**Do:**
+1. `design/tokens.json` per section 6.2. Generate `SupyScannerTokens.{kt,swift,dart}`.
+2. `design/ui-config.schema.json` per section 6.4. Generate config types for all three.
+3. `design/strings/{en,ar}.arb`. Generate `strings.xml`, `.strings`, `.arb`.
+4. Add the lint rule that fails the build on any hex literal, `Colors.*`, `Color(0xFF...)`, `UIColor(red:)`, or raw numeric padding inside a scanner view file.
+
+**Gate:**
+```bash
+./tools/build-tokens.sh && git diff --exit-code   # generated output matches committed
+./tools/lint-no-literals.sh                        # zero violations
+```
+
+## Phase 9: Branded UI
+
+**Do:** the five screens and six states (section 6.5), on whichever platforms Q9 resolved to. Build Flutter first (fastest iteration, where design review happens), then transcribe to Compose and SwiftUI.
+
+**Critical sequencing:** stand up the cross-platform diff harness **before** the second platform's UI, not after. Otherwise the second implementation drifts during development and you pay to converge it at the end.
+
+**Gate:**
+```bash
+./gradlew verifyPaparazziDebug
+swift test --filter SnapshotTests
+flutter test --tags golden
+./tools/ui-parity --screens=all --locales=en,ar --scales=1.0,1.3
+# layout diff <= 2 dp, SSIM >= 0.94, brand hex assertions EXACT
+```
+
+---
+
+# PART 4: TARGET SPEC, THE PIPELINE
+
+## 4.1 OpenCV build
+
+Full OpenCV is +20 MB per ABI and unacceptable. Use `opencv-mobile` or a custom trimmed CMake build:
+
+```
+BUILD_LIST=core,imgproc,imgcodecs
+WITH_PROTOBUF=OFF  WITH_QUIRC=OFF  WITH_ITT=OFF  WITH_IPP=OFF
+BUILD_opencv_apps=OFF  BUILD_TESTS=OFF  BUILD_PERF_TESTS=OFF
+WITH_JPEG=ON (libjpeg-turbo)  WITH_PNG=ON  WITH_WEBP=ON
+BUILD_SHARED_LIBS=OFF
+```
+
+Budget: 3.5 MB per ABI on Android, 4 MB on iOS. Build in a separate `supy-scanner-native` pipeline, publish as a GitHub Release artifact with SHA-256, download and verify at plugin build time. Do not vendor OpenCV sources.
+
+## 4.2 The C ABI
+
+This header is the contract between the core and all three bindings. Keep it narrow and stable.
+
+```c
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+typedef int64_t sc_handle;
+typedef int64_t sc_client;
+typedef int32_t sc_status;
+
+#define SC_OK                     0
+#define SC_ERR_DECODE            -1
+#define SC_ERR_NO_DOCUMENT       -2
+#define SC_ERR_DEGENERATE_QUAD   -3
+#define SC_ERR_OOM               -4
+#define SC_ERR_INVALID_HANDLE    -5
+#define SC_ERR_CANCELLED         -6
+
+typedef struct { float x, y; } sc_point;
+typedef struct { sc_point tl, tr, br, bl; } sc_quad;
+
+typedef struct {
+  int32_t enhancement;            /* 0 original 1 auto 2 color 3 gray 4 bw 5 ocr */
+  int32_t deskew;
+  int32_t shadow_removal;         /* 0 off 1 fast 2 guided */
+  int32_t background_whitening;
+  int32_t denoise;                /* 0 off 1 light 2 nlm */
+  float   sharpen_amount;
+  float   margin_percent;
+  int32_t max_dimension;
+  int32_t target_dpi;
+  int32_t output_format;          /* 0 jpeg 1 png 2 webp 3 g4tiff */
+  int32_t quality;
+  int32_t chroma_subsampling;     /* 0 = 4:4:4, 1 = 4:2:0 */
+  int32_t preserve_color_regions;
+} sc_options;
+
+/* lifecycle, refcounted so one loaded core can serve two callers */
+sc_status sc_init(void);
+sc_status sc_shutdown(void);
+sc_status sc_acquire_client(const char* tag, sc_client* out);
+sc_status sc_release_client(sc_client c);
+int32_t   sc_abi_version(void);
+const char* sc_version(void);
+const char* sc_last_error_message(void);
+
+/* images */
+sc_status sc_decode_jpeg(const uint8_t* bytes, int64_t len, int32_t reduce,
+                         int32_t exif_orientation, sc_handle* out);
+sc_status sc_wrap_luma(const uint8_t* y, int32_t w, int32_t h,
+                       int32_t stride, sc_handle* out);
+sc_status sc_release(sc_handle h);
+sc_status sc_dimensions(sc_handle h, int32_t* w, int32_t* h_out);
+
+/* pipeline */
+sc_status sc_detect_quad(sc_handle src, sc_quad* out, float* confidence);
+sc_status sc_rectify(sc_handle src, const sc_quad* q, const sc_options* o, sc_handle* out);
+sc_status sc_enhance(sc_handle rect, const sc_options* o, sc_handle* out);
+sc_status sc_encode(sc_handle h, const sc_options* o, uint8_t** bytes, int64_t* len);
+void      sc_free_bytes(uint8_t* p);
+
+/* one hop for the common case */
+sc_status sc_process(sc_handle src, const sc_quad* q, const sc_options* o,
+                     uint8_t** bytes, int64_t* len, int32_t* w, int32_t* h);
+
+/* cached refilter, so the filter strip feels instant */
+sc_status sc_cache_rectified(sc_client c, sc_handle rect, int32_t slot);
+sc_status sc_refilter(sc_client c, int32_t slot, const sc_options* o,
+                      uint8_t** bytes, int64_t* len);
+sc_status sc_clear_cache(sc_client c, int32_t slot);
+
+#ifdef __cplusplus
+}
+#endif
+```
+
+**ABI evolution rule:** any change to this header bumps `sc_abi_version()`. New `sc_options` fields go at the **end** of the struct and must treat zero as "previous behaviour", so an old wrapper against a new core degrades gracefully instead of reading garbage.
+
+## 4.3 Stage 0: ingest, decode exactly once
+
+1. Decode once. All stages operate on in-memory `cv::Mat`. Never decode, process, encode, decode between stages.
+2. Use DCT-scaled decode for the detection pass. libjpeg-turbo decodes at 1/2, 1/4, or 1/8 nearly free. Detection uses `reduce=8`.
+3. Normalise EXIF orientation at ingest, then strip it. Half of all "the scan is sideways" bugs are an orientation tag applied twice or zero times.
+4. For live frames use the **Y plane directly** as an 8-bit grayscale `Mat` with the supplied row stride. Zero conversion, zero copy. This is the difference between 4 ms and 18 ms per frame.
+
+```cpp
+cv::Mat luma(height, width, CV_8UC1, const_cast<uint8_t*>(yPlane), rowStride);
+```
+
+HEIC on iOS: decode via `CGImageSource` on the platform side and pass BGRA in. Adding libheif to the core costs ~1.5 MB and is not worth it.
+
+## 4.4 Stage 1: detection
+
+Work in Lab, not naive grayscale. This is what keeps colour stamps, red "PAID" marks, and blue signatures alive through later stages.
+
+Run detection at 512 px longest side.
+
+```cpp
+sc_status detect_quad_classical(const cv::Mat& src, sc_quad* out, float* conf) {
+  cv::Mat small; double scale = 512.0 / std::max(src.cols, src.rows);
+  cv::resize(src, small, {}, scale, scale, cv::INTER_AREA);
+
+  cv::Mat lab; cv::cvtColor(small, lab, cv::COLOR_BGR2Lab);
+  std::vector<cv::Mat> ch; cv::split(lab, ch);
+
+  /* per-pixel max gradient across L, a, b. White paper on a white table has
+     no luminance edge but almost always has a chroma edge. */
+  cv::Mat edges = cv::Mat::zeros(small.size(), CV_8UC1);
+  for (auto& c : ch) {
+    cv::Mat blurred, e;
+    cv::medianBlur(c, blurred, 5);
+    double med = median_of(blurred);
+    cv::Canny(blurred, e, std::max(0.0, 0.66*med), std::min(255.0, 1.33*med));
+    cv::max(edges, e, edges);
+  }
+  cv::morphologyEx(edges, edges, cv::MORPH_CLOSE,
+                   cv::getStructuringElement(cv::MORPH_RECT, {3,3}), {-1,-1}, 2);
+
+  std::vector<std::vector<cv::Point>> contours;
+  cv::findContours(edges, contours, cv::RETR_EXTERNAL, cv::CHAIN_APPROX_SIMPLE);
+  std::sort(contours.begin(), contours.end(),
+            [](auto& a, auto& b){ return cv::contourArea(a) > cv::contourArea(b); });
+
+  const double frameArea = small.total();
+  for (int i = 0; i < std::min<int>(8, contours.size()); ++i) {
+    std::vector<cv::Point> approx;
+    cv::approxPolyDP(contours[i], approx, 0.02*cv::arcLength(contours[i], true), true);
+    if (approx.size() != 4) continue;
+    if (!cv::isContourConvex(approx)) continue;
+    if (cv::contourArea(approx) < 0.15*frameArea) continue;
+    if (!angles_within(approx, 60.0, 120.0)) continue;
+    emit_ordered(approx, scale, out);
+    *conf = confidence_from(approx, contours[i]);
+    return SC_OK;
+  }
+  return detect_quad_lsd(src, out, conf);
+}
+```
+
+**LSD fallback, required not optional.** When a finger covers a corner (extremely common with receipts) `approxPolyDP` never yields four points. Run `cv::createLineSegmentDetector`, keep segments longer than 15% of the frame, cluster into near-horizontal and near-vertical groups by angle (plus or minus 25 degrees), take the two extreme lines of each group, and intersect them to synthesise the corner. The corner is reconstructed even though it is physically hidden. This single fallback measurably reduces retake rate.
+
+**Confidence score,** used for auto-capture, margin expansion, and UI hints:
+
+```
+conf = 0.35 * edge_support      /* fraction of quad perimeter with a real edge beneath */
+     + 0.25 * convexity         /* contourArea / convexHullArea */
+     + 0.20 * angle_regularity  /* 1 - mean(|angle - 90|)/45 */
+     + 0.20 * area_ratio_sanity /* penalise below 20% or above 95% of frame */
+```
+
+If `conf < 0.6`, expand the crop margin to 3% and do not auto-capture.
+
+**Temporal stabilisation for live preview:**
+
+```dart
+if (iou(newQuad, smoothed) < 0.70) {
+  smoothed = newQuad;        // genuine re-frame, snap rather than lerp
+  stableFrames = 0;
+} else {
+  smoothed = lerpQuad(smoothed, newQuad, 0.35);
+  stableFrames++;
+}
+```
+
+Auto-capture fires when all hold: `stableFrames >= 8`, `confidence >= 0.75`, focus locked, device motion below threshold, quad area between 25% and 92% of frame. Show a visible 3-tick countdown. Auto-capture with no warning is indistinguishable from a bug.
+
+**Never leave the user with nothing.** Failed detection means "show the full frame with draggable corners", never an error dialog.
+
+## 4.5 Stage 2: corner ordering
+
+Order by angle around the centroid, then rotate the array so index 0 is the vertex nearest the image top-left. The simpler sum/diff trick (TL = min(x+y) and so on) degrades past 45 degrees of rotation; the robust version costs nothing and removes a whole class of mirrored-scan bugs.
+
+Reject as `SC_ERR_DEGENERATE_QUAD`: any edge shorter than 5% of the image's shorter side, self-intersecting quads (inconsistent cross-product signs), aspect ratio beyond 1:12.
+
+## 4.6 Stage 3: perspective correction
+
+**The output-size problem.** The naive `w = max(|TR-TL|, |BR-BL|)` is wrong under strong perspective. Shooting a portrait A4 from 40 degrees makes the near edge much longer than the far edge, and `max()` of two projected lengths does not recover the true aspect ratio. Result: subtly stretched documents. Users do not articulate this; they say the scan "looks off".
+
+**Correct approach.** Given four image points, an assumed principal point at the image centre, and a focal length, the physical rectangle's aspect ratio is solvable in closed form (Zhang and He, *Whiteboard Scanning and Image Enhancement*, MSR-TR-2003-39).
+
+Focal length in pixels is available on both platforms:
+- Android: `LENS_INFO_AVAILABLE_FOCAL_LENGTHS` and `SENSOR_INFO_PHYSICAL_SIZE`, then `f_px = f_mm * imageWidth / sensorWidth_mm`
+- iOS: EXIF, or `kCMSampleBufferAttachmentKey_CameraIntrinsicMatrix` with `isCameraIntrinsicMatrixDeliveryEnabled = true`
+
+Fallback prior when unavailable: `f_px ~= 1.2 * max(W, H)`.
+
+Optional aspect snapping (default OFF): if within 2.5% of A4 (1:1.414), Letter (1:1.294), or ID-1 (1.586:1), snap. Never snap receipts.
+
+**Fold the resize into the warp.** Do not warp at full resolution then downscale.
+
+```cpp
+cv::Mat H = cv::getPerspectiveTransform(srcQuad, dstQuad);
+cv::Mat S = (cv::Mat_<double>(3,3) << s,0,0, 0,s,0, 0,0,1);
+cv::Mat Hs = S * H;
+```
+
+**Anti-aliasing rule.** If the effective scale is a downscale greater than 2x, sampling in `warpPerspective` aliases text into moire. Pre-filter:
+
+```cpp
+cv::Mat working = src;
+while (effective_downscale(Hs, working) > 2.0) {
+  cv::pyrDown(working, working);
+  Hs = adjust_for_pyrdown(Hs);
+}
+cv::warpPerspective(working, dst, Hs, targetSize,
+                    final ? cv::INTER_LANCZOS4 : cv::INTER_LINEAR,
+                    cv::BORDER_REPLICATE);
+```
+
+`BORDER_REPLICATE`, never `BORDER_CONSTANT`. A constant border puts black wedges in the corners whenever margin expansion runs past the frame edge.
+
+## 4.7 Stage 4: deskew
+
+Residual skew after rectification is typically under 3 degrees.
+
+**Primary: projection-profile variance.** Sweep coarse (-5 to +5 degrees, step 0.5) then fine (plus or minus 0.5 around the winner, step 0.05). Shear rather than rotate, since shear approximates rotation at small angles and is far cheaper. Score = sum of squared differences between adjacent row sums. Sharp text lines score high. Compute on a 1/8-scale binarised copy; skew angle is scale-invariant and this makes the sweep about 3 ms.
+
+**Fallback for sparse-text documents:** Hough transform on Canny edges, modal angle within plus or minus 10 degrees of horizontal.
+
+**Guards:**
+- Skip if `|theta| < 0.3` degrees. A tenth of a degree costs a full resample and gains nothing.
+- Skip if the best score is within 5% of the score at zero (flat profile, no reliable text structure).
+- After `warpAffine` with `INTER_CUBIC` and `BORDER_REPLICATE`, crop to the largest inscribed axis-aligned rectangle.
+
+## 4.8 Stage 5: orientation
+
+Rectification gives a correct rectangle but not which way is up.
+
+- **Tier 1, free:** the projection-profile machinery already answers this. Horizontal text gives much higher row-profile variance than column-profile variance. If `columnScore > 1.6 * rowScore`, the document is rotated 90 or 270. Resolve which by margin asymmetry (documents have a larger bottom margin than top). About 85% accurate, fine as a default.
+- **Tier 2:** when OCR is enabled, both ML Kit and Vision report block orientation. Trust it over the heuristic.
+- **Tier 3:** show the rotate button prominently in review. A wrong 90 is the most annoying possible failure, and a one-tap fix beats a cleverer classifier.
+
+## 4.9 Stage 6: illumination and shadow removal
+
+**Highest-leverage stage in the pipeline.** Get this right and the rest is polish.
+
+**The physical model:** observed = reflectance x illumination. Illumination is low-frequency, text is high-frequency. Two consequences:
+
+1. It is a **division**, not a subtraction. Subtracting a background is the wrong model and crushes contrast in dark regions.
+2. Illumination being low-frequency means you can estimate it at 1/8 resolution and upsample bilinearly. Visually identical, 64x cheaper. This is the key performance trick of the whole pipeline.
+
+**Mode 1, morphological (default, fast):**
+
+```cpp
+cv::Mat estimate_background_fast(const cv::Mat& L) {
+  cv::Mat small;
+  cv::resize(L, small, {}, 0.125, 0.125, cv::INTER_AREA);
+  int k = std::max(3, (int)(std::max(small.cols, small.rows) / 12) | 1);
+  cv::morphologyEx(small, small, cv::MORPH_CLOSE,
+                   cv::getStructuringElement(cv::MORPH_ELLIPSE, {k, k}));
+  cv::medianBlur(small, small, 5);
+  cv::Mat bg;
+  cv::resize(small, bg, L.size(), 0, 0, cv::INTER_LINEAR);
+  return bg;
+}
+
+void normalise_illumination(cv::Mat& L, const cv::Mat& bg, float targetMean = 210.f) {
+  L.forEach<uchar>([&](uchar& p, const int* pos) {
+    float g = targetMean / std::max<float>(bg.at<uchar>(pos[0], pos[1]), 1.f);
+    g = std::clamp(g, 0.5f, 3.0f);
+    p = cv::saturate_cast<uchar>(p * g);
+  });
+}
+```
+
+Apply the gain to **L only**. Leave `a` and `b` untouched. This is exactly why the pipeline works in Lab.
+
+**Mode 2, guided filter (high quality).** The morphological estimate smears across hard shadow boundaries, such as the phone's own shadow cutting a straight line across the page, leaving a visible grey band. A guided filter (He, Sun, Tang) with the original L as guide is edge-aware, so the estimate follows the shadow boundary. About 20 lines using `cv::boxFilter` over integral images, O(1) per pixel regardless of radius. Radius `maxDim/16`, `eps = 0.02^2 * 255^2`. Run at 1/4 scale, upsample the coefficient maps, apply at full resolution (fast guided filter). Cost about 90 ms at 2200 px, so use for final only.
+
+**Failure mode you must handle.** A large dark photo or filled black region gets classified as shadow and washed to grey mush. Both mitigations are required:
+1. Clamp the gain to [0.5, 3.0].
+2. Mask large dark regions out of the estimate: connected components in `L < 60` with area above 2% of the page, inpainted in the 1/8-scale background map before upsampling.
+
+## 4.10 Stage 7: background whitening
+
+```cpp
+float paperL = percentile(L, 92.0f);   /* not max, that is a specular highlight */
+float inkL   = percentile(L,  8.0f);
+```
+
+Build a 256-entry LUT and apply with `cv::LUT`. Essentially free, and better than a per-pixel branch.
+
+```cpp
+cv::Mat build_tone_lut(float inkL, float paperL, float strength) {
+  cv::Mat lut(1, 256, CV_8U);
+  float lo = inkL + 6.f;
+  float hi = paperL - 4.f * (1.f - strength);
+  for (int i = 0; i < 256; ++i) {
+    float v;
+    if      (i >= hi) v = 255.f;
+    else if (i <= lo) v = i * (1.f - 0.15f * strength);
+    else { float t = (i - lo) / (hi - lo); v = lo + (255.f - lo) * smoothstep(t); }
+    lut.at<uchar>(i) = cv::saturate_cast<uchar>(v);
+  }
+  return lut;
+}
+```
+
+**Desaturate proportionally to whiteness,** or you get coloured fringing on the paper:
+
+```cpp
+float whiteness = std::clamp((L_out - hi) / (255.f - hi), 0.f, 1.f);
+float s = 1.f - whiteness;
+a_out = 128 + (a_in - 128) * s;
+b_out = 128 + (b_in - 128) * s;
+```
+
+**Coloured-document guard.** Pink carbon copies, yellow thermal receipts, and green delivery notes are destroyed by full whitening:
+
+```cpp
+float chroma = mean(abs(a - 128)) + mean(abs(b - 128));
+if (chroma > 14.f) strength *= 0.4f;
+```
+
+**Colour-region preservation** (default on for invoices): build a mask of pixels with local chroma above 20, dilate 5 px, feather, blend the whitened result against the original inside the mask. Costs about 15 ms and saves every "PAID" stamp on every supplier invoice.
+
+## 4.11 Stage 8: contrast
+
+**Do not reach for CLAHE by default.** It is the reflex answer and it is wrong for documents: it amplifies sensor noise in blank regions and produces visible tile seams across the large empty areas invoices are full of.
+
+- Document and Auto modes: global tone curve from the now-bimodal histogram. Black point at the 2nd percentile of ink, white point at paper white, gamma 1.0 to 1.15. One LUT, one pass, no artefacts.
+- CLAHE (`clipLimit=2.0`, `tileGridSize=8x8`) on L only: reserve for photo-ish captures such as whiteboards and handwritten notes on textured paper.
+
+## 4.12 Stage 9: denoise
+
+After illumination correction (which amplifies noise in the regions it brightens), before binarisation and sharpening.
+
+| Level | Method | Cost at 2200 px | Use |
+|---|---|---|---|
+| light (default) | `bilateralFilter(d=5, sigmaColor=45, sigmaSpace=5)` on L | ~60 ms | Everything |
+| nlm | `fastNlMeansDenoising(h=7, templ=7, search=21)` | ~600 ms | Final only, high ISO |
+| off | | 0 | Gallery imports of real scans |
+
+Trigger `nlm` automatically above ISO 800 (from EXIF or `SENSOR_SENSITIVITY`).
+
+Never denoise the detection copy.
+
+## 4.13 Stage 10: sharpening
+
+```cpp
+void unsharp(cv::Mat& L, float amount, float sigma = 1.0f, int threshold = 3) {
+  cv::Mat blur; cv::GaussianBlur(L, blur, {0,0}, sigma);
+  cv::Mat diff = L - blur;
+  cv::Mat mask = cv::abs(diff) > threshold;
+  cv::Mat sharpened = L + amount * diff;
+  sharpened.copyTo(L, mask);
+}
+```
+
+Three non-negotiables: after the final resize never before; threshold the difference so noise is not amplified; amount 0.4 to 0.8 with sigma about 1.0, beyond which you get white halos around every glyph, the signature of an over-processed scan. L channel only.
+
+## 4.14 Stage 11: binarisation
+
+**Sauvola is the correct default.** `T(x,y) = m(x,y) * [1 + k * (s(x,y)/R - 1)]`, with `k = 0.20` (`0.34` for faint thermal receipts), `R = 128`, window `(imageWidth / 40) | 1`.
+
+**Implement with integral images or it is unusable.** Naive windowed statistics at 2200 px with a 55 px window is billions of operations. With `cv::integral` for mean and `sqsum` for variance it is O(1) per pixel and window size becomes free. Target 150 ms at 2200 px. If your implementation is slower, you did not use integral images.
+
+Variants: Wolf-Jolion for very low global contrast, Otsu for clean evenly lit scans, adaptive Gaussian as a cheap preview approximation.
+
+Post-processing: `connectedComponentsWithStats`, drop components under 4 px, single 2x2 morphological open. **Verify periods and Arabic diacritics survive the area threshold before shipping it.**
+
+Encode 1-bit output as CCITT Group 4, not JPEG. A4 at 200 dpi is about 35 KB G4 versus about 380 KB JPEG. At Supy's invoice volume that is a real storage and bandwidth line item.
+
+## 4.15 Resolution policy
+
+**Target DPI, not pixels.**
+
+| DPI | A4 pixels | Use |
+|---|---|---|
+| 300 | 2480 x 3508 | Compliance archive, sub-6pt print |
+| **200** | **1654 x 2339** | **Default, OCR grade** |
+| 150 | 1240 x 1754 | Human-readable archive |
+| 96 | 794 x 1123 | Thumbnails only |
+
+The floor is set by OCR: roughly 20 to 30 px of character x-height, which for 8 pt body text is 150 to 200 dpi. Below 150 dpi accuracy falls off a cliff, not gradually.
+
+**Class-aware capping.** A single longest-side cap is wrong for receipts. A 4:1 thermal receipt capped at 2200 px on the long side ends up 550 px wide and unreadable.
+
+```dart
+ResolutionPolicy resolveFor(DocumentClass cls) => switch (cls) {
+  DocumentClass.invoice    => const ResolutionPolicy.dpi(200, maxLongSide: 2400),
+  DocumentClass.receipt    => const ResolutionPolicy.minWidth(1100, maxLongSide: 4000),
+  DocumentClass.idCard     => const ResolutionPolicy.dpi(300, maxLongSide: 1600),
+  DocumentClass.whiteboard => const ResolutionPolicy.dpi(150, maxLongSide: 2000),
+};
+```
+
+Classify by rectified aspect ratio (receipt if above 2.2), with manual override in review.
+
+## 4.16 Encoding and export
+
+| Content | Format | Settings |
+|---|---|---|
+| Colour document | JPEG | q=82, **4:4:4 chroma**, progressive |
+| Grayscale | JPEG | q=85 |
+| B&W | PNG or G4 TIFF | 1-bit |
+| Bandwidth constrained | WebP | q=80, about 28% smaller |
+
+**Use 4:4:4, not 4:2:0.** Halving chroma resolution visibly smears thin coloured text and red stamps, the exact things stage 7 preserved. On a mostly-white document the size penalty is about 8% because the chroma planes are nearly flat.
+
+**Multi-page PDF:** build client-side with the `pdf` Dart package, embedding already-compressed streams as image XObjects. Do not re-encode. Add an invisible text layer (`Tr 3`) from OCR word boxes for a searchable PDF. Set page size from actual DPI so A4 prints at A4.
+
+**Strip EXIF and GPS on every export.** A supplier invoice carrying the GPS coordinates of a restaurant back office is a privacy incident waiting to happen.
+
+## 4.17 OCR: two branches, not one
+
+The most expensive common mistake in this space is feeding OCR the same aggressively binarised, whitened, sharpened image shown to the user. Modern neural OCR performs **worse** on hard-binarised, halo-sharpened input than on clean grayscale, because it was trained on photographs, not 1-bit fax output.
+
+```
+                          ┌──> whiten, contrast, sharpen, JPEG   -> human / archive
+rectified -> illumination ┤
+                          └──> mild denoise, grayscale, PNG      -> OCR engine
+```
+
+The OCR branch is illumination-corrected, mildly denoised, **not** whitened, **not** binarised, **not** sharpened, at 200 dpi or above. In memory only, never persisted.
+
+**Engine availability, read before promising Arabic:**
+
+| Engine | Latin | Arabic |
+|---|---|---|
+| ML Kit Text Recognition v2 (Android) | yes | **no** |
+| Apple Vision `VNRecognizeTextRequest` | yes | limited, verify `supportedRecognitionLanguages` at runtime on the minimum target |
+| Google Cloud Vision | yes | yes (server) |
+| Azure AI Document Intelligence | yes | yes (server) |
+| AWS Textract | yes | no |
+
+**This is a hard architectural constraint.** Supy's market is UAE, KSA, and MENA, and a meaningful share of supplier invoices are Arabic or mixed. On-device OCR is effectively Latin-only.
+
+Therefore: treat on-device OCR as an optimisation (instant feedback, offline capture, cheap pre-filtering) and server-side OCR as the source of truth for invoice extraction. A page must be capturable offline and extractable server-side on reconnect. Never let on-device OCR silently become the extracted data for an Arabic document.
+
+Also plan for: RTL text, Eastern Arabic numerals, and Hijri dates. Separate spec, but must not be discovered late.
+
+## 4.18 Preview versus final
+
+| Tier | Resolution | Algorithms | Budget |
+|---|---|---|---|
+| Live detection | 384 to 512 px from Y plane | detector only | **12 ms/frame** |
+| Post-capture preview | ~1000 px | fast morphological BG, LUT, INTER_LINEAR | **250 ms** |
+| Filter toggle | ~1000 px, cached | LUT plus Sauvola only | **50 ms** |
+| Final | per resolution policy | guided filter, Lanczos, optional NLM | **900 ms** |
+
+The final pass runs in the background while the user reviews. If they change a filter, cancel in flight (`SC_ERR_CANCELLED`) and restart. By the time they tap Done the final is usually already encoded.
+
+## 4.19 Memory rules
+
+A 12 MP RGBA frame is 48 MB. Ten pages holding original, rectified, processed, and thumbnail is about 1.4 GB. That app is dead on any mid-tier device.
+
+1. At most two full-resolution buffers alive at once. Assert it in debug builds.
+2. On capture, write the original JPEG to cache and drop the in-memory copy. `ScannedPage` holds `originalPath`, `processedPath`, and a thumbnail at 256 px or less. Never full-resolution bytes in Bloc state.
+3. Explicit `dispose()` plus `NativeFinalizer` backstop.
+4. Bound the session at 50 pages.
+5. Never `android:largeHeap="true"`. It is a symptom, not a fix.
+6. Clear the cache directory on session completion and on app start. Crash orphans accumulate silently and users see "Supy is using 4 GB".
+7. iOS: on `didReceiveMemoryWarningNotification`, flush all native caches immediately.
+
+## 4.20 Performance budgets
+
+Reference: mid-tier Android (Snapdragon 6-series, 6 GB) and iPhone SE 3, 12 MP source. CI-enforced.
+
+| Operation | Budget | Fail above |
+|---|---|---|
+| Live detection per frame | 12 ms | 20 ms |
+| Shutter to preview | 400 ms | 600 ms |
+| Filter toggle (cached) | 50 ms | 100 ms |
+| Full process, colour, 2200 px | 900 ms | 1400 ms |
+| Sauvola additional | 150 ms | 250 ms |
+| On-device OCR per page | 700 ms | 1200 ms |
+| PDF export, 10 pages | 1500 ms | 2500 ms |
+| Peak RSS, 10-page session | 350 MB | 500 MB |
+| Binary size per ABI | 3.5 MB | 4.5 MB |
+
+## 4.21 Corpus and metrics
+
+**250+ labelled images.** The single highest-value artefact in the project.
+
+| Category | n | Why |
+|---|---|---|
+| White paper on white surface | 25 | Kills luminance-only edge detection |
+| Dark wood or stainless counter | 25 | Real Supy environment |
+| Hard shadow across the page | 25 | Guided filter validation |
+| Uneven or gradient lighting | 25 | Illumination model |
+| Finger occluding a corner | 20 | LSD fallback |
+| Glossy or laminated | 15 | White point estimation |
+| Crumpled or curled receipts | 20 | Known limitation |
+| Faded thermal receipts | 20 | Sauvola k tuning |
+| Arabic and mixed AR/EN | 30 | RTL, diacritic survival |
+| Coloured carbon forms | 15 | Whitening guard |
+| Stamps and signatures | 15 | Colour region preservation |
+| Low light plus motion blur | 15 | Denoise selection |
+| Flash hotspot | 10 | Gain clamp |
+
+Stage them in an actual restaurant back office, not on an office desk.
+
+**Metrics:**
+
+| Metric | Target |
+|---|---|
+| Mean quad IoU (rectified frame, ICDAR SmartDoc 2015 protocol) | >= 0.95 |
+| P95 IoU | >= 0.90 |
+| Catastrophic rate (IoU < 0.80) | <= 2% |
+| CER, printed Latin invoice | <= 1.5% |
+| CER, thermal receipt | <= 4% |
+| CER, Arabic (server engine) | <= 3% |
+| Cross-platform SSIM | >= 0.98 |
+
+Compare quads in the **rectified** frame. Comparing in the original frame over-weights the near edge and under-reports real failures.
+
+Judge every pipeline change by delta-CER, not by whether the thumbnail looks nicer.
+
+Do not use byte-hash goldens for native output. Floating-point differences across architectures make them permanently flaky, and a flaky gate gets disabled within a month.
+
+---
+
+# PART 5: TARGET SPEC, MULTI-PLATFORM DISTRIBUTION
+
+## 5.1 Module matrix
+
+### Android (`minSdk 24`, `compileSdk 36`, NDK r27+)
+
+| Artifact | Contents | Size |
+|---|---|---|
+| `io.supy:scanner-core` | `.so` x 3 ABIs, JNI bridge, `SupyScannerProcessor` | ~3.5 MB/ABI |
+| `io.supy:scanner-camera` | CameraX capture, `ScannerAnalyzer`, auto-capture | ~180 KB |
+| `io.supy:scanner-ui` | Compose viewfinder, crop editor, filter strip, review | ~340 KB |
+| `io.supy:scanner-mlkit` | Optional ML Kit turnkey adapter | ~40 KB |
+| `io.supy:scanner-ocr` | ML Kit Text Recognition binding | ~60 KB |
+| `io.supy:scanner-bom` | Version alignment | |
+
+### iOS (15.0+, with graceful 13.0 fallback)
+
+| Product | Contents | Size |
+|---|---|---|
+| `SupyScannerCore` | static `.xcframework`, Swift wrapper, `SupyScannerProcessor` | ~4 MB |
+| `SupyScannerCapture` | AVFoundation session, `VisionDetector`, auto-capture | ~140 KB |
+| `SupyScannerUI` | SwiftUI and UIKit screens | ~300 KB |
+| `SupyScannerOCR` | `VNRecognizeTextRequest` binding | ~30 KB |
+
+On iOS 13 and 14 the SDK silently uses the C++ detector instead of Vision. No API difference, no compile-time branch for the consumer.
+
+Ship via **both** SPM (`binaryTarget` plus checksum) and CocoaPods. Forcing a package-manager migration to adopt a library is a good way to not get adopted.
+
+### Flutter (3.41+, Dart 3.11+)
+
+| Package | Contents |
+|---|---|
+| `supy_scanner` | FFI bindings, isolate, ports, headless API |
+| `supy_scanner_camera` | Capture plus detection stream |
+| `supy_scanner_ui` | Flutter widgets |
+
+The core compiles for macOS and Linux, so headless processing works on Flutter desktop for gallery imports. Web is unsupported: `DocumentProcessorPort` throws `UnsupportedPlatformFailure` so a web build compiles and degrades gracefully rather than breaking CI.
+
+## 5.2 Linking: the two failure modes that break multi-target libraries
+
+### 5.2.1 Android duplicate `.so`
+
+If both the AAR and the Flutter plugin ship `libsupy_scanner_core.so`, Gradle's native merge either fails or silently picks one. Two different versions means an ABI mismatch crash at first call, on a device, in production.
+
+**The Flutter plugin ships no native library of its own:**
+
+```gradle
+dependencies {
+    api "io.supy:scanner-core:$supyScannerVersion"
+}
+android {
+    packagingOptions {
+        jniLibs { pickFirsts += [] }   /* no pickFirst: a duplicate must FAIL loudly */
+    }
+}
+```
+
+```dart
+final DynamicLibrary _lib = Platform.isAndroid
+    ? DynamicLibrary.open('libsupy_scanner_core.so')
+    : DynamicLibrary.process();
+```
+
+If the Kotlin SDK already called `System.loadLibrary`, `dlopen` on the same soname within the app's linker namespace resolves to the already-loaded instance. Verify this explicitly in the hybrid integration test; do not assume it.
+
+### 5.2.2 iOS duplicate symbols
+
+`SupyScannerCore` is a **static** xcframework, chosen for startup time and dead-code stripping. If the Swift SDK and the Flutter plugin each link it independently, the linker sees duplicate symbols.
+
+```ruby
+s.dependency 'SupyScannerCore', "~> #{s.version}"
+# NOT: s.vendored_frameworks = 'SupyScannerCore.xcframework'
+```
+
+Because it is static, symbols land in the app binary, so Dart FFI must use `DynamicLibrary.process()`. `DynamicLibrary.open()` fails with a confusing "image not found".
+
+### 5.2.3 Shared global state
+
+One loaded core may serve two callers simultaneously in a hybrid app. Therefore:
+
+- **Reference counted.** `sc_init` / `sc_shutdown` with an atomic refcount. Last caller out tears down.
+- **Thread safe.** All handle and slot maps behind a mutex. Handles are opaque `int64_t` from a global monotonic counter, never pointers cast to integers.
+- **Namespaced per client.** `sc_acquire_client(tag)` returns a token; cache slots are scoped to it, so Flutter's cache cannot evict the Kotlin SDK's.
+
+### 5.2.4 ABI version guard
+
+Three independently versioned wrappers over one binary core is an ABI-drift machine. Guard at init, loudly, in all three wrappers:
+
+```kotlin
+init {
+    val abi = NativeBridge.abiVersion()
+    require(abi == SUPPORTED_ABI) {
+        "supy-scanner ABI mismatch: core=$abi, sdk=$SUPPORTED_ABI. " +
+        "Align io.supy:scanner-* artifacts using io.supy:scanner-bom."
+    }
+}
+```
+
+Fail at init with an actionable message, never at the first `process()` call with a segfault.
+
+## 5.3 API parity: one model, three idioms
+
+Same concepts, same option names, same defaults, same failure taxonomy.
+
+```kotlin
+val processor = SupyScannerProcessor.create(context)
+val detection = processor.detect(bitmap)
+val page = processor.process(
+    source = bitmap, quad = detection.quad,
+    options = ProcessingOptions(
+        enhancement = Enhancement.AUTO,
+        shadowRemoval = ShadowRemoval.GUIDED,
+        backgroundWhitening = true,
+        preserveColorRegions = true,
+        documentClass = DocumentClass.INVOICE,
+    ),
+)
+```
+```swift
+let processor = try SupyScannerProcessor()
+let detection = try await processor.detect(image)
+let page = try await processor.process(
+    source: image, quad: detection.quad,
+    options: ProcessingOptions(
+        enhancement: .auto, shadowRemoval: .guided,
+        backgroundWhitening: true, preserveColorRegions: true,
+        documentClass: .invoice
+    )
+)
+```
+```dart
+final processor = await SupyScannerProcessor.create();
+final detection = await processor.detect(ImageRef.file(path));
+final result = await processor.process(
+  ImageRef.file(path), quad: detection.quad,
+  options: const ProcessingOptions(
+    enhancement: Enhancement.auto,
+    shadowRemoval: ShadowRemoval.guided,
+    backgroundWhitening: true,
+    preserveColorRegions: true,
+    documentClass: DocumentClass.invoice,
+  ),
+);
+```
+
+**Live detection:** `Flow<DetectionResult>` (Kotlin), `AsyncStream<DetectionResult>` (Swift), `Stream<DetectionResult>` (Dart).
+
+**Error model:** Kotlin throws, Swift throws, Dart returns `Either`. Same information, three conventions. Do not force `Either` on Kotlin or `Result` on Swift for superficial symmetry; that produces an API nobody on those platforms wants to use. Never let a raw `sc_status` int leak into a public API.
+
+**Image types at the boundary:**
+
+| Platform | Accepts | Path to core |
+|---|---|---|
+| Kotlin | `Bitmap`, `ImageProxy`, `ByteArray`, `Uri` | `AndroidBitmap_lockPixels` zero-copy; `ImageProxy` Y-plane direct |
+| Swift | `UIImage`, `CGImage`, `CVPixelBuffer`, `Data`, `URL` | `CVPixelBuffer` base address zero-copy |
+| Dart | `ImageRef.file/bytes/handle` | file path as `const char*`, decoded natively. **Never** a `Uint8List` round-trip for full-resolution images |
+
+## 5.4 Native glue
+
+### Android
+
+```kotlin
+class ScannerAnalyzer(private val onQuad: (FloatArray?, Float) -> Unit)
+    : ImageAnalysis.Analyzer {
+    override fun analyze(proxy: ImageProxy) {
+        val y = proxy.planes[0]
+        val quad = nativeDetect(y.buffer, proxy.width, proxy.height,
+                                y.rowStride, proxy.imageInfo.rotationDegrees)
+        onQuad(quad?.points, quad?.confidence ?: 0f)
+        proxy.close()   /* leak this and the pipeline stalls */
+    }
+}
+```
+
+```kotlin
+ImageAnalysis.Builder()
+    .setBackpressureStrategy(ImageAnalysis.STRATEGY_KEEP_ONLY_LATEST)
+    .setOutputImageFormat(ImageAnalysis.OUTPUT_IMAGE_FORMAT_YUV_420_888)
+    .build()
+```
+
+Capture with `CAPTURE_MODE_MAXIMIZE_QUALITY` and `setJpegQuality(95)`. The capture JPEG is an intermediate; the lossy step is our own final encode.
+
+**Android specifics:**
+- **16 KB page size.** Android 15+ devices require 16 KB alignment and Play enforces it for apps targeting Android 15+. Build with `-Wl,-z,max-page-size=16384`, verify with `llvm-readelf -l`, gate in CI.
+- ABIs: `arm64-v8a`, `armeabi-v7a`, `x86_64`. Drop `x86`.
+- Never request `WRITE_EXTERNAL_STORAGE`. Cache dir plus MediaStore.
+
+### iOS
+
+```swift
+func captureOutput(_ output: AVCaptureOutput,
+                   didOutput sampleBuffer: CMSampleBuffer,
+                   from connection: AVCaptureConnection) {
+    guard let pb = CMSampleBufferGetImageBuffer(sampleBuffer) else { return }
+    let request = VNDetectDocumentSegmentationRequest { req, _ in
+        guard let obs = req.results?.first as? VNRectangleObservation else {
+            self.onQuad(nil, 0); return
+        }
+        self.onQuad(obs.quad, obs.confidence)
+    }
+    try? VNImageRequestHandler(cvPixelBuffer: pb, orientation: self.exifOrientation)
+        .perform([request])
+}
+```
+
+Session: `.photo` preset, `maxPhotoQualityPrioritization = .quality`, `isCameraIntrinsicMatrixDeliveryEnabled = true` on the video connection (this gives the focal length for aspect-ratio recovery, free and worth taking).
+
+**iOS specifics:**
+- `PrivacyInfo.xcprivacy` mandatory.
+- `NSCameraUsageDescription` and `NSPhotoLibraryAddUsageDescription` in the host app's Info.plist. Document in the README: a missing key is an instant crash with an unhelpful message.
+- Run Vision on a dedicated serial queue. On the capture queue it drops frames; on main it drops the UI.
+
+## 5.5 Repository layout
+
+One monorepo. Three independently versioned products would drift within a quarter.
+
+```
+supy-scanner/
+├── core/                          L0, C++17, no platform deps
+│   ├── include/supy_scanner.h
+│   ├── src/
+│   ├── test/                      GoogleTest, runs on Linux CI
+│   └── CMakeLists.txt
+├── conformance/
+│   ├── corpus/                    git-lfs, 250+ labelled images
+│   ├── expected/
+│   ├── runner/
+│   └── ui/                        cross-platform screenshot diff
+├── design/
+│   ├── tokens.json
+│   ├── ui-config.schema.json
+│   └── strings/{en,ar}.arb
+├── android/
+│   ├── scanner-core/ scanner-camera/ scanner-ui/ scanner-mlkit/ scanner-ocr/
+│   └── sample-app/                proves Android-only works
+├── ios/
+│   ├── Sources/SupyScanner{Core,Capture,UI,OCR}/
+│   ├── Package.swift  *.podspec
+│   └── SampleApp/                 proves iOS-only works
+├── flutter/
+│   ├── supy_scanner/ supy_scanner_camera/ supy_scanner_ui/
+│   └── example/
+└── tools/
+    ├── build-core.sh  build-tokens.sh  ffigen.yaml
+    ├── harness  conformance  ui-parity
+    └── release.sh
+```
+
+**The three sample apps are load-bearing, not demos.** Built in CI on every PR. If the Android sample fails to compile without Flutter on its classpath, the Android-only requirement has silently regressed, and that regression is invisible until a native team tries to adopt the library.
+
+## 5.6 Release
+
+One version, three channels, lockstep.
+
+```
+tools/release.sh 2026.3.1
+  ├─ build core: .so x3 (16 KB aligned), .xcframework, host lib
+  ├─ bump gradle.properties, *.podspec, Package.swift, pubspec.yaml
+  ├─ verify sc_abi_version() matches all three wrappers
+  ├─ run conformance on all three targets, output must be identical
+  ├─ verify size budgets
+  ├─ publish Maven Central, CocoaPods, SPM tag, pub.dev
+  └─ GitHub Release with checksums
+```
+
+## 5.7 Cross-target testing
+
+| Layer | Tool | Runs |
+|---|---|---|
+| Core unit and corpus | GoogleTest, ASAN, UBSAN | Linux CI, seconds |
+| Kotlin binding | JUnit plus instrumented | CI plus device |
+| Swift binding | XCTest | CI |
+| Dart binding | `mocktail`, `bloc_test`, `integration_test` | CI plus device |
+| **Conformance** | `conformance/runner` | Every PR |
+| Hybrid integration | device | Nightly |
+
+Binding suites test only the binding: type marshalling, handle lifecycle, error mapping, cancellation, no leaks over 1000 cycles. They do not re-test the pipeline. The pipeline is tested once, in C++.
+
+**Conformance asserts byte-identical encoded output** across Android and iOS for the same input and options. Not SSIM: identical. If the core is genuinely shared and deterministic this holds, and when it breaks it means someone introduced a platform-conditional path, which is exactly what you want to catch. Set `cv::setNumThreads(1)` in the conformance build; thread-count differences change floating-point reduction order.
+
+**Hybrid integration** runs an Android app with both the native SDK and an add-to-app Flutter module in one process. Asserts one `.so` loaded (check `/proc/self/maps`), refcount correct across both, cache slots isolated per client token, no crash on `sc_shutdown` from one while the other is live. This looks paranoid and it catches the class of bug that costs a week to diagnose in production.
+
+---
+
+# PART 6: TARGET SPEC, UI AND SUPY BRANDING
+
+## 6.1 The approach
+
+| Option | Verdict |
+|---|---|
+| Flutter add-to-app everywhere | Rejected. Forces the Flutter engine (about 5 MB, plus 200 to 400 ms first frame) into every native host. Breaks the Android-only requirement outright. |
+| Three free-form implementations | Rejected. Drifts within a quarter. |
+| **Shared tokens plus shared config schema plus three thin native views plus a visual parity gate** | **Chosen.** |
+
+This is the shape Scanbot uses for its RTU-UI: screens written natively per platform, every colour, string, and visibility flag from one configuration object with identical field names on all three. That configuration object, not the view code, is the product surface.
+
+About 4,200 lines of view code total. That is the honest cost. It buys native scroll physics, native gestures, native accessibility, and no engine embedded in a host app. The parity gate is what stops those 4,200 lines from diverging.
+
+## 6.2 Token pipeline
+
+**No hex value is ever typed by hand in view code.** One JSON file, three generated outputs, one CI check.
+
+```json
+{
+  "color": {
+    "brand": {
+      "navy": "#321e57", "logoPurple": "#503390",
+      "brightPurple": "#7b51bf", "purpleAction": "#6C3FC5", "purpleDark": "#4A2A8A"
+    },
+    "scanner": {
+      "scrim":           { "value": "#321e57", "alpha": 0.72 },
+      "quadStroke":      "#7b51bf",
+      "quadStrokeInner": "#ffffff",
+      "quadFill":        { "value": "#7b51bf", "alpha": 0.14 },
+      "quadLocked":      "#40c798",
+      "quadWarning":     "#fcd34d",
+      "quadReposition":  "#fb763c",
+      "quadError":       "#c2260c",
+      "handle":          "#ffffff",
+      "handleCore":      "#6C3FC5",
+      "shutterRing":     "#ffffff",
+      "shutterFill":     "#6C3FC5"
+    },
+    "surface": {
+      "page": "#f4f1fa", "card": "#ffffff", "border": "#efedfa",
+      "textPrimary": "#1A1A2E", "textSecondary": "#888888"
+    }
+  },
+  "radius":  { "sm": 4, "md": 8, "lg": 12, "sheet": 16 },
+  "spacing": { "xs": 4, "sm": 8, "md": 12, "lg": 16, "xl": 24 },
+  "motion": {
+    "enter":     { "duration": 280, "curve": "easeOut" },
+    "exit":      { "duration": 200, "curve": "easeIn" },
+    "spring":    { "duration": 400, "curve": "cubic-bezier(0.34,1.56,0.64,1)" },
+    "dissolve":  { "duration": 200, "curve": "easeInOut" },
+    "quadTrack": { "duration": 120, "curve": "easeOut" }
+  },
+  "type": {
+    "family": "Noto Sans", "familyArabic": "Noto Kufi Arabic",
+    "h1": { "size": 28, "weight": 600 }, "h2": { "size": 20, "weight": 600 },
+    "sectionHeader": { "size": 16, "weight": 700 },
+    "body": { "size": 14, "weight": 400 }, "label": { "size": 12, "weight": 500 },
+    "caption": { "size": 11, "weight": 400 }
+  }
+}
+```
+
+Generated by Style Dictionary into `SupyScannerTokens.{kt,swift,dart}`, checked in as generated code, regenerated in CI. If regenerated output differs from committed output, the build fails.
+
+**Lint rule on every PR:** any hex literal, `Color(0xFF...)`, `Colors.*`, `UIColor(red:)`, or raw numeric padding inside a scanner view file fails the build. This is the mechanism that makes "the brand is applied" a fact rather than a claim.
+
+## 6.3 Brand on a dark surface
+
+Supy's palette is built for light enterprise surfaces: white cards on `#f4f1fa`. A viewfinder is the opposite context, so the mapping must be explicit or each platform improvises differently.
+
+| Element | Token | Rationale |
+|---|---|---|
+| Chrome, scrims, sheets over camera | Navy `#321e57` at 72% | Reads as Supy, not generic black |
+| Wordmark | `Supy_Logo_White.svg` | Required on dark backgrounds |
+| Quad outline | Bright Purple `#7b51bf`, 3 dp, plus 1 dp white inner hairline | The white hairline guarantees visibility on purple, navy, or dark documents. Purple alone disappears. |
+| Quad fill | Bright Purple at 14% | Reads the shape without obscuring the document |
+| Corner handles | White fill, Purple Action core, 44 dp touch target | Contrast plus brand |
+| Shutter | White ring, Purple Action fill | Standard Supy primary |
+| Active mode chip | White background, Purple Action text | Supy segmented control pattern |
+
+**Colour carries state, never decoration** (brand hard rule 6):
+
+| State | Quad colour | Hint |
+|---|---|---|
+| Searching | White 40%, dashed | "Point at a document" |
+| Detected, unstable | Bright Purple `#7b51bf` | "Hold steady" |
+| Stable, capturing | Yellow `#fcd34d` plus countdown ring | "Capturing" |
+| Captured | Green `#40c798`, 200 ms flash | none, haptic only |
+| Too close or far | Orange `#fb763c` | "Move back" / "Move closer" |
+| Low light | Orange `#fb763c` | "More light needed" |
+| Detection failed | Red `#c2260c` | "Tap to capture manually" |
+
+Every state is announced through the platform accessibility API as well as shown. A user holding a phone over an invoice is not necessarily looking at the hint text.
+
+## 6.4 Shared UI configuration
+
+The most important artefact in the UI work. It makes the same UI configurable identically from three languages, and it is what the parity tests drive.
+
+```json
+{
+  "topBar":        { "visible": true, "showLogo": true, "title": null },
+  "flashButton":   { "visible": true },
+  "galleryImport": { "visible": true },
+  "autoCapture":   { "enabled": true, "stableFrames": 8, "countdownVisible": true },
+  "hints":         { "visible": true, "position": "bottom" },
+  "shutter":       { "style": "ring", "hapticOnCapture": true },
+  "modes":         { "visible": true, "options": ["single","multi","receipt"] },
+  "cropEditor":    { "magnifier": true, "resetButton": true, "gridOverlay": true },
+  "filters":       { "visible": true, "options": ["auto","color","grayscale","bw"], "default": "auto" },
+  "review":        { "reorderable": true, "maxPages": 20, "addMoreButton": true },
+  "theme":         { "override": null },
+  "strings":       { "override": {} }
+}
+```
+
+Identical field names in Kotlin, Swift, and Dart. Because it is JSON-serializable, the parity test loads one fixture and drives all three platforms from it. That is what makes cross-platform screenshot comparison meaningful rather than approximate.
+
+`theme.override` lets a white-label deployment swap the palette without forking views. Supy's own apps never set it, so they always get Supy brand by default.
+
+## 6.5 Screens
+
+### Viewfinder
+
+```
+┌───────────────────────────────────┐
+│ X        [supy wordmark]      ⚡  │  Navy 72%, 56 dp, white logo
+├───────────────────────────────────┤
+│      ╔═══════════════════╗        │  3 dp Bright Purple
+│      ║     INVOICE       ║        │  + 1 dp white inner hairline
+│      ╚═══════════════════╝        │  + 14% purple fill
+│         Hold steady               │  Navy 60% pill, 8 dp radius
+├───────────────────────────────────┤
+│  Single  <Multi>  Receipt         │  white active chip
+│   [img]      ( o )        [3]     │  gallery / shutter / page count
+└───────────────────────────────────┘  Navy 72%, 132 dp
+```
+
+- Quad animates to new corners over 120 ms `easeOut`. Never teleports, never springs. Spring on a tracking overlay reads as instability.
+- Corner brackets are L-shaped at 24 dp until the quad is stable. Full perimeter appears only on lock, giving a legible progress signal for free.
+- Auto-capture shows a 3-tick countdown ring around the shutter.
+- Page count badge uses the Neutral badge palette (`#EDE9FB` background, `#6C3FC5` text) and taps through to review.
+
+### Crop editor
+
+- Handles: 20 dp visual, 44 dp touch target, white with an 8 dp Purple Action core.
+- **Magnifier** on handle drag only, 96 dp circle, 2 dp Bright Purple border, positioned to avoid the finger. This single detail most separates a polished scanner from a rough one.
+- Edges draggable, not just corners. Users reach for the edge more often.
+- Handles snap to detected edges within 12 dp with a light haptic.
+- `Reset` is a ghost button, not primary, because it is a recovery action.
+
+### Filter strip
+
+- 72 dp thumbnails, 8 dp radius. Active: 2 dp Purple Action border plus purple label.
+- Rendered from the cached rectified buffer via `sc_refilter`, under 50 ms. If a filter tap shows a spinner, the caching is broken.
+- **Filter chrome is uniform across all four thumbnails** per brand hard rule 5. Only the image content differs. Do not colour-code the filter chips.
+
+### Page review
+
+The one screen on a light surface, so standard Supy chrome applies directly: page background `#f4f1fa`, white cards at 12 dp radius with `0 1px 3px rgba(0,0,0,0.06)` shadow, `#efedfa` borders, `#1A1A2E` text. Reorder by long-press plus drag with a 400 ms spring on pickup.
+
+### Processing and export
+
+Determinate Purple Action progress bar, not an indeterminate spinner, because the pipeline reports real progress through the FFI callback. Copy follows Supy voice: "Enhancing page 2 of 3", not "Please wait".
+
+### The five states nobody specs and everybody ships broken
+
+| State | Treatment |
+|---|---|
+| Camera permission denied | Navy full screen, white icon, one-line explanation, `Open settings` primary button. Never a bare system dialog with no recovery path. |
+| No document for 10 s | Hint becomes "Tap the shutter to capture manually". Never block on detection. |
+| Low light | Orange hint plus automatic torch suggestion chip. |
+| Max pages reached | Inline banner using the Warning badge palette (`#FEF9EC` / `#B8860B`), not a modal. |
+| Processing failure | Error badge palette, failed page marked in the grid with a `Retry` ghost button. The session is never discarded because one page failed. |
+
+## 6.6 Component parity
+
+| Component | Compose | SwiftUI | Flutter |
+|---|---|---|---|
+| Quad overlay | `Canvas` plus `Animatable` | `Canvas` plus `withAnimation` | `CustomPainter` plus `AnimationController` |
+| Camera preview | `PreviewView` in `AndroidView` | `AVCaptureVideoPreviewLayer` in `UIViewRepresentable` | `Texture` over platform view |
+| Magnifier | `graphicsLayer` scale on cropped bitmap | `UIView` snapshot scaled | `BackdropFilter` plus `Transform.scale` |
+| Filter strip | `LazyRow` | `ScrollView(.horizontal)` | horizontal `ListView.builder` |
+| Page reorder | `LazyVerticalGrid` plus drag gestures | `.onDrag` / `.onDrop` | `ReorderableGridView` |
+| Haptics | `HapticFeedbackConstants` | `UIImpactFeedbackGenerator` | `HapticFeedback` |
+
+Each platform uses its native primitive. The parity gate compares the rendered result, not the implementation.
+
+## 6.7 Localisation and RTL
+
+Copy lives in `design/strings/{en,ar}.arb`, generated into `strings.xml`, `.strings`, and `.arb`. One source, three outputs, same keys.
+
+Typeface: `Noto Sans` for Latin, `Noto Kufi Arabic` for Arabic. Both bundled in the SDK rather than assumed present on device. A missing Arabic font renders as boxes, and that is a support ticket you will get.
+
+**The RTL trap.** In a scanner, some things mirror and some absolutely must not.
+
+| Element | Mirrors under RTL? |
+|---|---|
+| Top bar, back button, bottom bar layout | Yes |
+| Filter strip scroll direction | Yes |
+| Page thumbnail order in review | Yes |
+| Hint text alignment | Yes |
+| **Camera preview** | **No.** Mirroring makes the physical document unreadable. |
+| **Quad overlay coordinates** | **No.** They are image space, not layout space. |
+| **The captured image** | **No.** Obviously, and yet this has shipped broken in real products. |
+
+Add an explicit RTL golden per screen on all three platforms. This class of bug is invisible to a team that does not read Arabic and glaring to every user who does.
+
+## 6.8 Accessibility
+
+- Corner handles: 44 dp minimum touch target, individually focusable, adjustable by keyboard or switch control in 1% increments, labelled "Top left corner, 12 percent from left, 8 percent from top".
+- Detection state announced live, throttled to once per 1.5 s so it does not spam.
+- Capture confirmed by haptic and sound, never the visual flash alone.
+- All text pairings pass WCAG AA. Note: Yellow `#fcd34d` on Navy passes at large size only, so countdown text is 16 px bold minimum, never caption size.
+- Reduced motion: quad tracking becomes instant, countdown ring becomes a numeric counter, cross-dissolves become cuts.
+- Filter options labelled, never distinguished by colour alone.
+
+## 6.9 Visual parity: making the brand claim testable
+
+| Layer | Tool |
+|---|---|
+| Android goldens | Paparazzi (JVM, no emulator) |
+| iOS goldens | swift-snapshot-testing |
+| Flutter goldens | Alchemist |
+| Cross-platform diff | `conformance/ui/` |
+
+Matrix: 5 screens x 6 states x 2 locales x 2 text scales = 120 goldens per platform, 360 total.
+
+**Do not require pixel-identical output across platforms.** Font rasterisation, antialiasing, and shadow rendering genuinely differ, and a gate that fails on those gets disabled within a month. Instead:
+
+1. **Layout diff:** bounding boxes of every labelled element, tolerance 2 dp. Catches a 16 dp padding that became 12 dp on iOS only.
+2. **Brand colour assertion:** sample specific pixels, assert the **exact** hex. The quad stroke pixel must be exactly `#7b51bf` on all three. No tolerance, because there is no legitimate reason for a brand colour to differ by one bit.
+3. **Perceptual diff:** SSIM at least 0.94 between platforms for the same screen and state.
+
+Point 2 is what actually enforces the brand. A human reviewer will not notice that iOS drifted to `#7c52c0` after someone hand-typed a hex. The test will.
+
+---
+
+# PART 7: ANTI-PATTERNS
+
+Known ways this work goes wrong. Check against this list before opening any PR.
+
+## Pipeline
+
+1. **Decode, process, encode, decode between stages.** Destroys quality and performance. Decode once, all processing in memory, encode once.
+2. **`max(edge length)` for output size.** Wrong under perspective. Use aspect-ratio recovery from the homography.
+3. **Warping at full resolution then downscaling.** Twice the work, no quality gain. Fold the scale into the homography.
+4. **No pre-filter before a greater-than-2x downscale warp.** Aliases text into moire.
+5. **`BORDER_CONSTANT` in `warpPerspective`.** Black wedges in the corners.
+6. **Subtracting the illumination background instead of dividing.** Wrong physical model, crushes dark regions.
+7. **Estimating illumination at full resolution.** 64x more expensive for no visible gain.
+8. **Naive Sauvola without integral images.** Billions of operations, unusable.
+9. **CLAHE as the document default.** Tile seams and amplified noise on the large blank areas invoices are full of.
+10. **Sharpening before the final resize.** Wastes the sharpening and creates aliasing.
+11. **Unsharp without a difference threshold.** Amplifies sensor noise into visible grain.
+12. **Applying gain to a, b as well as L.** Destroys the colour stamps you worked to preserve.
+13. **Feeding OCR the binarised, whitened, sharpened image.** OCR does worse on it. Two branches.
+14. **Single longest-side resolution cap.** Turns receipts into unreadable mush. Class-aware capping.
+15. **4:2:0 chroma on documents.** Smears thin coloured text and red stamps.
+16. **Byte-hash goldens for native output.** Permanently flaky across architectures.
+17. **Comparing quads in the original frame.** Over-weights the near edge, under-reports failures. Compare in the rectified frame.
+
+## Memory
+
+18. **Full-resolution `Uint8List` in Bloc state.** 48 MB per page. Paths and thumbnails only.
+19. **Relying on GC for native buffers.** Explicit `dispose()` plus `NativeFinalizer`.
+20. **`android:largeHeap="true"`.** A symptom, not a fix, and it makes OOMs harder to reproduce.
+21. **Never clearing the cache directory.** Crash orphans accumulate and users see "Supy is using 4 GB".
+
+## Multi-platform
+
+22. **Flutter plugin shipping its own copy of the `.so`.** Duplicate native library, version mismatch crash in production.
+23. **`pickFirst` on `libsupy_scanner_core.so`.** Hides the duplicate instead of failing loudly.
+24. **Vendoring the xcframework in the Flutter podspec.** Duplicate symbols.
+25. **`DynamicLibrary.open()` on iOS with a static framework.** Fails with "image not found". Use `.process()`.
+26. **Flutter calling the Kotlin SDK which calls the core.** A chain, not siblings. Adds a JNI hop and inherits Kotlin-side bugs.
+27. **No ABI version guard.** Segfault at first call instead of an actionable message at init.
+28. **Global cache slots not namespaced per client.** Flutter's cache evicts the Kotlin SDK's.
+29. **Deferring the "no Flutter on the classpath" CI check.** By the time you notice, it is a rewrite.
+30. **Raw `sc_status` leaking into a public API.** Map to the native error type.
+
+## UI
+
+31. **Any hex literal in a view file.** Lint rule exists precisely because this is the default failure mode.
+32. **Mirroring the camera preview or quad coordinates under RTL.** Makes the document unreadable.
+33. **Colour-coding the filter chips.** Violates chrome consistency. Chrome uniform, content varies.
+34. **Auto-capture with no countdown.** Indistinguishable from a bug.
+35. **Springing the quad overlay.** Reads as instability. Use 120 ms `easeOut`.
+36. **Spinner on filter toggle.** Means the rectified-buffer cache is broken.
+37. **A modal for "max pages reached".** Inline banner using the Warning badge palette.
+38. **Discarding the session because one page failed.** Mark the page, offer Retry.
+39. **Blocking on detection with no manual capture path.** Always leave the shutter available.
+40. **Standing up the second platform's UI before the parity harness.** Guarantees drift you pay to converge later.
+
+## Process
+
+41. **Tuning pipeline parameters without the corpus.** Every change becomes a coin flip.
+42. **Deleting the legacy path before parity is proven in production telemetry.** Strangler pattern exists for a reason.
+43. **Reporting a metric you did not measure.** Say the gate cannot be evaluated instead.
+44. **Batching phases into one PR.** Unreviewable, therefore rubber-stamped.
+45. **Em dashes or en dashes anywhere in Supy output.** Brand hard rule 1.
+
+---
+
+# PART 8: OPEN QUESTIONS, DO NOT ANSWER ALONE
+
+Stop and escalate if a phase depends on one of these.
+
+| # | Question | Blocks | Why it matters |
+|---|---|---|---|
+| Q1 | What retake rate or CER from the core would justify keeping or buying a vendor SDK? | Phase 5 | Agree the threshold before Phase 2 ships or the decision gets made on sentiment. |
+| Q2 | Is server-side Arabic extraction (Azure Document Intelligence versus Google Cloud Vision) committed? Cost per page at projected volume? | OCR work | On-device OCR is Latin-only. This gates the whole Arabic path. |
+| Q3 | Storage format for the invoice archive: per-page JPEG or multi-page searchable PDF? | Export design | Affects the export path and backend ingestion contract. |
+| Q4 | Offline queue depth: how many pages before the cache policy pushes back? | Phase 3 | Restaurant back offices have genuinely poor Wi-Fi. |
+| Q5 | Can real customer captures be retained for a test corpus under current terms? | **Phase 0** | Legal input needed before collection starts, not after. |
+| Q6 | Does the ingestion and OCR path accept WebP? | Encoding | About 28% bandwidth saving is worth confirming. |
+| Q7 | Curled thermal receipts are not planar and homography cannot fix them. Accept the limitation or scope cylindrical dewarping? | Backlog | Sets expectations with product. |
+| Q8 | Public distribution (Maven Central, CocoaPods trunk, pub.dev) or internal Artifactory? | Phase 6 | Public implies API stability commitments, support burden, and a licence decision. |
+| Q9 | **Which native teams consume the Android and iOS SDKs?** | **Phases 6, 7, 9** | If the answer is "none today", skip those phases. This is the single largest swing in the estimate: UI work goes from 8 weeks to 3. |
+| Q10 | Is `theme.override` a real white-label requirement or speculative? | Phase 8 | Shapes the token architecture. Retrofitting is expensive. |
+| Q11 | Is there a Figma file for these screens? | Phase 8 | If yes, the token pipeline should read Figma Variables directly rather than a hand-maintained `tokens.json`. |
+| Q12 | iOS floor: 15 for Vision, or 13 using the C++ detector everywhere? | Phase 7 | Dropping Vision gives perfect cross-platform parity at some accuracy cost. Measure on the corpus before deciding. |
+| Q13 | Do the light screens (review, export) follow a dark theme if the system is dark? | Phase 9 | Viewfinder and crop are dark by nature; the other two are a product decision. |
+
+---
+
+# PART 9: NON-GOALS
+
+Explicitly out of scope. Do not build these.
+
+- Curled, folded, or otherwise non-planar page dewarping
+- Handwriting recognition
+- Table structure extraction (that is the server-side document-AI layer)
+- Barcode and QR scanning (separate module, already exists)
+- Real-time video OCR
+- Kotlin Multiplatform for the binding layers (adds a toolchain, buys little, the bindings are a few hundred lines each)

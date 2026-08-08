@@ -8,8 +8,8 @@ void main() {
       expect(cfg.mode, SupyMultipleScanMode.unique);
       expect(cfg.countingRepeatDelay, const Duration(milliseconds: 1000));
       expect(cfg.initiallyCollapsed, isTrue);
-      expect(cfg.submitButtonText, 'Submit');
-      expect(cfg.clearButtonText, 'Clear');
+      expect(cfg.submitButtonText, isNull);
+      expect(cfg.clearButtonText, isNull);
     });
 
     test('value equality', () {

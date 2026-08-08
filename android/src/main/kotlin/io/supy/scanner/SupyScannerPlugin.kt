@@ -9,8 +9,11 @@ import io.flutter.plugin.common.MethodChannel
 import io.flutter.plugin.common.MethodChannel.MethodCallHandler
 import io.flutter.plugin.common.MethodChannel.Result
 import io.supy.scanner.barcode.ActivityHolder
+import io.supy.scanner.barcode.BarcodeImageDecoder
 import io.supy.scanner.barcode.BatchBarcodeScannerLauncher
 import io.supy.scanner.barcode.SupyBarcodeScannerViewFactory
+import io.supy.scanner.datacapture.SupyDataCaptureScannerViewFactory
+import io.supy.scanner.document.DocumentImportLauncher
 import io.supy.scanner.document.DocumentScannerLauncher
 import io.supy.scanner.document.SupyDocumentScannerViewFactory
 import io.supy.scanner.nativecore.SupyNativeCore
@@ -30,8 +33,10 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
     private val activityHolder: ActivityHolder = ActivityHolder()
     private val cameraPermissions: CameraPermissionHandler = CameraPermissionHandler()
     private val documentLauncher: DocumentScannerLauncher = DocumentScannerLauncher()
+    private val documentImportLauncher: DocumentImportLauncher = DocumentImportLauncher()
     private val batchBarcodeLauncher: BatchBarcodeScannerLauncher =
         BatchBarcodeScannerLauncher()
+    private val barcodeImageDecoder: BarcodeImageDecoder = BarcodeImageDecoder()
     private var activityBinding: ActivityPluginBinding? = null
 
     override fun onAttachedToEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
@@ -47,6 +52,11 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             SupyDocumentScannerViewFactory.VIEW_TYPE_ID,
             SupyDocumentScannerViewFactory(binding.binaryMessenger, activityHolder),
         )
+
+        binding.platformViewRegistry.registerViewFactory(
+            SupyDataCaptureScannerViewFactory.VIEW_TYPE_ID,
+            SupyDataCaptureScannerViewFactory(binding.binaryMessenger, activityHolder),
+        )
     }
 
     override fun onDetachedFromEngine(@NonNull binding: FlutterPlugin.FlutterPluginBinding) {
@@ -55,6 +65,8 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         // is Closeable and pins native resources until released. Engine detach is
         // the last guaranteed teardown signal on the plugin lifecycle.
         documentLauncher.close()
+        documentImportLauncher.close()
+        barcodeImageDecoder.close()
     }
 
     override fun onMethodCall(@NonNull call: MethodCall, @NonNull result: Result) {
@@ -64,6 +76,13 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
                 val args = expectMapArgs(call, result) ?: return
                 documentLauncher.launch(activityHolder.activity, args, result)
             }
+            "importDocumentImage" -> {
+                // Native gallery import: photo picker → on-device detect +
+                // perspective warp + enhance + persist. No args; resolves null
+                // when the user dismisses the picker. On-device only — no bytes
+                // cross the channel.
+                documentImportLauncher.launch(activityHolder.activity, result)
+            }
             "scanBarcodesBatch" -> {
                 val args = expectMapArgs(call, result) ?: return
                 batchBarcodeLauncher.launch(activityHolder.activity, args, result)
@@ -71,6 +90,53 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
             "prewarm" -> {
                 documentLauncher.prewarm(activityHolder.activity?.applicationContext)
                 result.success(null)
+            }
+            "recognizeText" -> {
+                val args = expectMapArgs(call, result) ?: return
+                val path = args["imagePath"] as? String
+                if (path.isNullOrEmpty()) {
+                    result.error("unknown", "recognizeText: missing or empty `imagePath` arg", null)
+                    return
+                }
+                // Accept a file path or a content/file URI. `languages` is
+                // accepted for wire symmetry but ignored (ML Kit is Latin-only).
+                val uri = if (path.contains("://")) {
+                    android.net.Uri.parse(path)
+                } else {
+                    android.net.Uri.fromFile(java.io.File(path))
+                }
+                val includeElements = args["includeElements"] as? Boolean ?: true
+                documentLauncher.recognizeText(
+                    activityHolder.activity?.applicationContext,
+                    uri,
+                    includeElements,
+                    onComplete = { tree -> result.success(tree) },
+                    onError = { code, message -> result.error(code, message, null) },
+                )
+            }
+            "decodeImage" -> {
+                val args = expectMapArgs(call, result) ?: return
+                val path = args["imagePath"] as? String
+                if (path.isNullOrEmpty()) {
+                    result.error("unknown", "decodeImage: missing or empty `imagePath` arg", null)
+                    return
+                }
+                val uri = if (path.contains("://")) {
+                    android.net.Uri.parse(path)
+                } else {
+                    android.net.Uri.fromFile(java.io.File(path))
+                }
+                val formats = (args["formats"] as? List<*>)
+                    ?.mapNotNull { it as? String } ?: emptyList()
+                val useNativeCore = args["useNativeCore"] as? Boolean ?: false
+                barcodeImageDecoder.decode(
+                    activityHolder.activity?.applicationContext,
+                    uri,
+                    formats,
+                    useNativeCore,
+                    onComplete = { detections -> result.success(detections) },
+                    onError = { code, message -> result.error(code, message, null) },
+                )
             }
             "getDeviceTier" -> {
                 val ctx = activityHolder.activity?.applicationContext
@@ -176,12 +242,14 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         activityBinding = binding
         binding.addRequestPermissionsResultListener(cameraPermissions)
         binding.addActivityResultListener(documentLauncher)
+        binding.addActivityResultListener(documentImportLauncher)
         binding.addActivityResultListener(batchBarcodeLauncher)
     }
 
     override fun onDetachedFromActivityForConfigChanges() {
         activityBinding?.removeRequestPermissionsResultListener(cameraPermissions)
         activityBinding?.removeActivityResultListener(documentLauncher)
+        activityBinding?.removeActivityResultListener(documentImportLauncher)
         activityBinding?.removeActivityResultListener(batchBarcodeLauncher)
         activityHolder.activity = null
         activityBinding = null
@@ -192,12 +260,14 @@ class SupyScannerPlugin : FlutterPlugin, ActivityAware, MethodCallHandler {
         activityBinding = binding
         binding.addRequestPermissionsResultListener(cameraPermissions)
         binding.addActivityResultListener(documentLauncher)
+        binding.addActivityResultListener(documentImportLauncher)
         binding.addActivityResultListener(batchBarcodeLauncher)
     }
 
     override fun onDetachedFromActivity() {
         activityBinding?.removeRequestPermissionsResultListener(cameraPermissions)
         activityBinding?.removeActivityResultListener(documentLauncher)
+        activityBinding?.removeActivityResultListener(documentImportLauncher)
         activityBinding?.removeActivityResultListener(batchBarcodeLauncher)
         activityHolder.activity = null
         activityBinding = null

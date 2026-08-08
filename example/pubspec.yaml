@@ -11,6 +11,13 @@ dependencies:
   flutter:
     sdk: flutter
   image: ^4.9.1
+  # Benchmark-only, example-app deps (never in the library `lib/`):
+  #  - mobile_scanner: the free baseline we compare against.
+  #  - barcode + barcode_image: pure-Dart fixture generation (rasterized via `image`).
+  # All free/permissive; none is a paid third-party SDK.
+  barcode: ^2.2.8
+  barcode_image: ^2.0.3
+  mobile_scanner: ^7.0.1
   supy_scanner:
     path: ../
 
