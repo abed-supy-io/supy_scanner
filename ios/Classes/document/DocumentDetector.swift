@@ -5,6 +5,12 @@ import CoreVideo
 import Foundation
 import Vision
 
+// SPM builds the Obj-C bridge as a separate module; CocoaPods folds it into
+// this umbrella module.
+#if SWIFT_PACKAGE
+import supy_scanner_objc
+#endif
+
 /// One frame's worth of raw measurements emitted to the Dart state machine.
 ///
 /// All quad points are normalized to preview coordinates with the **top-left
@@ -35,6 +41,12 @@ struct DocumentFrameMetrics {
   /// computed independently per corner). Empty when no quad / not enough
   /// history. CQG: feeds the `kHandShake` exit gate.
   let perCornerStability: [Double]
+  /// Aspect ratio (width / height) of the analyzer frame the quad was
+  /// normalized against, in the *oriented* (portrait) space Vision processed —
+  /// i.e. matching what the preview layer renders. `0` when unknown. The Dart
+  /// overlay uses this to reproduce the preview's aspect-fill crop so the drawn
+  /// quad stays glued to the real document edges.
+  let sourceAspectRatio: Double
 
   static let empty = DocumentFrameMetrics(
     quad: [],
@@ -47,7 +59,8 @@ struct DocumentFrameMetrics {
     quadStability: 0,
     glareRatio: 0,
     cornerVelocity: 0,
-    perCornerStability: []
+    perCornerStability: [],
+    sourceAspectRatio: 0
   )
 
   /// Signed quad-centroid offset from preview center, per axis, in half-extent
@@ -76,6 +89,7 @@ struct DocumentFrameMetrics {
       "perCornerStability": perCornerStability,
       "centerOffsetX": offset.x,
       "centerOffsetY": offset.y,
+      "sourceAspectRatio": sourceAspectRatio,
     ]
   }
 }
@@ -188,7 +202,14 @@ final class DocumentDetector: NSObject,
   /// Quads whose interior variance falls below this floor are treated as
   /// uniform patches (blank table, monitor, sky) and discarded. Empirically
   /// well below textured paper but above sensor noise on a uniform surface.
-  private static let interiorVarianceFloor: Double = 5.0
+  ///
+  /// Kept in lockstep with the shared Dart default
+  /// `SupyDocumentGuidanceConfiguration.interiorVarianceFloor`: a sparse,
+  /// mostly-white invoice (little ink, wide margins) reports interior variance
+  /// only a little above a blank surface, and the old 5.0 floor discarded those
+  /// quads outright — the page outline never highlighted. 3.0 still rejects a
+  /// genuinely uniform patch but lets a low-ink invoice through to the classifier.
+  private static let interiorVarianceFloor: Double = 3.0
 
   /// Owns the rolling per-corner drift buffer used to compute `quadStability`.
   /// Cleared on every no-quad frame so the buffer never bleeds across
@@ -296,6 +317,17 @@ final class DocumentDetector: NSObject,
         glareRatio = 0
       }
 
+      // Oriented (portrait) analyzer size: Vision ran with `.right`
+      // orientation, so its normalized space swaps the pixel buffer's
+      // width/height. This is the space both the quad and the preview live in.
+      let orientedSize = CGSize(
+        width: CGFloat(CVPixelBufferGetHeight(pixelBuffer)),
+        height: CGFloat(CVPixelBufferGetWidth(pixelBuffer))
+      )
+      let sourceAspectRatio =
+        orientedSize.height > 0
+        ? Double(orientedSize.width / orientedSize.height) : 0
+
       let metrics = Self.buildMetrics(
         rawQuad: acceptedQuad,
         meanLuma: lumaMetrics.meanLuma,
@@ -305,15 +337,12 @@ final class DocumentDetector: NSObject,
         quadStability: stability,
         glareRatio: glareRatio,
         cornerVelocity: cornerVelocity,
-        perCornerStability: perCorner
+        perCornerStability: perCorner,
+        sourceAspectRatio: sourceAspectRatio
       )
       // Cache the emitted (top-left-origin) quad so capture-and-rectify can
       // pick it up without re-running detection. Cleared whenever the quad
       // is rejected — `metrics.quad` is `[]` in that case.
-      let orientedSize = CGSize(
-        width: CGFloat(CVPixelBufferGetHeight(pixelBuffer)),
-        height: CGFloat(CVPixelBufferGetWidth(pixelBuffer))
-      )
       self.setLatestQuad(metrics.quad, analyzerSize: orientedSize)
       self.onMetrics?(metrics)
     }
@@ -339,7 +368,10 @@ final class DocumentDetector: NSObject,
           quadStability: 0,
           glareRatio: 0,
           cornerVelocity: 0,
-          perCornerStability: []
+          perCornerStability: [],
+          sourceAspectRatio: CVPixelBufferGetWidth(pixelBuffer) > 0
+            ? Double(CVPixelBufferGetHeight(pixelBuffer))
+              / Double(CVPixelBufferGetWidth(pixelBuffer)) : 0
         )
       )
     }
@@ -489,7 +521,8 @@ final class DocumentDetector: NSObject,
     quadStability: Double,
     glareRatio: Double,
     cornerVelocity: Double,
-    perCornerStability: [Double]
+    perCornerStability: [Double],
+    sourceAspectRatio: Double
   ) -> DocumentFrameMetrics {
     guard rawQuad.count == 4 else {
       return DocumentFrameMetrics(
@@ -503,7 +536,8 @@ final class DocumentDetector: NSObject,
         quadStability: 0,
         glareRatio: 0,
         cornerVelocity: 0,
-        perCornerStability: []
+        perCornerStability: [],
+        sourceAspectRatio: sourceAspectRatio
       )
     }
 
@@ -526,7 +560,8 @@ final class DocumentDetector: NSObject,
       quadStability: quadStability,
       glareRatio: glareRatio,
       cornerVelocity: cornerVelocity,
-      perCornerStability: perCornerStability
+      perCornerStability: perCornerStability,
+      sourceAspectRatio: sourceAspectRatio
     )
   }
 

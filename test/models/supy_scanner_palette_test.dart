@@ -18,6 +18,34 @@ void main() {
       expect(a.hashCode, equals(b.hashCode));
     });
 
+    test('supyDark / supyLight presets are stable and self-equal', () {
+      expect(
+        const SupyScannerPalette.supyDark(),
+        equals(const SupyScannerPalette.supyDark()),
+      );
+      expect(
+        const SupyScannerPalette.supyLight(),
+        equals(const SupyScannerPalette.supyLight()),
+      );
+    });
+
+    test('supy presets use the Supy purple as primary accent', () {
+      const purple = Color(0xFF6448C3);
+      expect(const SupyScannerPalette.supyDark().primary, equals(purple));
+      expect(const SupyScannerPalette.supyLight().primary, equals(purple));
+    });
+
+    test('supy presets are branded distinctly from the scanbot presets', () {
+      expect(
+        const SupyScannerPalette.supyDark(),
+        isNot(equals(const SupyScannerPalette.scanbotDark())),
+      );
+      expect(
+        const SupyScannerPalette.supyDark().primary,
+        isNot(equals(const SupyScannerPalette.scanbotDark().primary)),
+      );
+    });
+
     test('dark and light presets differ', () {
       const dark = SupyScannerPalette.scanbotDark();
       const light = SupyScannerPalette.scanbotLight();

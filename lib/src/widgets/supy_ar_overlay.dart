@@ -2,6 +2,7 @@ import 'package:flutter/widgets.dart';
 
 import '../models/supy_barcode.dart';
 import '../models/ui/supy_ar_overlay_configuration.dart';
+import '../models/ui/supy_scanner_palette.dart';
 
 /// Paints AR-style bounding boxes (and optional label chips) over the
 /// camera preview for each detected barcode.
@@ -15,6 +16,7 @@ class SupyArOverlay extends StatelessWidget {
     required this.barcodes,
     super.key,
     this.config = const SupyArOverlayConfiguration(),
+    this.palette = const SupyScannerPalette.supyDark(),
   });
 
   /// The barcodes to highlight. Boxes are in normalized `[0..1]`
@@ -24,6 +26,9 @@ class SupyArOverlay extends StatelessWidget {
   /// Visual style.
   final SupyArOverlayConfiguration config;
 
+  /// Palette used to resolve any color the [config] leaves null.
+  final SupyScannerPalette palette;
+
   @override
   Widget build(BuildContext context) {
     if (!config.enabled || barcodes.isEmpty) {
@@ -31,7 +36,11 @@ class SupyArOverlay extends StatelessWidget {
     }
     return IgnorePointer(
       child: CustomPaint(
-        painter: _ArOverlayPainter(barcodes: barcodes, config: config),
+        painter: _ArOverlayPainter(
+          barcodes: barcodes,
+          config: config,
+          palette: palette,
+        ),
         size: Size.infinite,
       ),
     );
@@ -39,21 +48,26 @@ class SupyArOverlay extends StatelessWidget {
 }
 
 class _ArOverlayPainter extends CustomPainter {
-  _ArOverlayPainter({required this.barcodes, required this.config});
+  _ArOverlayPainter({
+    required this.barcodes,
+    required this.config,
+    required this.palette,
+  });
 
   final List<SupyBarcode> barcodes;
   final SupyArOverlayConfiguration config;
+  final SupyScannerPalette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
     final stroke =
         Paint()
-          ..color = config.strokeColor
+          ..color = config.strokeColor ?? palette.positive
           ..style = PaintingStyle.stroke
           ..strokeWidth = config.strokeWidth;
     final fill =
         Paint()
-          ..color = config.fillColor
+          ..color = config.fillColor ?? palette.positive.withValues(alpha: 0.2)
           ..style = PaintingStyle.fill;
 
     for (final b in barcodes) {
@@ -83,7 +97,7 @@ class _ArOverlayPainter extends CustomPainter {
       text: TextSpan(
         text: text,
         style: TextStyle(
-          color: config.labelTextColor,
+          color: config.labelTextColor ?? palette.onSurface,
           fontSize: config.labelTextSize,
           fontWeight: FontWeight.w600,
         ),
@@ -112,13 +126,18 @@ class _ArOverlayPainter extends CustomPainter {
       chipRect,
       const Radius.circular(4),
     );
-    canvas.drawRRect(chipRRect, Paint()..color = config.labelBackgroundColor);
+    canvas.drawRRect(
+      chipRRect,
+      Paint()..color = config.labelBackgroundColor ?? palette.surfaceLow,
+    );
     tp.paint(canvas, Offset(left + hPad, top + vPad));
   }
 
   @override
   bool shouldRepaint(covariant _ArOverlayPainter old) {
-    return old.config != config || !_listEquals(old.barcodes, barcodes);
+    return old.config != config ||
+        old.palette != palette ||
+        !_listEquals(old.barcodes, barcodes);
   }
 
   static bool _listEquals(List<SupyBarcode> a, List<SupyBarcode> b) {

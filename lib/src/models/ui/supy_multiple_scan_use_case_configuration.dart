@@ -22,16 +22,16 @@ class SupyMultipleScanUseCaseConfiguration {
   const SupyMultipleScanUseCaseConfiguration({
     this.mode = SupyMultipleScanMode.unique,
     this.countingRepeatDelay = const Duration(milliseconds: 1000),
-    this.sheetTitle = 'Items scanned',
+    this.sheetTitle,
     this.initiallyCollapsed = true,
-    this.submitButtonText = 'Submit',
-    this.clearButtonText = 'Clear',
-    this.sheetBackgroundColor = const Color(0xFFFFFFFF),
-    this.titleColor = const Color(0xFF000000),
-    this.bodyColor = const Color(0xCC000000),
-    this.submitButtonBackgroundColor = const Color(0xFF000000),
-    this.submitButtonForegroundColor = const Color(0xFFFFFFFF),
-    this.clearButtonForegroundColor = const Color(0xFF000000),
+    this.submitButtonText,
+    this.clearButtonText,
+    this.sheetBackgroundColor,
+    this.titleColor,
+    this.bodyColor,
+    this.submitButtonBackgroundColor,
+    this.submitButtonForegroundColor,
+    this.clearButtonForegroundColor,
   });
 
   /// Counting vs unique behaviour.
@@ -41,36 +41,41 @@ class SupyMultipleScanUseCaseConfiguration {
   /// Ignored in [SupyMultipleScanMode.unique].
   final Duration countingRepeatDelay;
 
-  /// Title rendered at the top of the collapsible sheet.
-  final String sheetTitle;
+  /// Title rendered at the top of the collapsible sheet. Resolves to the
+  /// string bundle's `itemsScanned` when null.
+  final String? sheetTitle;
 
   /// Whether the sheet starts collapsed (header only) or expanded (header
   /// + scrollable list).
   final bool initiallyCollapsed;
 
-  /// Label on the primary submit button.
-  final String submitButtonText;
+  /// Label on the primary submit button. Resolves to the string bundle's
+  /// `submit` when null.
+  final String? submitButtonText;
 
-  /// Label on the secondary clear button.
-  final String clearButtonText;
+  /// Label on the secondary clear button. Resolves to the string bundle's
+  /// `clear` when null.
+  final String? clearButtonText;
 
-  /// Sheet background fill.
-  final Color sheetBackgroundColor;
+  /// Sheet background fill. Resolves to the palette `surface` when null.
+  final Color? sheetBackgroundColor;
 
-  /// Title color.
-  final Color titleColor;
+  /// Title color. Resolves to the palette `onSurface` when null.
+  final Color? titleColor;
 
-  /// Body / list-item color.
-  final Color bodyColor;
+  /// Body / list-item color. Resolves to the palette `onSurfaceVariant` when
+  /// null.
+  final Color? bodyColor;
 
-  /// Primary button fill.
-  final Color submitButtonBackgroundColor;
+  /// Primary button fill. Resolves to the palette `primary` when null.
+  final Color? submitButtonBackgroundColor;
 
-  /// Primary button label color.
-  final Color submitButtonForegroundColor;
+  /// Primary button label color. Resolves to the palette `onPrimary` when null.
+  final Color? submitButtonForegroundColor;
 
-  /// Secondary (clear) button label color.
-  final Color clearButtonForegroundColor;
+  /// Secondary (clear) button label color. Resolves to the palette `onSurface`
+  /// when null.
+  final Color? clearButtonForegroundColor;
 
   @override
   bool operator ==(Object other) =>

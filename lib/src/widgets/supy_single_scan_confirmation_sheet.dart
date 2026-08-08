@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 
 import '../models/supy_barcode.dart';
+import '../models/ui/supy_scanner_palette.dart';
+import '../models/ui/supy_scanner_strings.dart';
 import '../models/ui/supy_single_scan_use_case_configuration.dart';
 
 /// Bottom sheet shown by the single-scan use case after a barcode is
@@ -14,6 +16,8 @@ class SupySingleScanConfirmationSheet extends StatelessWidget {
     required this.config,
     required this.onConfirm,
     required this.onRetry,
+    this.palette = const SupyScannerPalette.supyDark(),
+    this.strings = const SupyScannerStrings.en(),
     super.key,
   });
 
@@ -29,10 +33,18 @@ class SupySingleScanConfirmationSheet extends StatelessWidget {
   /// Invoked when the user taps the retry text button.
   final VoidCallback onRetry;
 
+  /// Palette used to resolve any color the [config] leaves null.
+  final SupyScannerPalette palette;
+
+  /// String bundle used to resolve copy the [config] leaves null.
+  final SupyScannerStrings strings;
+
   @override
   Widget build(BuildContext context) {
+    final titleColor = config.titleColor ?? palette.onSurface;
+    final bodyColor = config.bodyColor ?? palette.onSurfaceVariant;
     return Material(
-      color: config.sheetBackgroundColor,
+      color: config.sheetBackgroundColor ?? palette.surface,
       shape: const RoundedRectangleBorder(
         borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
       ),
@@ -49,16 +61,16 @@ class SupySingleScanConfirmationSheet extends StatelessWidget {
                   width: 36,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: config.bodyColor.withValues(alpha: 0.2),
+                    color: bodyColor.withValues(alpha: 0.2),
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ),
               const SizedBox(height: 16),
               Text(
-                config.title,
+                config.title ?? strings.barcodeDetected,
                 style: TextStyle(
-                  color: config.titleColor,
+                  color: titleColor,
                   fontSize: 18,
                   fontWeight: FontWeight.w600,
                 ),
@@ -66,10 +78,10 @@ class SupySingleScanConfirmationSheet extends StatelessWidget {
               if (config.showBarcodeFormat) ...[
                 const SizedBox(height: 12),
                 Align(
-                  alignment: Alignment.centerLeft,
+                  alignment: AlignmentDirectional.centerStart,
                   child: _FormatChip(
                     label: barcode.format.name,
-                    color: config.bodyColor,
+                    color: bodyColor,
                   ),
                 ),
               ],
@@ -77,7 +89,7 @@ class SupySingleScanConfirmationSheet extends StatelessWidget {
                 const SizedBox(height: 12),
                 SelectableText(
                   barcode.rawValue,
-                  style: TextStyle(color: config.bodyColor, fontSize: 14),
+                  style: TextStyle(color: bodyColor, fontSize: 14),
                 ),
               ],
               const SizedBox(height: 20),
@@ -86,22 +98,26 @@ class SupySingleScanConfirmationSheet extends StatelessWidget {
                 child: ElevatedButton(
                   onPressed: onConfirm,
                   style: ElevatedButton.styleFrom(
-                    backgroundColor: config.confirmButtonBackgroundColor,
-                    foregroundColor: config.confirmButtonForegroundColor,
+                    backgroundColor:
+                        config.confirmButtonBackgroundColor ?? palette.primary,
+                    foregroundColor:
+                        config.confirmButtonForegroundColor ??
+                        palette.onPrimary,
                     shape: RoundedRectangleBorder(
                       borderRadius: BorderRadius.circular(12),
                     ),
                   ),
-                  child: Text(config.confirmButtonText),
+                  child: Text(config.confirmButtonText ?? strings.submit),
                 ),
               ),
               const SizedBox(height: 8),
               TextButton(
                 onPressed: onRetry,
                 style: TextButton.styleFrom(
-                  foregroundColor: config.retryButtonForegroundColor,
+                  foregroundColor:
+                      config.retryButtonForegroundColor ?? palette.onSurface,
                 ),
-                child: Text(config.retryButtonText),
+                child: Text(config.retryButtonText ?? strings.retry),
               ),
             ],
           ),

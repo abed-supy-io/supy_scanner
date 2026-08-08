@@ -48,64 +48,71 @@ class SupyFindAndPickUseCaseConfiguration {
   /// Creates a find-and-pick use case configuration.
   const SupyFindAndPickUseCaseConfiguration({
     this.expected = const <SupyExpectedBarcode>[],
-    this.sheetTitle = 'Pick list',
+    this.sheetTitle,
     this.initiallyCollapsed = false,
-    this.submitButtonText = 'Done',
-    this.clearButtonText = 'Reset',
+    this.submitButtonText,
+    this.clearButtonText,
     this.allowUnexpected = false,
-    this.sheetBackgroundColor = const Color(0xFFFFFFFF),
-    this.titleColor = const Color(0xFF000000),
-    this.bodyColor = const Color(0xCC000000),
-    this.matchedRowColor = const Color(0xFF1F8A4C),
-    this.pendingRowColor = const Color(0xFF000000),
-    this.submitButtonBackgroundColor = const Color(0xFF000000),
-    this.submitButtonForegroundColor = const Color(0xFFFFFFFF),
-    this.clearButtonForegroundColor = const Color(0xFF000000),
+    this.sheetBackgroundColor,
+    this.titleColor,
+    this.bodyColor,
+    this.matchedRowColor,
+    this.pendingRowColor,
+    this.submitButtonBackgroundColor,
+    this.submitButtonForegroundColor,
+    this.clearButtonForegroundColor,
   });
 
   /// The pick-list. Order is preserved in the sheet.
   final List<SupyExpectedBarcode> expected;
 
-  /// Title rendered at the top of the collapsible sheet.
-  final String sheetTitle;
+  /// Title rendered at the top of the collapsible sheet. Resolves to the
+  /// string bundle's `pickList` when null.
+  final String? sheetTitle;
 
   /// Whether the sheet starts collapsed (header only) or expanded.
   /// Find-and-pick defaults to expanded — operators need the list in view.
   final bool initiallyCollapsed;
 
-  /// Label on the primary submit button.
-  final String submitButtonText;
+  /// Label on the primary submit button. Resolves to the string bundle's
+  /// `done` when null.
+  final String? submitButtonText;
 
-  /// Label on the secondary reset button.
-  final String clearButtonText;
+  /// Label on the secondary reset button. Resolves to the string bundle's
+  /// `reset` when null.
+  final String? clearButtonText;
 
   /// When true, detected payloads not in [expected] are still recorded
   /// (in an "Unexpected" section). When false, they are dropped silently.
   final bool allowUnexpected;
 
-  /// Sheet background fill.
-  final Color sheetBackgroundColor;
+  /// Sheet background fill. Resolves to the palette `surface` when null.
+  final Color? sheetBackgroundColor;
 
-  /// Title color.
-  final Color titleColor;
+  /// Title color. Resolves to the palette `onSurface` when null.
+  final Color? titleColor;
 
-  /// Body color (used by the count line and unmatched-row payload).
-  final Color bodyColor;
+  /// Body color (used by the count line and unmatched-row payload). Resolves to
+  /// the palette `onSurfaceVariant` when null.
+  final Color? bodyColor;
 
-  /// Color for fully-matched rows (e.g. green).
-  final Color matchedRowColor;
+  /// Color for fully-matched rows. Resolves to the palette `positive` when
+  /// null.
+  final Color? matchedRowColor;
 
-  /// Color for pending rows.
-  final Color pendingRowColor;
+  /// Color for pending rows. Resolves to the palette `onSurfaceVariant` when
+  /// null.
+  final Color? pendingRowColor;
 
-  /// Primary button fill.
-  final Color submitButtonBackgroundColor;
+  /// Primary button fill. Resolves to the palette `primary` when null.
+  final Color? submitButtonBackgroundColor;
 
-  /// Primary button label color.
-  final Color submitButtonForegroundColor;
+  /// Primary button label color. Resolves to the palette `onPrimary` when null.
+  final Color? submitButtonForegroundColor;
 
-  /// Secondary (reset) button label color.
-  final Color clearButtonForegroundColor;
+  /// Secondary (reset) button label color. Resolves to the palette `onSurface`
+  /// when null.
+  final Color? clearButtonForegroundColor;
 
   @override
   bool operator ==(Object other) {

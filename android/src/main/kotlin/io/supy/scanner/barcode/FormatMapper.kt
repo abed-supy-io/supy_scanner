@@ -64,6 +64,11 @@ internal object FormatMapper {
     private const val SUPY_FORMAT_QR_CODE      = 1 shl 10
     private const val SUPY_FORMAT_UPC_A        = 1 shl 11
     private const val SUPY_FORMAT_UPC_E        = 1 shl 12
+    private const val SUPY_FORMAT_DATA_BAR          = 1 shl 13
+    private const val SUPY_FORMAT_DATA_BAR_EXPANDED = 1 shl 14
+    private const val SUPY_FORMAT_MICRO_QR          = 1 shl 15
+    private const val SUPY_FORMAT_RMQR              = 1 shl 16
+    private const val SUPY_FORMAT_MAXI_CODE         = 1 shl 17
 
     /**
      * Translates wire names to a SUPY_FORMAT_* bitmask for the native core.
@@ -94,6 +99,11 @@ internal object FormatMapper {
         "dataMatrix" -> SUPY_FORMAT_DATA_MATRIX
         "aztec" -> SUPY_FORMAT_AZTEC
         "codabar" -> SUPY_FORMAT_CODABAR
+        "dataBar" -> SUPY_FORMAT_DATA_BAR
+        "dataBarExpanded" -> SUPY_FORMAT_DATA_BAR_EXPANDED
+        "microQr" -> SUPY_FORMAT_MICRO_QR
+        "rMQR" -> SUPY_FORMAT_RMQR
+        "maxiCode" -> SUPY_FORMAT_MAXI_CODE
         else -> null
     }
 
@@ -123,6 +133,11 @@ internal object FormatMapper {
         SUPY_FORMAT_DATA_MATRIX -> "dataMatrix"
         SUPY_FORMAT_AZTEC -> "aztec"
         SUPY_FORMAT_CODABAR -> "codabar"
+        SUPY_FORMAT_DATA_BAR -> "dataBar"
+        SUPY_FORMAT_DATA_BAR_EXPANDED -> "dataBarExpanded"
+        SUPY_FORMAT_MICRO_QR -> "microQr"
+        SUPY_FORMAT_RMQR -> "rMQR"
+        SUPY_FORMAT_MAXI_CODE -> "maxiCode"
         else -> "all"
     }
 

@@ -32,6 +32,28 @@ enum DocumentStillRefiner {
     )
   }
 
+  /// Largest-area document quad detected on the still, or `nil` when Vision
+  /// finds nothing rectangular. Used by the gallery-import path, which has no
+  /// preview-tracked seed to refine against — it takes the biggest plausible
+  /// document region outright. Normalized [0,1], top-left origin, TL/TR/BR/BL.
+  /// Synchronous Vision pass — call on a background queue only.
+  static func detectBestQuad(still: CIImage) -> [CGPoint]? {
+    bestByArea(detectCandidates(still: still))
+  }
+
+  /// Picks the largest-area 4-point candidate. Separated from Vision so the
+  /// selection rule is unit-testable against synthetic candidate sets.
+  static func bestByArea(_ candidates: [[CGPoint]]) -> [CGPoint]? {
+    var best: (quad: [CGPoint], area: CGFloat)?
+    for candidate in candidates where candidate.count == 4 {
+      let a = QuadGeometry.area(candidate)
+      if a > (best?.area ?? 0) {
+        best = (candidate, a)
+      }
+    }
+    return best?.quad
+  }
+
   /// Pure accept/reject gate, separated from Vision for testability.
   static func evaluate(
     candidates: [[CGPoint]],

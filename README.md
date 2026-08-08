@@ -6,12 +6,12 @@ A first-party Flutter scanning library for Supy. Native-backed (AVFoundation + V
 
 ## Why
 
-The retailer app currently ships with **Scanbot SDK** — a paid third-party scanner. This package replaces it with:
+The retailer app currently ships with **Scanbot SDK** — a paid third-party scanner. This package replaces it with a **first-party, Supy-licensed** scanner:
 
-- **Zero recurring license cost** — Apple Vision + Google ML Kit are free.
-- **Smaller binary** — no ~50 MB native blob.
-- **Drop-in compatibility** — end users see no behavior change.
-- **On-device only** — no network calls in the scanning path.
+- **First-party licensing** — a Supy-issued license replaces Scanbot's per-seat SDK fee. See [Licensing](#licensing).
+- **Smaller binary** — no ~50 MB native blob; built on Apple Vision + Google ML Kit.
+- **Drop-in compatibility** — end users see no behavior change; call sites add a one-time `SupyScanner.activate(...)`.
+- **On-device only** — no network calls in the scanning path. License checks are offline (signed-token verification); the network is touched once at activation, never per scan.
 
 ## Install
 
@@ -67,6 +67,33 @@ final batch = await SupyScannerChannel.instance.scanBarcodesBatch(
 );
 ```
 
+## Licensing
+
+`supy_scanner` is a paid, Supy-licensed library. Scanning APIs are gated behind a
+valid license: activate once at app startup, then every scan runs fully offline.
+
+```dart
+// Once, before the first scan (e.g. in main() or app bootstrap):
+await SupyScanner.activate(licenseToken); // token issued by the licensing backend
+```
+
+- **Offline enforcement.** The token is an Ed25519 **signed license blob**. The
+  library ships only the **public** verify key and checks the signature
+  on-device — there is **no network call in the scanning path**. The network is
+  touched exactly once, out-of-band, to obtain the token at activation.
+- **What happens without a valid license.** Scan entry points
+  (`scanDocument`, batch/multi sessions, etc.) throw until `activate` succeeds
+  with an unexpired, correctly-signed token.
+- **Getting a license.** Purchase a tier at the marketing site, then activate a
+  device to receive its token. The issuing service lives in
+  [`supy-licensing-backend/`](supy-licensing-backend/) (Stripe checkout →
+  signed-token issuance → activation). It holds the **private** signing key;
+  the library never does.
+
+> This is a logged, intentional reversal of the library's original
+> zero-license-cost mission — see the *Phase PAID* entry in the
+> [`TODO.md`](TODO.md) decisions log.
+
 ## Drop-in compatibility
 
 The retailer call sites pre-migration:
@@ -92,6 +119,9 @@ The compat shim `supy_scanner_scanbot_compat` preserves these exact signatures s
 
 ## Constraints
 
-- No paid SDK dependencies.
-- No cloud OCR; no network calls in the scanning path.
+- No paid **third-party** SDK dependencies — the scanner is built on free
+  platform frameworks. (The library itself is now a paid, Supy-licensed product;
+  see [Licensing](#licensing) and the *Phase PAID* decision in [`TODO.md`](TODO.md).)
+- No cloud OCR; no network calls in the scanning path. License verification is
+  on-device; activation is the only out-of-band network call.
 - The MethodChannel is versioned (`io.supy.scanner/v1`). A v2 means a parallel surface, not a breaking change.

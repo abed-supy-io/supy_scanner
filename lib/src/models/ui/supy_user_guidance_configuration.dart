@@ -11,23 +11,26 @@ class SupyUserGuidanceConfiguration {
   /// dark scrim background and white text.
   const SupyUserGuidanceConfiguration({
     this.visible = true,
-    this.titleText = 'Point the camera at a barcode',
-    this.titleColor = const Color(0xFFFFFFFF),
-    this.backgroundFillColor = const Color(0x99000000),
+    this.titleText,
+    this.titleColor,
+    this.backgroundFillColor,
     this.fontSize = 14.0,
   });
 
   /// Whether the guidance card is rendered.
   final bool visible;
 
-  /// Hint text shown inside the card.
-  final String titleText;
+  /// Hint text shown inside the card. Resolves to the string bundle's
+  /// `barcodeGuidanceTitle` when null; pass `''` to render an empty card.
+  final String? titleText;
 
-  /// Foreground color of the hint text.
-  final Color titleColor;
+  /// Foreground color of the hint text. Resolves to the palette `onSurface`
+  /// when null.
+  final Color? titleColor;
 
   /// Background fill color of the card (alpha allowed for scrim effect).
-  final Color backgroundFillColor;
+  /// Resolves to the palette `modalOverlay` when null.
+  final Color? backgroundFillColor;
 
   /// Hint font size in logical pixels.
   final double fontSize;

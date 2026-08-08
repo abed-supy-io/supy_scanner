@@ -194,7 +194,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     guard !sessionConfigured else { return }
 
     session.beginConfiguration()
-    session.sessionPreset = .high
+    // Phase DPX: full-resolution stills. `.photo` unlocks the sensor's native
+    // capture size (vs `.high`'s ~1080p cap) so the document pipeline has real
+    // pixels to crop, deskew and resize from — the "Full HD"-class output the
+    // shared `DocumentProcessor` targets.
+    session.sessionPreset = .photo
 
     guard
       let device = AVCaptureDevice.default(
@@ -273,6 +277,15 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     // Photo output for stills (captureAndRectify / captureFullFrame).
     if session.canAddOutput(photoOutput) {
       session.addOutput(photoOutput)
+      // Opt into the largest still the active format supports (iOS 16+); the
+      // per-capture settings mirror this in `makePhotoSettings()`.
+      if let device = videoDevice,
+        let maxDim = device.activeFormat.supportedMaxPhotoDimensions.max(by: {
+          Int($0.width) * Int($0.height) < Int($1.width) * Int($1.height)
+        })
+      {
+        photoOutput.maxPhotoDimensions = maxDim
+      }
     }
 
     session.commitConfiguration()
@@ -297,6 +310,14 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   private func attachPreviewLayer() {
     let layer = AVCaptureVideoPreviewLayer(session: session)
     layer.videoGravity = .resizeAspectFill
+    // Pin the preview to portrait so it renders in the same orientation the
+    // analyzer (and the emitted `sourceAspectRatio`) is measured in. Without
+    // this the preview would follow the device's default connection
+    // orientation and could disagree with the overlay's crop math, sliding the
+    // drawn quad off the real document edges.
+    if let connection = layer.connection, connection.isVideoOrientationSupported {
+      connection.videoOrientation = .portrait
+    }
     container.attach(previewLayer: layer)
     previewLayer = layer
   }
@@ -400,10 +421,14 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       setTorch(on: on, result: result)
     case "captureAndRectify":
       let quality = Self.parseJpegQuality(call.arguments)
-      captureAndRectify(jpegQuality: quality, result: result)
+      let options = DocumentProcessingOptions.parse(
+        call.arguments as? [String: Any], fallbackFilter: .color, fallbackQuality: 95)
+      captureAndRectify(jpegQuality: quality, options: options, result: result)
     case "captureFullFrame":
       let quality = Self.parseJpegQuality(call.arguments)
-      captureFullFrame(jpegQuality: quality, result: result)
+      let options = DocumentProcessingOptions.parse(
+        call.arguments as? [String: Any], fallbackFilter: .color, fallbackQuality: 95)
+      captureFullFrame(jpegQuality: quality, options: options, result: result)
     default:
       result(FlutterMethodNotImplemented)
     }
@@ -428,7 +453,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
 
   // MARK: - Still capture
 
-  private func captureAndRectify(jpegQuality: CGFloat, result: @escaping FlutterResult) {
+  private func captureAndRectify(
+    jpegQuality: CGFloat,
+    options: DocumentProcessingOptions,
+    result: @escaping FlutterResult
+  ) {
     guard let detection = detector.snapshotLatestDetection() else {
       DispatchQueue.main.async {
         result(
@@ -448,7 +477,8 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
         result: result,
         quad: detection.quad,
         analyzerSize: detection.analyzerSize,
-        jpegQuality: jpegQuality
+        jpegQuality: jpegQuality,
+        options: options
       )
       let delegate = PhotoCaptureDelegate(owner: self)
       // Retain the delegate until the callback fires — AVFoundation only
@@ -463,7 +493,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     }
   }
 
-  private func captureFullFrame(jpegQuality: CGFloat, result: @escaping FlutterResult) {
+  private func captureFullFrame(
+    jpegQuality: CGFloat,
+    options: DocumentProcessingOptions,
+    result: @escaping FlutterResult
+  ) {
     sessionQueue.async { [weak self] in
       guard let self = self else { return }
       let settings = self.makePhotoSettings()
@@ -471,7 +505,8 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
         result: result,
         quad: nil,
         analyzerSize: nil,
-        jpegQuality: jpegQuality
+        jpegQuality: jpegQuality,
+        options: options
       )
       let delegate = PhotoCaptureDelegate(owner: self)
       objc_setAssociatedObject(
@@ -493,6 +528,8 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     } else {
       settings = AVCapturePhotoSettings()
     }
+    // Request the full-resolution still the output was configured for.
+    settings.maxPhotoDimensions = photoOutput.maxPhotoDimensions
     return settings
   }
 
@@ -544,10 +581,14 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
             quad: quad,
             analyzerSize: pending.analyzerSize ?? .zero,
             jpegQuality: pending.jpegQuality,
+            options: pending.options,
             result: pending.result)
         } else {
           self.processFullFrameCapture(
-            data: data, jpegQuality: pending.jpegQuality, result: pending.result)
+            data: data,
+            jpegQuality: pending.jpegQuality,
+            options: pending.options,
+            result: pending.result)
         }
       }
     }
@@ -558,6 +599,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     quad: [CGPoint],
     analyzerSize: CGSize,
     jpegQuality: CGFloat,
+    options: DocumentProcessingOptions,
     result: @escaping FlutterResult
   ) {
     guard let ciImage = CIImage(data: data) else {
@@ -591,8 +633,13 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       }
       return
     }
-    let uiImage = UIImage(cgImage: output.image)
-    guard let jpeg = uiImage.jpegData(compressionQuality: jpegQuality) else {
+    // The rectify pipeline owns the crop + quad; run only the shared
+    // enhancement tail (illumination flatten, whitening, filter, resize) so the
+    // embedded path produces the same optimized output as the VisionKit path
+    // without re-detecting. Decode once (above), encode once (below).
+    let enhanced = DocumentProcessor.enhanceOnly(
+      UIImage(cgImage: output.image), options: options)
+    guard let jpeg = enhanced.jpegData(compressionQuality: jpegQuality) else {
       DispatchQueue.main.async {
         result(
           FlutterError(
@@ -620,10 +667,14 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       }
       return
     }
+    // Report the enhanced image's actual pixel dimensions (resize may have
+    // scaled it); the quad stays normalized so it is resolution-independent.
+    let widthPx = Int(enhanced.size.width * enhanced.scale)
+    let heightPx = Int(enhanced.size.height * enhanced.scale)
     let payload: [String: Any] = [
       "path": url.path,
-      "widthPx": output.image.width,
-      "heightPx": output.image.height,
+      "widthPx": widthPx,
+      "heightPx": heightPx,
       // Final still-space quad actually used for the warp (was: raw
       // analyzer-space quad). Same convention — normalized, top-left origin.
       "quad": output.quad.map { ["x": Double($0.x), "y": Double($0.y)] },
@@ -632,8 +683,8 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       // Legacy keys for existing `SupyDocumentPage.fromMap` consumers
       // (`controller.capture()`). Additive — never remove.
       "uri": "file://\(url.path)",
-      "width": output.image.width,
-      "height": output.image.height,
+      "width": widthPx,
+      "height": heightPx,
     ]
     DispatchQueue.main.async { result(payload) }
   }
@@ -641,15 +692,30 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   private func processFullFrameCapture(
     data: Data,
     jpegQuality: CGFloat,
+    options: DocumentProcessingOptions,
     result: @escaping FlutterResult
   ) {
-    guard let image = UIImage(data: data),
-          let jpeg = image.jpegData(compressionQuality: jpegQuality) else {
+    // No preview seed here — run the full shared pipeline (detect + crop +
+    // deskew + enhance + resize) on the still, then encode once.
+    guard let decoded = UIImage(data: data) else {
       DispatchQueue.main.async {
         result(
           FlutterError(
             code: "captureFailed",
-            message: "Could not decode/encode full-frame JPEG",
+            message: "Could not decode full-frame JPEG",
+            details: nil
+          )
+        )
+      }
+      return
+    }
+    let image = DocumentProcessor.process(decoded, options: options)
+    guard let jpeg = image.jpegData(compressionQuality: jpegQuality) else {
+      DispatchQueue.main.async {
+        result(
+          FlutterError(
+            code: "captureFailed",
+            message: "Could not encode full-frame JPEG",
             details: nil
           )
         )
@@ -716,6 +782,9 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     /// JPEG compression quality (0.0–1.0). Matches the presenter's
     /// `jpegQuality` arg so both capture paths produce identical fidelity.
     let jpegQuality: CGFloat
+    /// Shared-pipeline options (detect/crop/enhance/resize). Parsed from the
+    /// capture call's `processing` map; defaults when absent.
+    let options: DocumentProcessingOptions
   }
 
   /// Parses the `jpegQuality` arg (0–100 int, like the presenter) from a

@@ -31,17 +31,18 @@ enum SupyStatusBarMode {
 class SupyTextStyleSpec {
   /// Creates a text-style spec. Defaults match Scanbot RTU UI.
   const SupyTextStyleSpec({
-    required this.text,
-    required this.color,
+    this.text,
+    this.color,
     this.fontSize = 16.0,
     this.fontWeight = FontWeight.w600,
   });
 
-  /// The string to render.
-  final String text;
+  /// The string to render. Resolves to the string bundle's `cancel` when null;
+  /// pass `''` to hide the element entirely.
+  final String? text;
 
-  /// Foreground color.
-  final Color color;
+  /// Foreground color. Resolves to the palette `onSurface` when null.
+  final Color? color;
 
   /// Font size in logical pixels.
   final double fontSize;
@@ -72,25 +73,26 @@ class SupyTopBarConfiguration {
   /// scrim shows through the camera), status bar hidden, "Cancel" label.
   const SupyTopBarConfiguration({
     this.mode = SupyTopBarMode.gradient,
-    this.backgroundColor = const Color(0xCC000000),
+    this.backgroundColor,
     this.statusBarMode = SupyStatusBarMode.hidden,
-    this.cancelButton = const SupyTextStyleSpec(
-      text: 'Cancel',
-      color: Color(0xFFFFFFFF),
-    ),
+    this.cancelButton = const SupyTextStyleSpec(),
   });
 
   /// Background fill mode.
   final SupyTopBarMode mode;
 
   /// Background color. With [SupyTopBarMode.gradient] this is the top color
-  /// (fades to transparent at the bottom of the bar).
-  final Color backgroundColor;
+  /// (fades to transparent at the bottom of the bar). Resolves to the palette
+  /// `surfaceLow` when null.
+  final Color? backgroundColor;
 
-  /// Status-bar policy while the scanner is on screen.
+  /// Status-bar policy while the scanner is on screen. The default
+  /// [SupyStatusBarMode.hidden] hides the system status bar for the lifetime
+  /// of the top bar and restores it on dispose (Scanbot RTU UI parity).
   final SupyStatusBarMode statusBarMode;
 
-  /// Cancel-button label + color. Hidden if [SupyTextStyleSpec.text] is empty.
+  /// Cancel-button label + color. Resolves to the string bundle's `cancel`
+  /// when [SupyTextStyleSpec.text] is null; hidden if it is empty.
   final SupyTextStyleSpec cancelButton;
 
   @override

@@ -45,6 +45,11 @@ enum SymbologyMapper {
     case "dataMatrix": return [.dataMatrix]
     case "aztec": return [.aztec]
     case "codabar": return [.codabar]
+    // Unsupported on the Vision path — these decode only via the native
+    // zxing-cpp core (`useNativeCore`). Returning [] drops them from the
+    // Vision symbology request. See docs/SYMBOLOGIES.md.
+    case "dataBar", "dataBarExpanded", "microQr", "rMQR", "maxiCode":
+      return []
     default: return []
     }
   }

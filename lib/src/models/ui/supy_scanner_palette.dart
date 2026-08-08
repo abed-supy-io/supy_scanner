@@ -52,6 +52,48 @@ class SupyScannerPalette {
       warning = const Color(0xFFFF4D4D),
       modalOverlay = const Color(0x99000000);
 
+  /// Supy-branded **dark** preset — the first-party Supy design-system look:
+  /// the Supy purple (`#6448C3`) accent over a dark, purple-tinted chrome.
+  /// Prefer this over [scanbotDark] for surfaces that should read as Supy
+  /// rather than as the Scanbot-parity default.
+  const SupyScannerPalette.supyDark()
+    : primary = const Color(0xFF6448C3),
+      primaryDisabled = const Color(0x806448C3),
+      onPrimary = const Color(0xFFFFFFFF),
+      secondary = const Color(0xFFB6A6F0),
+      secondaryDisabled = const Color(0x80B6A6F0),
+      onSecondary = const Color(0xFF1C1B2E),
+      surface = const Color(0xFF1C1B2E),
+      surfaceLow = const Color(0xCC0E0B1F),
+      surfaceHigh = const Color(0xFF2A2740),
+      onSurface = const Color(0xFFFFFFFF),
+      onSurfaceVariant = const Color(0xB3FFFFFF),
+      outline = const Color(0x66FFFFFF),
+      negative = const Color(0xFFFF3B30),
+      positive = const Color(0xFF34C759),
+      warning = const Color(0xFFFFC24B),
+      modalOverlay = const Color(0x99000000);
+
+  /// Supy-branded **light** preset — the Supy purple (`#6448C3`) accent over a
+  /// bright, purple-tinted chrome. The light-mode counterpart to [supyDark].
+  const SupyScannerPalette.supyLight()
+    : primary = const Color(0xFF6448C3),
+      primaryDisabled = const Color(0x806448C3),
+      onPrimary = const Color(0xFFFFFFFF),
+      secondary = const Color(0xFF4B3A9E),
+      secondaryDisabled = const Color(0x804B3A9E),
+      onSecondary = const Color(0xFFFFFFFF),
+      surface = const Color(0xFFFFFFFF),
+      surfaceLow = const Color(0xCCFFFFFF),
+      surfaceHigh = const Color(0xFFF3F1FB),
+      onSurface = const Color(0xFF1C1340),
+      onSurfaceVariant = const Color(0xB31C1340),
+      outline = const Color(0x661C1340),
+      negative = const Color(0xFFD32F2F),
+      positive = const Color(0xFF2E7D32),
+      warning = const Color(0xFFED6C02),
+      modalOverlay = const Color(0x66000000);
+
   /// Light-themed default — for hosts that want a brighter chrome over the
   /// camera preview (still uses a translucent scrim for legibility).
   const SupyScannerPalette.scanbotLight()

@@ -38,8 +38,8 @@ void main() {
       expect(cfg.expected, isEmpty);
       expect(cfg.initiallyCollapsed, isFalse);
       expect(cfg.allowUnexpected, isFalse);
-      expect(cfg.sheetTitle, 'Pick list');
-      expect(cfg.submitButtonText, 'Done');
+      expect(cfg.sheetTitle, isNull);
+      expect(cfg.submitButtonText, isNull);
     });
 
     test('value equality across expected list', () {

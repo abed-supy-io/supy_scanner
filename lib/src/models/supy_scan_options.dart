@@ -49,13 +49,18 @@ class SupyBarcodeScanOptions {
   };
 }
 
-/// Per-page image encoding for the document scanner. v1.1 / Sprint 7.
+/// Per-page image encoding for the document scanner. v1.1 / Sprint 7;
+/// `tiff` + `searchablePdf` added in v1.2 / Phase DC8.
 ///
 /// - [jpg] — default; matches v1.0 behaviour. Honours `jpegQuality`.
 /// - [png] — lossless. `jpegQuality` is ignored.
 /// - [pdf] — pages still persist individually (as JPG), AND the native side
 ///   assembles a single multi-page PDF whose URI is surfaced on
 ///   `SupyDocumentData.pdfUri`.
+/// - [tiff] — JPG pages + an assembled multi-page TIFF whose URI is surfaced
+///   on `SupyDocumentData.tiffUri`.
+/// - [searchablePdf] — like [pdf], but the assembled PDF carries an invisible,
+///   selectable OCR text layer. URI is surfaced on `SupyDocumentData.pdfUri`.
 enum SupyDocumentOutputFormat {
   /// JPEG-encoded pages. Default — preserves v1.0 behaviour.
   jpg,
@@ -65,6 +70,13 @@ enum SupyDocumentOutputFormat {
 
   /// JPG pages + an assembled multi-page PDF on `SupyDocumentData.pdfUri`.
   pdf,
+
+  /// JPG pages + an assembled multi-page TIFF on `SupyDocumentData.tiffUri`.
+  tiff,
+
+  /// JPG pages + a multi-page PDF with an invisible, selectable OCR text
+  /// layer on `SupyDocumentData.pdfUri`.
+  searchablePdf,
 }
 
 /// Capture intent for the document scanner. Drives a small bundle of preset
@@ -83,6 +95,135 @@ enum SupyDocumentScanIntent {
   /// (edge-clipping becomes blocking), bumps the per-page quality threshold,
   /// and defaults the output to a multi-page PDF.
   invoice,
+}
+
+/// Fine-grained control over the shared native document pipeline: detect →
+/// perspective-correct → crop → deskew → shadow/lighting flatten → background
+/// whitening → filter → denoise → sharpen → smart resize. Serialized under the
+/// `processing` key of the document scan args and consumed by both iOS capture
+/// paths (VisionKit still + embedded AVFoundation still).
+///
+/// Every field defaults to the paper-preserving "color" scan the plugin already
+/// produces, so attaching a default instance is behaviour-preserving. Leave
+/// [SupyDocumentScanOptions.processing] `null` (the default) to get exactly that
+/// pipeline with the enclosing [SupyDocumentScanOptions.filter]. [enhancement]
+/// and [quality] are `null` by default and fall back to the enclosing
+/// [SupyDocumentScanOptions.filter] / `jpegQuality`.
+@immutable
+class SupyDocumentProcessingOptions {
+  /// Creates document-processing options. Defaults reproduce the color scan.
+  const SupyDocumentProcessingOptions({
+    this.detectDocument = true,
+    this.perspectiveCorrection = true,
+    this.autoCrop = true,
+    this.cropMargin = 0.02,
+    this.deskew = true,
+    this.shadowRemoval = true,
+    this.backgroundWhitening = true,
+    this.denoise = true,
+    this.sharpen = true,
+    this.maxDimension = 2200,
+    this.enhancement,
+    this.quality,
+  });
+
+  /// Run document/corner detection when no preview seed quad is supplied.
+  final bool detectDocument;
+
+  /// Warp the detected quad to a rectangle (perspective correction).
+  final bool perspectiveCorrection;
+
+  /// Crop to the detected document, dropping finger / table / letterbox.
+  final bool autoCrop;
+
+  /// Fraction each corner is bled outward before the warp so the outermost
+  /// text/edge survives. Clamped to the image. `0.02` ≈ a 2% safety margin.
+  final double cropMargin;
+
+  /// Correct residual small-angle skew after cropping.
+  final bool deskew;
+
+  /// Flatten uneven lighting / shadow gradients.
+  final bool shadowRemoval;
+
+  /// Push near-neutral paper toward white while preserving colored stamps,
+  /// signatures and logos.
+  final bool backgroundWhitening;
+
+  /// Light edge-preserving denoise.
+  final bool denoise;
+
+  /// Halo-safe unsharp sharpening.
+  final bool sharpen;
+
+  /// Longest-edge cap for the exported image in pixels. `0` disables the cap.
+  /// `2200` ≈ 300 DPI on A4 — small files that stay OCR-legible.
+  final int maxDimension;
+
+  /// Output look. `null` (the default) falls back to the enclosing
+  /// [SupyDocumentScanOptions.filter].
+  final SupyDocumentFilter? enhancement;
+
+  /// JPEG quality (0–100) applied when encoding. `null` (the default) falls
+  /// back to the enclosing [SupyDocumentScanOptions.jpegQuality].
+  final int? quality;
+
+  /// Serializes to the nested `processing` argument shape.
+  Map<String, Object?> toWire() => {
+    'detectDocument': detectDocument,
+    'perspectiveCorrection': perspectiveCorrection,
+    'autoCrop': autoCrop,
+    'cropMargin': cropMargin,
+    'deskew': deskew,
+    'shadowRemoval': shadowRemoval,
+    'backgroundWhitening': backgroundWhitening,
+    'denoise': denoise,
+    'sharpen': sharpen,
+    'maxDimension': maxDimension,
+    if (enhancement != null) 'enhancement': enhancement!.wireName,
+    if (quality != null) 'quality': quality,
+  };
+
+  @override
+  bool operator ==(Object other) =>
+      other is SupyDocumentProcessingOptions &&
+      other.detectDocument == detectDocument &&
+      other.perspectiveCorrection == perspectiveCorrection &&
+      other.autoCrop == autoCrop &&
+      other.cropMargin == cropMargin &&
+      other.deskew == deskew &&
+      other.shadowRemoval == shadowRemoval &&
+      other.backgroundWhitening == backgroundWhitening &&
+      other.denoise == denoise &&
+      other.sharpen == sharpen &&
+      other.maxDimension == maxDimension &&
+      other.enhancement == enhancement &&
+      other.quality == quality;
+
+  @override
+  int get hashCode => Object.hash(
+    detectDocument,
+    perspectiveCorrection,
+    autoCrop,
+    cropMargin,
+    deskew,
+    shadowRemoval,
+    backgroundWhitening,
+    denoise,
+    sharpen,
+    maxDimension,
+    enhancement,
+    quality,
+  );
+
+  @override
+  String toString() =>
+      'SupyDocumentProcessingOptions(detectDocument: $detectDocument, '
+      'perspectiveCorrection: $perspectiveCorrection, autoCrop: $autoCrop, '
+      'cropMargin: $cropMargin, deskew: $deskew, shadowRemoval: $shadowRemoval, '
+      'backgroundWhitening: $backgroundWhitening, denoise: $denoise, '
+      'sharpen: $sharpen, maxDimension: $maxDimension, '
+      'enhancement: $enhancement, quality: $quality)';
 }
 
 /// Options for the document scanner flow.
@@ -104,6 +245,7 @@ class SupyDocumentScanOptions {
     this.filter = SupyDocumentFilter.color,
     this.minPageQuality = SupyDocumentPageQuality.poor,
     this.intent = SupyDocumentScanIntent.generic,
+    this.processing,
   });
 
   /// Maximum pages to capture. `0` means unlimited (matches Scanbot's
@@ -181,6 +323,14 @@ class SupyDocumentScanOptions {
   /// the precedence rule.
   final SupyDocumentScanIntent intent;
 
+  /// Fine-grained overrides for the shared native document pipeline. `null`
+  /// (the default) runs the full paper-preserving pipeline using [filter] and
+  /// [jpegQuality] — behaviour-preserving vs. v1.0. Supply an instance to tune
+  /// individual stages (e.g. B&W adaptive threshold, tighter crop, resolution
+  /// cap). Honoured by iOS; Android maps the equivalent stages onto its
+  /// native-core pipeline.
+  final SupyDocumentProcessingOptions? processing;
+
   /// Serializes to the channel argument shape.
   ///
   /// When [intent] is non-generic, the invoice preset is folded in on a
@@ -223,6 +373,7 @@ class SupyDocumentScanOptions {
         'enhanceMode': effectiveEnhanceMode.wireName,
       if (preferredBackend != null)
         'preferredBackend': preferredBackend!.wireName,
+      if (processing != null) 'processing': processing!.toWire(),
     };
   }
 }

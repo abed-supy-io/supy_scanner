@@ -1,9 +1,15 @@
 import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 
+import '../licensing/supy_scanner_license.dart';
+import '../models/barcode/supy_decode_image_options.dart';
+import '../models/ocr/supy_recognize_text_options.dart';
+import '../models/ocr/supy_recognized_text.dart';
+import '../models/supy_barcode.dart';
 import '../models/supy_batch_barcode_options.dart';
 import '../models/supy_batch_barcode_result.dart';
 import '../models/supy_document_data.dart';
+import '../models/supy_document_page.dart';
 import '../models/supy_scan_error.dart';
 import '../models/supy_scan_options.dart';
 
@@ -35,6 +41,7 @@ class SupyScannerChannel {
   Future<SupyDocumentData?> scanDocument(
     SupyDocumentScanOptions options,
   ) async {
+    SupyLicenseGate.ensureActivated();
     try {
       final result = await _methodChannel.invokeMapMethod<Object?, Object?>(
         'scanDocument',
@@ -42,6 +49,27 @@ class SupyScannerChannel {
       );
       if (result == null) return null;
       return SupyDocumentData.fromMap(result);
+    } on PlatformException catch (e) {
+      throw _wrap(e);
+    }
+  }
+
+  /// Opens the platform photo picker, runs on-device document edge-detection
+  /// + perspective rectification on the chosen image natively, and returns the
+  /// cropped page — or `null` if the user dismissed the picker.
+  ///
+  /// The whole flow (picker UI, detection, warp, persistence) is native; no
+  /// image bytes cross the channel and no new Flutter plugin dependency is
+  /// pulled in. Mirrors the branded capture path so an imported page is
+  /// interchangeable with a camera-captured one.
+  Future<SupyDocumentPage?> importDocumentImage() async {
+    SupyLicenseGate.ensureActivated();
+    try {
+      final result = await _methodChannel.invokeMapMethod<Object?, Object?>(
+        'importDocumentImage',
+      );
+      if (result == null) return null;
+      return SupyDocumentPage.fromMap(result);
     } on PlatformException catch (e) {
       throw _wrap(e);
     }
@@ -55,6 +83,7 @@ class SupyScannerChannel {
   Future<SupyBatchBarcodeResult?> scanBarcodesBatch(
     SupyBatchBarcodeScanOptions options,
   ) async {
+    SupyLicenseGate.ensureActivated();
     try {
       final result = await _methodChannel.invokeMapMethod<Object?, Object?>(
         'scanBarcodesBatch',
@@ -62,6 +91,56 @@ class SupyScannerChannel {
       );
       if (result == null) return null;
       return SupyBatchBarcodeResult.fromMap(result);
+    } on PlatformException catch (e) {
+      throw _wrap(e);
+    }
+  }
+
+  /// Runs a standalone OCR pass over the image at [options].imagePath and
+  /// returns the recognized block/line/element tree with normalized bounding
+  /// boxes.
+  ///
+  /// This is the foundation for the Dart-side MRZ/VIN/ID parsers — a single
+  /// native method, all domain interpretation happens in `lib/`.
+  Future<SupyRecognizedText> recognizeText(
+    SupyRecognizeTextOptions options,
+  ) async {
+    SupyLicenseGate.ensureActivated();
+    try {
+      final result = await _methodChannel.invokeMapMethod<Object?, Object?>(
+        'recognizeText',
+        options.toWire(),
+      );
+      if (result == null) {
+        throw const SupyScanError(
+          code: SupyScanErrorCode.unknown,
+          message: 'recognizeText returned null',
+        );
+      }
+      return SupyRecognizedText.fromMap(result);
+    } on PlatformException catch (e) {
+      throw _wrap(e);
+    }
+  }
+
+  /// Decodes every barcode in the still image at [options].imagePath and
+  /// returns them in native detection order.
+  ///
+  /// A one-shot, camera-less decode over a file already on disk — the
+  /// deterministic counterpart to the live [SupyBarcodeScannerView]. Returns an
+  /// empty list when the image contains no barcode of a requested format.
+  Future<List<SupyBarcode>> decodeImage(SupyDecodeImageOptions options) async {
+    SupyLicenseGate.ensureActivated();
+    try {
+      final result = await _methodChannel.invokeListMethod<Object?>(
+        'decodeImage',
+        options.toWire(),
+      );
+      if (result == null) return const <SupyBarcode>[];
+      return result
+          .whereType<Map<Object?, Object?>>()
+          .map(SupyBarcode.fromMap)
+          .toList(growable: false);
     } on PlatformException catch (e) {
       throw _wrap(e);
     }

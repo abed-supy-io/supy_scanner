@@ -8,6 +8,7 @@ import '../models/ui/supy_action_bar_configuration.dart';
 import '../models/ui/supy_ar_overlay_configuration.dart';
 import '../models/ui/supy_scan_use_case.dart';
 import '../models/ui/supy_scanner_palette.dart';
+import '../models/ui/supy_scanner_strings.dart';
 import '../models/ui/supy_top_bar_configuration.dart';
 import '../models/ui/supy_user_guidance_configuration.dart';
 import '../models/ui/supy_view_finder_configuration.dart';
@@ -43,7 +44,8 @@ class SupyBarcodeScannerScreen extends StatefulWidget {
     required this.useCase,
     super.key,
     this.scanOptions = const SupyBarcodeScanOptions(),
-    this.palette = const SupyScannerPalette.scanbotDark(),
+    this.palette = const SupyScannerPalette.supyDark(),
+    this.locale,
     this.topBar = const SupyTopBarConfiguration(),
     this.viewFinder = const SupyViewFinderConfiguration(),
     this.userGuidance = const SupyUserGuidanceConfiguration(),
@@ -67,6 +69,12 @@ class SupyBarcodeScannerScreen extends StatefulWidget {
   /// passed through to children that already wire their own configs — kept
   /// here so callers can theme the whole screen in one place.
   final SupyScannerPalette palette;
+
+  /// BCP-47 language code (`'en'`, `'ar'`, …) selecting the built-in string
+  /// bundle and text direction for all chrome the configs leave unset. When
+  /// null, falls back to the ambient [Localizations] locale, then English.
+  /// Additive — Scanbot call sites that never passed a locale keep English.
+  final String? locale;
 
   /// Top-bar (cancel button + scrim) configuration.
   final SupyTopBarConfiguration topBar;
@@ -176,7 +184,7 @@ class _SupyBarcodeScannerScreenState extends State<SupyBarcodeScannerScreen> {
     widget.onSingleScan?.call(b);
   }
 
-  Widget? _buildSheet() {
+  Widget? _buildSheet(SupyScannerStrings strings) {
     switch (widget.useCase) {
       case SupySingleScanUseCase(:final config):
         final pending = _pendingSingle;
@@ -184,6 +192,8 @@ class _SupyBarcodeScannerScreenState extends State<SupyBarcodeScannerScreen> {
         return SupySingleScanConfirmationSheet(
           barcode: pending,
           config: config,
+          palette: widget.palette,
+          strings: strings,
           onConfirm: _confirmSingle,
           onRetry: _retrySingle,
         );
@@ -191,6 +201,8 @@ class _SupyBarcodeScannerScreenState extends State<SupyBarcodeScannerScreen> {
         return SupyMultipleScanSheet(
           accumulator: _multiAcc!,
           config: config,
+          palette: widget.palette,
+          strings: strings,
           onSubmit: () => widget.onMultipleScan?.call(_multiAcc!.items),
           onClear: _multiAcc!.clear,
         );
@@ -198,6 +210,8 @@ class _SupyBarcodeScannerScreenState extends State<SupyBarcodeScannerScreen> {
         return SupyFindAndPickSheet(
           accumulator: _findAcc!,
           config: config,
+          palette: widget.palette,
+          strings: strings,
           onSubmit: () => widget.onFindAndPick?.call(_findAcc!.rows),
           onClear: _findAcc!.clear,
         );
@@ -206,64 +220,86 @@ class _SupyBarcodeScannerScreenState extends State<SupyBarcodeScannerScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final sheet = _buildSheet();
-    return Scaffold(
-      backgroundColor: widget.palette.surface,
-      body: Stack(
-        fit: StackFit.expand,
-        children: [
-          SupyBarcodeScannerView(
-            options: widget.scanOptions,
-            controller: _controller,
-            onBarcodeDetected: _onDetected,
-            onError: (e) => widget.onError?.call(e),
-            showFinder: false,
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: CustomPaint(
-                painter: SupyFinderPainter(config: widget.viewFinder),
+    final strings = SupyScannerStrings.of(
+      widget.locale ?? Localizations.maybeLocaleOf(context)?.languageCode,
+    );
+    final sheet = _buildSheet(strings);
+    return Directionality(
+      textDirection: strings.textDirection,
+      child: Scaffold(
+        backgroundColor: widget.palette.surface,
+        body: Stack(
+          fit: StackFit.expand,
+          children: [
+            SupyBarcodeScannerView(
+              options: widget.scanOptions,
+              controller: _controller,
+              onBarcodeDetected: _onDetected,
+              onError: (e) => widget.onError?.call(e),
+              showFinder: false,
+              palette: widget.palette,
+            ),
+            Positioned.fill(
+              child: IgnorePointer(
+                child: CustomPaint(
+                  painter: SupyFinderPainter(
+                    config: widget.viewFinder,
+                    palette: widget.palette,
+                  ),
+                ),
               ),
             ),
-          ),
-          Positioned.fill(
-            child: IgnorePointer(
-              child: SupyArOverlay(barcodes: _latest, config: widget.arOverlay),
-            ),
-          ),
-          Positioned(
-            top: 0,
-            left: 0,
-            right: 0,
-            child: SupyTopBar(
-              config: widget.topBar,
-              onCancel: () => widget.onCancel?.call(),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: sheet == null ? 120 : 220,
-            child: Center(
-              child: SupyUserGuidanceCard(config: widget.userGuidance),
-            ),
-          ),
-          Positioned(
-            left: 0,
-            right: 0,
-            bottom: 0,
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                SupyActionBar(
-                  config: widget.actionBar,
-                  controller: _controller,
+            Positioned.fill(
+              child: IgnorePointer(
+                child: SupyArOverlay(
+                  barcodes: _latest,
+                  config: widget.arOverlay,
+                  palette: widget.palette,
                 ),
-                if (sheet != null) sheet,
-              ],
+              ),
             ),
-          ),
-        ],
+            Positioned(
+              top: 0,
+              left: 0,
+              right: 0,
+              child: SupyTopBar(
+                config: widget.topBar,
+                palette: widget.palette,
+                strings: strings,
+                onCancel: () => widget.onCancel?.call(),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: sheet == null ? 120 : 220,
+              child: Center(
+                child: SupyUserGuidanceCard(
+                  config: widget.userGuidance,
+                  palette: widget.palette,
+                  strings: strings,
+                ),
+              ),
+            ),
+            Positioned(
+              left: 0,
+              right: 0,
+              bottom: 0,
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  SupyActionBar(
+                    config: widget.actionBar,
+                    controller: _controller,
+                    palette: widget.palette,
+                    strings: strings,
+                  ),
+                  if (sheet != null) sheet,
+                ],
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

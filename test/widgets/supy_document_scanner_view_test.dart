@@ -63,7 +63,10 @@ void main() {
     ) async {
       await _onDesktop(() async {
         await tester.pumpWidget(host(const SupyDocumentScannerView()));
-        expect(find.textContaining('not yet supported'), findsOneWidget);
+        expect(
+          find.text(const SupyScannerStrings.en().unsupportedPlatform),
+          findsOneWidget,
+        );
       });
     });
 

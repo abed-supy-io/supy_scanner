@@ -42,8 +42,10 @@ import io.supy.scanner.nativecore.SupyNativeCore
  * runs on a background executor; results marshalled to main only at the
  * EventSink boundary.
  *
- * Edge-detection (the document quad itself) is not wired on Android in this
- * spike — see `DocumentFrameAnalyzer` for the gap and the followup plan.
+ * Edge-detection (the document quad itself) IS wired on Android:
+ * `DocumentFrameAnalyzer` runs the JNI `SupyNativeCore.detectQuad` per frame,
+ * emits the quad in `frame_metrics`, and retains the last smoothed quad so
+ * `captureAndRectify` can warp-rectify the still (parity with iOS Vision).
  */
 class SupyDocumentScannerView(
     private val context: Context,
@@ -279,6 +281,14 @@ class SupyDocumentScannerView(
                     result.error("captureFailed", e.message ?: "could not create temp file", null)
                     return
                 }
+                // DPX: honor an optional nested `processing` map on this call so
+                // the embedded rectify path applies the same resize/enhance/filter
+                // as `scanDocument`. Absent → the full-pipeline defaults.
+                @Suppress("UNCHECKED_CAST")
+                val options = DocumentProcessingOptions.parse(
+                    call.arguments as? Map<String, Any?>,
+                    fallbackQuality = RECTIFIED_JPEG_QUALITY,
+                )
                 isCapturing = true
                 val output = ImageCapture.OutputFileOptions.Builder(file).build()
                 controller.takePicture(
@@ -288,7 +298,7 @@ class SupyDocumentScannerView(
                         override fun onImageSaved(outputResults: ImageCapture.OutputFileResults) {
                             // Decode + warp + enhance + encode is heavy — bounce
                             // off the main thread; result is posted back to main.
-                            rectifyExecutor.execute { rectifyCapturedStill(file, quad, result) }
+                            rectifyExecutor.execute { rectifyCapturedStill(file, quad, options, result) }
                         }
                         override fun onError(exc: ImageCaptureException) {
                             isCapturing = false
@@ -314,6 +324,7 @@ class SupyDocumentScannerView(
     private fun rectifyCapturedStill(
         srcFile: File,
         quad: FloatArray,
+        options: DocumentProcessingOptions,
         result: MethodChannel.Result,
     ) {
         fun fail(code: String, message: String) {
@@ -377,13 +388,21 @@ class SupyDocumentScannerView(
             srcCorners[i * 2 + 1] = quad[i * 2 + 1] * height
         }
 
+        // Cap the warp output at the smaller of the rectify ceiling and the
+        // caller's `maxDimension` so we don't materialize a page larger than the
+        // export target; `reencodeBitmap`'s resize then handles any remainder.
+        val warpCap = if (options.maxDimension > 0) {
+            minOf(MAX_RECTIFIED_LONG_SIDE, options.maxDimension)
+        } else {
+            MAX_RECTIFIED_LONG_SIDE
+        }
         val warp = SupyNativeCore.warpPerspective(
             rgba = srcBuf,
             width = width,
             height = height,
             rowStride = rowStride,
             srcCorners = srcCorners,
-            maxLongSide = MAX_RECTIFIED_LONG_SIDE,
+            maxLongSide = warpCap,
         )
         if (warp == null) {
             fail("captureUnsupported", "perspective warp failed or quad degenerate")
@@ -404,9 +423,11 @@ class SupyDocumentScannerView(
         val page = PageReencoder.reencodeBitmap(
             context = context,
             bitmap = warped, // recycled inside reencodeBitmap
-            quality = RECTIFIED_JPEG_QUALITY,
+            quality = options.quality,
             format = PageReencoder.Format.JPG,
-            enhanceMode = PageReencoder.EnhanceMode.BALANCED,
+            enhanceMode = options.enhanceMode,
+            maxDimension = options.maxDimension,
+            filter = options.filter,
         )
         srcFile.delete()
         isCapturing = false

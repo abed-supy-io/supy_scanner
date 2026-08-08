@@ -44,6 +44,7 @@ class SupyDocumentMetricsSmoother {
   double? _centerOffsetY;
   List<double>? _perCornerStability;
   double? _liveQualityScore;
+  double? _sourceAspectRatio;
   List<Offset>? _quad;
   bool _lastClipsEdge = false;
 
@@ -80,6 +81,7 @@ class SupyDocumentMetricsSmoother {
       centerOffsetY: _centerOffsetY ?? 0.0,
       perCornerStability: _perCornerStability ?? const <double>[],
       liveQualityScore: _liveQualityScore,
+      sourceAspectRatio: _sourceAspectRatio,
     );
   }
 
@@ -111,6 +113,10 @@ class SupyDocumentMetricsSmoother {
     // smooths inputs on the C++ side; double-smoothing would just lag the
     // surfaced score.
     _liveQualityScore = sample.liveQualityScore ?? _liveQualityScore;
+    // Source aspect is a per-session constant (camera format doesn't change
+    // mid-stream). Hold the latest non-null so an occasional frame that omits
+    // it doesn't drop the overlay's crop correction back to identity.
+    _sourceAspectRatio = sample.sourceAspectRatio ?? _sourceAspectRatio;
     _quad = _smoothQuad(_quad, sample.quad);
     return current;
   }
@@ -130,6 +136,7 @@ class SupyDocumentMetricsSmoother {
     _centerOffsetY = null;
     _perCornerStability = null;
     _liveQualityScore = null;
+    _sourceAspectRatio = null;
     _quad = null;
     _lastClipsEdge = false;
   }

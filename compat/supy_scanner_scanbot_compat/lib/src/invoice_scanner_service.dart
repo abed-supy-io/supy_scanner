@@ -20,11 +20,9 @@ class InvoiceScannerService implements IInvoiceScannerService {
   /// a fake `SupyScannerChannel`; production callers should use the no-arg
   /// form, mirroring the retailer's existing `InvoiceScannerService()` shape.
   const InvoiceScannerService({SupyScannerChannel? channel})
-      : _channel = channel;
+    : _channel = channel;
 
   final SupyScannerChannel? _channel;
-
-  SupyScannerChannel get _ch => _channel ?? SupyScannerChannel.instance;
 
   @override
   Future<List<File>> scanWithCamera(BuildContext context) async {
@@ -32,9 +30,22 @@ class InvoiceScannerService implements IInvoiceScannerService {
     final locale = languageCode == 'ar' ? 'ar' : 'en';
 
     try {
-      final result = await _ch.scanDocument(
-        SupyDocumentScanOptions(locale: locale),
-      );
+      // Production (no injected channel) routes through the branded facade so
+      // the retailer gets the Supy-branded embedded document session on mobile,
+      // with the native scanner kept as the internal fallback (web/desktop,
+      // invoice intent, capability failure). See `docs/MIGRATION.md`.
+      //
+      // A test-injected [channel] keeps the direct native call so mocked
+      // path-selection stays deterministic without a live PlatformView.
+      final result =
+          _channel != null
+              ? await _channel.scanDocument(
+                SupyDocumentScanOptions(locale: locale),
+              )
+              : await SupyDocumentScanner.startMultiPage(
+                context,
+                locale: locale,
+              );
       if (result == null) return const <File>[];
       return _pagesToFiles(result.pages);
     } on SupyScanError {

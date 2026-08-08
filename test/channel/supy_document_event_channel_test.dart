@@ -31,6 +31,53 @@ void main() {
       expect(m.clipsEdge, isFalse);
     });
 
+    // D3-1 contract lock: a fully-populated wire frame must round-trip every
+    // documented key in the docs/ARCHITECTURE.md frame_metrics table. If a key
+    // is added/renamed on the wire, this test must change in the same PR.
+    test('frame_metrics decodes the full documented key set', () {
+      final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
+        'type': 'frame_metrics',
+        'quad': <Map<Object?, Object?>>[
+          <Object?, Object?>{'x': 0.1, 'y': 0.1},
+          <Object?, Object?>{'x': 0.9, 'y': 0.1},
+          <Object?, Object?>{'x': 0.9, 'y': 0.9},
+          <Object?, Object?>{'x': 0.1, 'y': 0.9},
+        ],
+        'coverageRatio': 0.64,
+        'tiltDegrees': 3.5,
+        'meanLuma': 142.0,
+        'blurScore': 220.0,
+        'clipsEdge': true,
+        'quadStability': 0.8,
+        'interiorVariance': 42.5,
+        'glareRatio': 0.12,
+        'cornerVelocity': 0.003,
+        'centerOffsetX': -0.25,
+        'centerOffsetY': 0.4,
+        'perCornerStability': <double>[0.9, 0.8, 0.95, 0.7],
+        'liveQualityScore': 0.77,
+        'state': 7, // ready
+      });
+
+      final e = event as SupyDocumentFrameMetricsEvent;
+      final m = e.metrics;
+      expect(m.quad, hasLength(4));
+      expect(m.coverageRatio, 0.64);
+      expect(m.tiltDegrees, 3.5);
+      expect(m.meanLuma, 142.0);
+      expect(m.blurScore, 220.0);
+      expect(m.clipsEdge, isTrue);
+      expect(m.quadStability, 0.8);
+      expect(m.interiorVariance, 42.5);
+      expect(m.glareRatio, 0.12);
+      expect(m.cornerVelocity, 0.003);
+      expect(m.centerOffsetX, -0.25);
+      expect(m.centerOffsetY, 0.4);
+      expect(m.perCornerStability, <double>[0.9, 0.8, 0.95, 0.7]);
+      expect(m.liveQualityScore, 0.77);
+      expect(e.nativeState, SupyDocumentFrameState.ready);
+    });
+
     test('frame_metrics with missing fields uses defaults', () {
       final event = SupyDocumentEvent.fromMap(const <Object?, Object?>{
         'type': 'frame_metrics',

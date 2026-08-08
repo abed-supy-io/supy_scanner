@@ -6,11 +6,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../channel/supy_document_event_channel.dart';
+import '../document/supy_auto_capture_hold_gate.dart';
+import '../document/supy_document_metrics_smoother.dart';
 import '../document/supy_document_state_machine.dart';
 import '../models/supy_document_frame_metrics.dart';
 import '../models/supy_document_frame_state.dart';
 import '../models/supy_scan_error.dart';
 import '../models/ui/supy_document_guidance_configuration.dart';
+import '../models/ui/supy_scanner_palette.dart';
+import '../models/ui/supy_scanner_strings.dart';
 import 'supy_document_scanner_controller.dart';
 
 /// View-type identifier registered by the native PlatformView factories.
@@ -144,15 +148,26 @@ class SupyDocumentScannerView extends StatefulWidget {
     this.controller,
     this.onGuidance,
     this.onReady,
+    this.onCapture,
     this.onError,
     this.onPreviewStarted,
     this.showOverlay = true,
     this.header,
     this.footer,
+    this.palette = const SupyScannerPalette.supyDark(),
+    this.strings = const SupyScannerStrings.en(),
   });
 
   /// Thresholds + palette + hint copy.
   final SupyDocumentGuidanceConfiguration guidance;
+
+  /// String bundle used to resolve guidance copy the [guidance] leaves null
+  /// and the unsupported-platform placeholder text.
+  final SupyScannerStrings strings;
+
+  /// Palette used to resolve the capture flash, hint-card chrome, and
+  /// unsupported-platform placeholder colors.
+  final SupyScannerPalette palette;
 
   /// Optional controller for `pause`/`resume`/`setTorch`/`captureAndRectify`.
   final SupyDocumentScannerController? controller;
@@ -162,6 +177,13 @@ class SupyDocumentScannerView extends StatefulWidget {
 
   /// Fires the first time the state machine reports `ready`.
   final ValueChanged<SupyDocumentGuidanceFrame>? onReady;
+
+  /// Fires after an auto-capture (countdown-completed) still is rectified,
+  /// surfacing the [SupyDocumentCapture] to the host so it can push the page
+  /// onto a multi-page review stack. When set, the host owns the post-capture
+  /// lifecycle and should call `controller.clearCapturePhase()` once it has
+  /// acknowledged the page; when `null`, the view re-arms itself.
+  final ValueChanged<SupyDocumentCapture>? onCapture;
 
   /// Fires when the native side reports an error.
   final ValueChanged<SupyScanError>? onError;
@@ -189,13 +211,37 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
     configuration: widget.guidance,
   );
 
+  // Render-smoother for the native-classified path (iOS C++ GuidanceClassifier).
+  // Native ships a resolved `state` but a raw, per-frame quad + scalars, so the
+  // painter would jitter without this. The Android path smooths inside the FSM
+  // instead; both use the same alpha so the overlay feels identical. Kept in
+  // sync with `guidance.smoothingAlpha` in [didUpdateWidget].
+  late SupyDocumentMetricsSmoother _renderSmoother =
+      SupyDocumentMetricsSmoother(alpha: widget.guidance.smoothingAlpha);
+
   StreamSubscription<SupyDocumentEvent>? _eventSub;
   SupyDocumentGuidanceFrame _frame = const SupyDocumentGuidanceFrame(
     state: SupyDocumentFrameState.noDocument,
     metrics: SupyDocumentFrameMetrics(),
     framesAtState: 0,
   );
-  bool _readyAnnounced = false;
+  // Debounces the `ready` acquisition that drives the lock cue, `onReady`, and
+  // the auto-capture countdown. A one- or two-frame flicker out of `ready` (a
+  // momentary hand-shake/hold-steady demotion — which the FSM applies
+  // immediately, with no dwell protection) rides through instead of tearing
+  // down and restarting the countdown sweep. Both platforms feed the same
+  // per-frame `ready` boolean, so the hold behaves identically on iOS/Android.
+  final SupyAutoCaptureHoldGate _autoCaptureGate = SupyAutoCaptureHoldGate();
+
+  // Guidance colors resolve to palette tokens when the config leaves them null.
+  Color get _readyColor =>
+      widget.guidance.readyColor ?? widget.palette.positive;
+  Color get _warningColor =>
+      widget.guidance.warningColor ?? widget.palette.warning;
+  Color get _notReadyColor =>
+      widget.guidance.notReadyColor ?? widget.palette.negative;
+  Color get _scrimColor =>
+      widget.guidance.scrimColor ?? widget.palette.modalOverlay;
 
   // Current recenter direction while `_frame.state == offCenter`, else null.
   // Derived from the native centroid offset by [_resolveNudge].
@@ -203,6 +249,12 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
 
   // Reticle pulse animation (1.2 s, repeating)
   late final AnimationController _pulseController;
+
+  // One-shot success flash on the lock (`ready`) transition: the detected quad
+  // outline flashes at `readyColor` and decays to nothing. Driven off the
+  // Dart-observed `ready` transition so timing is identical on iOS and Android.
+  late final AnimationController _lockFlashController;
+  static const Duration _lockFlashDuration = Duration(milliseconds: 280);
 
   // Countdown ring state
   bool _countdownActive = false;
@@ -220,6 +272,10 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
       duration: const Duration(milliseconds: 1200),
     );
     unawaited(_pulseController.repeat(reverse: true));
+    _lockFlashController = AnimationController(
+      vsync: this,
+      duration: _lockFlashDuration,
+    );
     widget.controller?.addListener(_onControllerChanged);
   }
 
@@ -228,6 +284,11 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
     super.didUpdateWidget(oldWidget);
     if (oldWidget.guidance != widget.guidance) {
       _stateMachine.configuration = widget.guidance;
+      if (oldWidget.guidance.smoothingAlpha != widget.guidance.smoothingAlpha) {
+        _renderSmoother = SupyDocumentMetricsSmoother(
+          alpha: widget.guidance.smoothingAlpha,
+        );
+      }
     }
     if (oldWidget.controller != widget.controller) {
       oldWidget.controller?.removeListener(_onControllerChanged);
@@ -238,6 +299,7 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
   @override
   void dispose() {
     _pulseController.dispose();
+    _lockFlashController.dispose();
     unawaited(_eventSub?.cancel());
     widget.controller?.removeListener(_onControllerChanged);
     widget.controller?.detach();
@@ -269,9 +331,12 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
         if (nativeState != null) {
           final framesAtState =
               nativeState == _frame.state ? _frame.framesAtState + 1 : 1;
+          // Native emits a resolved `state` but a raw, per-frame quad + scalars.
+          // Smooth them for rendering so the overlay is stable, matching the
+          // Android path (which smooths inside the FSM); trust the native state.
           next = SupyDocumentGuidanceFrame(
             state: nativeState,
-            metrics: metrics,
+            metrics: _renderSmoother.add(metrics),
             framesAtState: framesAtState,
           );
         } else {
@@ -281,15 +346,36 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
         // on Android) — derive only the directional arrow here from the
         // native-computed centroid offset; never rewrite the state in Dart.
         _resolveNudge(next);
+        if (kDebugMode) {
+          // Lock-gate telemetry: when a document "never locks", this shows
+          // which gate is holding it back. Fires on both platforms (Android
+          // FSM + iOS native-classified) and compiles out of release builds.
+          final m = next.metrics;
+          debugPrint(
+            '[supy_scanner/doc] state=${next.state.name} '
+            'frames=${next.framesAtState} hasDoc=${m.hasDocument} '
+            'cover=${m.coverageRatio.toStringAsFixed(2)} '
+            'tilt=${m.tiltDegrees.toStringAsFixed(1)} '
+            'luma=${m.meanLuma.toStringAsFixed(0)} '
+            'blur=${m.blurScore.toStringAsFixed(0)} '
+            'stab=${m.quadStability.toStringAsFixed(2)} '
+            'iVar=${m.interiorVariance.toStringAsFixed(1)} '
+            'glare=${m.glareRatio.toStringAsFixed(2)} '
+            'vel=${m.cornerVelocity.toStringAsFixed(3)}',
+          );
+        }
         setState(() => _frame = next);
         widget.onGuidance?.call(next);
-        if (next.state == SupyDocumentFrameState.ready && !_readyAnnounced) {
-          _readyAnnounced = true;
-          widget.onReady?.call(next);
-          _maybeStartCountdown();
-        } else if (next.state != SupyDocumentFrameState.ready) {
-          _readyAnnounced = false;
-          _cancelCountdown();
+        final isReady = next.state == SupyDocumentFrameState.ready;
+        switch (_autoCaptureGate.update(isReady: isReady)) {
+          case SupyAutoCaptureHoldEdge.acquired:
+            _triggerLockCue();
+            widget.onReady?.call(next);
+            _maybeStartCountdown();
+          case SupyAutoCaptureHoldEdge.lost:
+            _cancelCountdown();
+          case SupyAutoCaptureHoldEdge.none:
+            break;
         }
       case SupyDocumentPreviewStartedEvent(:final flashAvailable):
         widget.onPreviewStarted?.call(flashAvailable);
@@ -345,13 +431,14 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
     setState(() => _countdownActive = false);
     final ctrl = widget.controller;
     if (ctrl == null) return;
+    SupyDocumentCapture capture;
     try {
       try {
-        await ctrl.captureAndRectify();
+        capture = await ctrl.captureAndRectify();
       } on StateError catch (e) {
         if (e.message.startsWith('captureUnsupported') &&
             widget.guidance.allowUnrectifiedFallback) {
-          await ctrl.captureFullFrame();
+          capture = await ctrl.captureFullFrame();
         } else {
           rethrow;
         }
@@ -371,7 +458,26 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
       return;
     }
     if (!mounted) return;
+    ctrl.setCapturePhase(SupyDocumentCapturePhase.captured);
+    if (widget.onCapture != null) {
+      // Host now owns the lifecycle: it pushes the page and clears the phase.
+      widget.onCapture!(capture);
+    } else {
+      // No host to acknowledge the capture — re-arm ourselves so a standalone
+      // view keeps working exactly as before this callback existed.
+      ctrl.clearCapturePhase();
+    }
     _triggerFlash();
+  }
+
+  /// Success cue at the lock (`ready`) transition: a crisp haptic tick plus a
+  /// one-shot flash of the detected quad outline. Fires on the Dart-observed
+  /// transition into `ready`, which both platforms reach identically, so the
+  /// haptic and the flash have the same timing on iOS and Android.
+  void _triggerLockCue() {
+    unawaited(HapticFeedback.selectionClick());
+    // Snap to full intensity, then decay to 0 over [_lockFlashDuration].
+    unawaited(_lockFlashController.reverse(from: 1.0));
   }
 
   void _triggerFlash() {
@@ -411,7 +517,7 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
                   child: SupyDocumentCountdownRing(
                     key: _countdownKey,
                     duration: widget.guidance.autoCaptureDelay,
-                    color: widget.guidance.readyColor,
+                    color: _readyColor,
                     onComplete: _onCountdownComplete,
                   ),
                 ),
@@ -425,7 +531,7 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
               child: AnimatedOpacity(
                 opacity: _flashOpacity,
                 duration: const Duration(milliseconds: 80),
-                child: const ColoredBox(color: Colors.white),
+                child: ColoredBox(color: widget.palette.onSurface),
               ),
             ),
           ),
@@ -441,7 +547,7 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
     return Positioned.fill(
       child: IgnorePointer(
         child: AnimatedBuilder(
-          animation: _pulseController,
+          animation: Listenable.merge([_pulseController, _lockFlashController]),
           builder: (context, _) {
             // Bracket color ramp by state
             final state = _effectiveState;
@@ -450,11 +556,12 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
             return CustomPaint(
               painter: _DocumentGuidancePainter(
                 frame: _frame,
-                scrimColor: widget.guidance.scrimColor,
+                scrimColor: _scrimColor,
                 bracketColor: bracketColor,
                 pulseValue: _pulseController.value,
-                warningColor: widget.guidance.warningColor,
-                readyColor: widget.guidance.readyColor,
+                lockFlash: _lockFlashController.value,
+                warningColor: _warningColor,
+                readyColor: _readyColor,
               ),
             );
           },
@@ -468,15 +575,11 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
       case SupyDocumentFrameState.ready:
       case SupyDocumentFrameState.capturing:
       case SupyDocumentFrameState.captured:
-        return widget.guidance.readyColor;
+        return _readyColor;
       case SupyDocumentFrameState.holdSteady:
       case SupyDocumentFrameState.offCenter:
         // Amber midpoint — framing has cleared, just settling / recentering.
-        return Color.lerp(
-          widget.guidance.warningColor,
-          widget.guidance.readyColor,
-          0.5,
-        )!;
+        return Color.lerp(_warningColor, _readyColor, 0.5)!;
       case SupyDocumentFrameState.noDocument:
       case SupyDocumentFrameState.tooDark:
       case SupyDocumentFrameState.tooClose:
@@ -487,18 +590,33 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
       case SupyDocumentFrameState.occluded:
       case SupyDocumentFrameState.handShake:
       case SupyDocumentFrameState.edgeClipped:
-        return widget.guidance.warningColor;
+        return _warningColor;
     }
+  }
+
+  // Mirrors [SupyDocumentGuidanceConfiguration.colorFor] but resolves the
+  // nullable config field against the palette (ready → positive, else negative).
+  Color _accentColorForState(SupyDocumentFrameState state) {
+    const readyStates = {
+      SupyDocumentFrameState.ready,
+      SupyDocumentFrameState.capturing,
+      SupyDocumentFrameState.captured,
+    };
+    return readyStates.contains(state) ? _readyColor : _notReadyColor;
   }
 
   Widget _buildHintCard() {
     final state = _effectiveState;
+    // Config hints win when set; otherwise fall back to the ambient-locale
+    // bundle so guidance copy is localized without forcing callers to supply
+    // an explicit hint set.
+    final hints = widget.guidance.hints ?? widget.strings.documentHints;
     // For `offCenter` prefer the resolved directional copy over the generic
     // "Center the document" so the user knows which way to move.
     final text =
         state == SupyDocumentFrameState.offCenter
-            ? widget.guidance.hints.nudgeText(_nudge)
-            : widget.guidance.hintFor(state);
+            ? hints.nudgeText(_nudge)
+            : hints.textFor(state);
     return Positioned(
       left: 16,
       right: 16,
@@ -507,7 +625,10 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
         child: _HintCard(
           text: text,
           icon: _iconForState(state, _nudge),
-          accentColor: widget.guidance.colorFor(state),
+          accentColor: _accentColorForState(state),
+          backgroundColor: widget.palette.surfaceLow,
+          shadowColor: widget.palette.outline,
+          textColor: widget.palette.onSurface,
         ),
       ),
     );
@@ -590,7 +711,10 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
       case TargetPlatform.linux:
       case TargetPlatform.macOS:
       case TargetPlatform.windows:
-        return const _UnsupportedPlatformPlaceholder();
+        return _UnsupportedPlatformPlaceholder(
+          palette: widget.palette,
+          message: widget.strings.unsupportedPlatform,
+        );
     }
   }
 }
@@ -598,6 +722,27 @@ class _SupyDocumentScannerViewState extends State<SupyDocumentScannerView>
 // ---------------------------------------------------------------------------
 // Guidance painter
 // ---------------------------------------------------------------------------
+
+/// Builds the internal document-guidance painter for tests; the painter type
+/// is library-private, so this is the only sanctioned construction seam.
+@visibleForTesting
+CustomPainter makeDocumentGuidancePainter({
+  required SupyDocumentGuidanceFrame frame,
+  required Color scrimColor,
+  required Color bracketColor,
+  required double pulseValue,
+  required Color warningColor,
+  required Color readyColor,
+  double lockFlash = 0.0,
+}) => _DocumentGuidancePainter(
+  frame: frame,
+  scrimColor: scrimColor,
+  bracketColor: bracketColor,
+  pulseValue: pulseValue,
+  warningColor: warningColor,
+  readyColor: readyColor,
+  lockFlash: lockFlash,
+);
 
 class _DocumentGuidancePainter extends CustomPainter {
   _DocumentGuidancePainter({
@@ -607,6 +752,7 @@ class _DocumentGuidancePainter extends CustomPainter {
     required this.pulseValue,
     required this.warningColor,
     required this.readyColor,
+    this.lockFlash = 0.0,
   });
 
   final SupyDocumentGuidanceFrame frame;
@@ -615,6 +761,9 @@ class _DocumentGuidancePainter extends CustomPainter {
   final double pulseValue; // 0..1 from the pulse AnimationController
   final Color warningColor;
   final Color readyColor;
+
+  // 1→0 one-shot lock flash; 0 when idle. Draws a decaying full-quad outline.
+  final double lockFlash;
 
   static const double _bracketLen = 22.0;
   static const double _strokeWidth = 4.0;
@@ -629,9 +778,8 @@ class _DocumentGuidancePainter extends CustomPainter {
       return;
     }
 
-    final points = quad
-        .map((p) => Offset(p.dx * size.width, p.dy * size.height))
-        .toList(growable: false);
+    final mapPoint = _coverMapper(size, frame.metrics.sourceAspectRatio);
+    final points = quad.map(mapPoint).toList(growable: false);
 
     final quadPath = Path()..moveTo(points[0].dx, points[0].dy);
     for (var i = 1; i < points.length; i++) {
@@ -646,6 +794,61 @@ class _DocumentGuidancePainter extends CustomPainter {
 
     // Four corner brackets only — no full outline
     _paintCornerBrackets(canvas, points);
+
+    // One-shot success flash: the full quad outline snaps on at `readyColor`
+    // on lock and fades as [lockFlash] decays 1→0.
+    if (lockFlash > 0.0) {
+      _paintLockFlash(canvas, quadPath);
+    }
+  }
+
+  /// Builds a normalized-quad → view-pixel mapper that reproduces the native
+  /// preview's `BoxFit.cover` crop.
+  ///
+  /// The native preview layer fills the platform view, scaling the camera frame
+  /// up until it covers the whole view and letting the overflow spill past the
+  /// edges. The quad, however, is normalized against the *full* (uncropped)
+  /// frame. Mapping it straight onto the view rect (`p.dx * width`) therefore
+  /// drifts off the real document whenever the frame and the view disagree on
+  /// aspect ratio — the bug this corrects.
+  ///
+  /// Given [srcAspect] (the frame's width/height in the preview's orientation)
+  /// we recompute the displayed frame size the same way `cover` does, then
+  /// offset every point by the cropped margin. When [srcAspect] is unknown
+  /// (`null` — older payloads, or platforms whose preview fills without a crop)
+  /// we fall back to the identity stretch, which is the pre-fix behavior.
+  static Offset Function(Offset) _coverMapper(Size size, double? srcAspect) {
+    if (srcAspect == null || srcAspect <= 0 || size.height == 0) {
+      return (p) => Offset(p.dx * size.width, p.dy * size.height);
+    }
+    final viewAspect = size.width / size.height;
+    final double displayedW;
+    final double displayedH;
+    if (srcAspect > viewAspect) {
+      // Frame is wider than the view: height fills, width overflows the sides.
+      displayedH = size.height;
+      displayedW = size.height * srcAspect;
+    } else {
+      // Frame is taller than the view: width fills, height overflows top/bottom.
+      displayedW = size.width;
+      displayedH = size.width / srcAspect;
+    }
+    final dx = (size.width - displayedW) / 2.0;
+    final dy = (size.height - displayedH) / 2.0;
+    return (p) => Offset(dx + p.dx * displayedW, dy + p.dy * displayedH);
+  }
+
+  /// Full-quad outline flashed once on lock, its alpha tracking [lockFlash] 1→0.
+  void _paintLockFlash(Canvas canvas, Path quadPath) {
+    final alpha = lockFlash.clamp(0.0, 1.0);
+    canvas.drawPath(
+      quadPath,
+      Paint()
+        ..color = readyColor.withValues(alpha: alpha)
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = _strokeWidth + 2.0
+        ..strokeJoin = StrokeJoin.round,
+    );
   }
 
   void _paintScrimFull(Canvas canvas, Size size) {
@@ -722,7 +925,8 @@ class _DocumentGuidancePainter extends CustomPainter {
       old.bracketColor != bracketColor ||
       old.warningColor != warningColor ||
       old.readyColor != readyColor ||
-      old.pulseValue != pulseValue;
+      old.pulseValue != pulseValue ||
+      old.lockFlash != lockFlash;
 }
 
 // ---------------------------------------------------------------------------
@@ -734,10 +938,22 @@ class _HintCard extends StatelessWidget {
     required this.text,
     required this.icon,
     required this.accentColor,
+    required this.backgroundColor,
+    required this.shadowColor,
+    required this.textColor,
   });
 
   final String text;
   final IconData icon;
+
+  /// Pill background (scrim over the preview).
+  final Color backgroundColor;
+
+  /// Drop-shadow tint under the pill.
+  final Color shadowColor;
+
+  /// Hint copy color.
+  final Color textColor;
 
   /// State-derived accent used to tint the icon (green when ready, the
   /// not-ready palette otherwise).
@@ -763,13 +979,13 @@ class _HintCard extends StatelessWidget {
         child: DecoratedBox(
           key: ValueKey<String>('${icon.codePoint}:$text'),
           decoration: BoxDecoration(
-            color: Colors.black.withValues(alpha: 0.55),
+            color: backgroundColor,
             borderRadius: BorderRadius.circular(24),
-            boxShadow: const [
+            boxShadow: [
               BoxShadow(
-                color: Colors.black26,
+                color: shadowColor,
                 blurRadius: 8,
-                offset: Offset(0, 2),
+                offset: const Offset(0, 2),
               ),
             ],
           ),
@@ -784,8 +1000,8 @@ class _HintCard extends StatelessWidget {
                   child: Text(
                     text,
                     textAlign: TextAlign.center,
-                    style: const TextStyle(
-                      color: Colors.white,
+                    style: TextStyle(
+                      color: textColor,
                       fontSize: 15,
                       fontWeight: FontWeight.w600,
                     ),
@@ -805,19 +1021,24 @@ class _HintCard extends StatelessWidget {
 // ---------------------------------------------------------------------------
 
 class _UnsupportedPlatformPlaceholder extends StatelessWidget {
-  const _UnsupportedPlatformPlaceholder();
+  const _UnsupportedPlatformPlaceholder({
+    required this.palette,
+    required this.message,
+  });
+
+  final SupyScannerPalette palette;
+  final String message;
 
   @override
   Widget build(BuildContext context) {
     return ColoredBox(
-      color: Colors.black,
+      color: palette.surface,
       child: Center(
         child: Padding(
           padding: const EdgeInsets.all(16),
           child: Text(
-            'SupyDocumentScannerView is not yet supported on '
-            '${defaultTargetPlatform.name}.',
-            style: const TextStyle(color: Colors.white),
+            message,
+            style: TextStyle(color: palette.onSurface),
             textAlign: TextAlign.center,
           ),
         ),

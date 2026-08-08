@@ -1,5 +1,6 @@
 import 'package:flutter/widgets.dart';
 
+import '../models/ui/supy_scanner_palette.dart';
 import '../models/ui/supy_view_finder_configuration.dart';
 
 /// Renders a Scanbot-style cornered finder: four corner brackets fitted to
@@ -7,10 +8,16 @@ import '../models/ui/supy_view_finder_configuration.dart';
 /// fits inside the available size, centered.
 class SupyFinderPainter extends CustomPainter {
   /// Creates a finder painter bound to [config].
-  SupyFinderPainter({required this.config});
+  SupyFinderPainter({
+    required this.config,
+    this.palette = const SupyScannerPalette.supyDark(),
+  });
 
   /// View-finder visual configuration.
   final SupyViewFinderConfiguration config;
+
+  /// Palette used to resolve any color the [config] leaves null.
+  final SupyScannerPalette palette;
 
   @override
   void paint(Canvas canvas, Size size) {
@@ -21,7 +28,7 @@ class SupyFinderPainter extends CustomPainter {
     final rect = _fitRect(size, config.aspectRatio.value);
     final paint =
         Paint()
-          ..color = style.strokeColor
+          ..color = style.strokeColor ?? palette.primary
           ..strokeWidth = style.strokeWidth
           ..style = PaintingStyle.stroke
           ..strokeCap = StrokeCap.round
@@ -106,7 +113,8 @@ class SupyFinderPainter extends CustomPainter {
   }
 
   @override
-  bool shouldRepaint(covariant SupyFinderPainter old) => old.config != config;
+  bool shouldRepaint(covariant SupyFinderPainter old) =>
+      old.config != config || old.palette != palette;
 }
 
 enum _Corner { topLeft, topRight, bottomLeft, bottomRight }

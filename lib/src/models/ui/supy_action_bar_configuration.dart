@@ -7,27 +7,30 @@ class SupyActionButtonSpec {
   /// Creates a button spec.
   const SupyActionButtonSpec({
     this.visible = true,
-    this.backgroundColor = const Color(0x66000000),
-    this.foregroundColor = const Color(0xFFFFFFFF),
-    this.activeBackgroundColor = const Color(0xFFFFFFFF),
-    this.activeForegroundColor = const Color(0xFF000000),
+    this.backgroundColor,
+    this.foregroundColor,
+    this.activeBackgroundColor,
+    this.activeForegroundColor,
   });
 
   /// Whether the button is rendered.
   final bool visible;
 
-  /// Fill color in the default (off) state.
-  final Color backgroundColor;
+  /// Fill color in the default (off) state. Resolves to the palette
+  /// `surfaceLow` at 40% alpha when null.
+  final Color? backgroundColor;
 
-  /// Icon/label color in the default (off) state.
-  final Color foregroundColor;
+  /// Icon/label color in the default (off) state. Resolves to the palette
+  /// `onSurface` when null.
+  final Color? foregroundColor;
 
   /// Fill color in the active (on) state — for toggles like flash and
-  /// close-focus.
-  final Color activeBackgroundColor;
+  /// close-focus. Resolves to the palette `onPrimary` when null.
+  final Color? activeBackgroundColor;
 
-  /// Icon/label color in the active (on) state.
-  final Color activeForegroundColor;
+  /// Icon/label color in the active (on) state. Resolves to the palette
+  /// `onSecondary` when null.
+  final Color? activeForegroundColor;
 
   @override
   bool operator ==(Object other) =>

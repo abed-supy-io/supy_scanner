@@ -11,7 +11,9 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
   private static let channelName = "io.supy.scanner/v1"
 
   private let documentPresenter = DocumentScannerPresenter()
+  private let documentImportPresenter = DocumentImportPresenter()
   private let batchBarcodePresenter = BatchBarcodeScannerPresenter()
+  private let ocrRunner = OcrRunner()
 
   public static func register(with registrar: FlutterPluginRegistrar) {
     let channel = FlutterMethodChannel(
@@ -34,6 +36,14 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
       documentFactory,
       withId: SupyDocumentScannerViewFactory.viewTypeId
     )
+
+    let dataCaptureFactory = SupyDataCaptureScannerViewFactory(
+      messenger: registrar.messenger()
+    )
+    registrar.register(
+      dataCaptureFactory,
+      withId: SupyDataCaptureScannerViewFactory.viewTypeId
+    )
   }
 
   public func handle(_ call: FlutterMethodCall, result: @escaping FlutterResult) {
@@ -51,6 +61,11 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
         SupyLog.i("scanDocument intent=\(intent) (resolved on Dart side; VisionKit owns multi-page)")
       }
       documentPresenter.present(args: args, result: result)
+    case "importDocumentImage":
+      // Native gallery import: PHPicker → on-device edge-detect + rectify +
+      // enhance + persist. No args; resolves nil when the user dismisses the
+      // picker. On-device only — no bytes cross the channel.
+      documentImportPresenter.present(result: result)
     case "scanBarcodesBatch":
       guard let args = Self.expectMapArgs(call, result: result) else { return }
       batchBarcodePresenter.present(args: args, result: result)
@@ -117,6 +132,68 @@ public class SupyScannerPlugin: NSObject, FlutterPlugin {
       }
       InvoiceParser.parse(image: image) { dict in
         result(dict)
+      }
+    case "recognizeText":
+      guard let args = Self.expectMapArgs(call, result: result) else { return }
+      guard let path = args["imagePath"] as? String, !path.isEmpty else {
+        result(FlutterError(
+          code: "unknown",
+          message: "recognizeText: missing or empty `imagePath` arg",
+          details: nil
+        ))
+        return
+      }
+      let url = path.hasPrefix("file://")
+        ? URL(string: path)!
+        : URL(fileURLWithPath: path)
+      guard let data = try? Data(contentsOf: url),
+            let image = UIImage(data: data) else {
+        result(FlutterError(
+          code: "model_unavailable",
+          message: "recognizeText: could not load image at \(path)",
+          details: nil
+        ))
+        return
+      }
+      let languages = (args["languages"] as? [String]) ?? []
+      let includeElements = (args["includeElements"] as? Bool) ?? true
+      ocrRunner.recognizeStructured(
+        image: image,
+        languages: languages,
+        includeElements: includeElements
+      ) { tree in
+        result(tree)
+      }
+    case "decodeImage":
+      guard let args = Self.expectMapArgs(call, result: result) else { return }
+      guard let path = args["imagePath"] as? String, !path.isEmpty else {
+        result(FlutterError(
+          code: "unknown",
+          message: "decodeImage: missing or empty `imagePath` arg",
+          details: nil
+        ))
+        return
+      }
+      let url = path.hasPrefix("file://")
+        ? URL(string: path)!
+        : URL(fileURLWithPath: path)
+      guard let data = try? Data(contentsOf: url),
+            let image = UIImage(data: data) else {
+        result(FlutterError(
+          code: "unknown",
+          message: "decodeImage: could not load image at \(path)",
+          details: nil
+        ))
+        return
+      }
+      let wireFormats = (args["formats"] as? [String]) ?? []
+      let useNativeCore = (args["useNativeCore"] as? Bool) ?? false
+      BarcodeImageDecoder.decode(
+        image: image,
+        wireFormats: wireFormats,
+        useNativeCore: useNativeCore
+      ) { detections in
+        DispatchQueue.main.async { result(detections) }
       }
     case "nativeCoreProbe":
       let version = SupyNativeCore.version()

@@ -1,41 +1,46 @@
 import 'package:flutter/material.dart';
 import 'package:supy_scanner/supy_scanner.dart';
 
-/// Supy brand tokens for the example showcase tab.
+/// Supy brand tokens for the example showcase chrome (app bars, cards, list
+/// tiles) — the Supy purple design system, primary `#6448C3`.
 ///
-/// Lives in the example app only — promotion to the library (as a
-/// `SupyScannerPalette.supyBrand()` preset) waits on real brand-design sign-off.
+/// Lives in the example app only. The *scanner-surface* half of this palette
+/// now has a first-party home in the library as
+/// `SupyScannerPalette.supyDark()` / `.supyLight()`; [palette] below stays for
+/// the example's light-chrome showcase.
 class SupyBrand {
   SupyBrand._();
 
-  // Brand color tokens — derived from supy.io.
-  static const Color navy = Color(0xFF0F1E3A);
-  static const Color navyDeep = Color(0xFF0A1428);
-  static const Color accent = Color(0xFF2F6BFF);
-  static const Color accentSoft = Color(0xFFE8EFFF);
+  // Brand color tokens — Supy purple design system (primary `#6448C3`).
+  // `navy`/`navyDeep` keep their historical names but now carry the deep-purple
+  // chrome so existing call sites don't churn.
+  static const Color navy = Color(0xFF2A1E5C);
+  static const Color navyDeep = Color(0xFF1C1340);
+  static const Color accent = Color(0xFF6448C3);
+  static const Color accentSoft = Color(0xFFEDE9FB);
   static const Color surface = Color(0xFFFFFFFF);
-  static const Color surfaceAlt = Color(0xFFF4F6FB);
+  static const Color surfaceAlt = Color(0xFFF5F3FC);
   static const Color success = Color(0xFF1FB57A);
   static const Color warning = Color(0xFFF0A91B);
   static const Color critical = Color(0xFFE5484D);
   static const Color onNavy = Color(0xFFFFFFFF);
-  static const Color onSurface = Color(0xFF0F1E3A);
-  static const Color onSurfaceMuted = Color(0xB30F1E3A);
+  static const Color onSurface = Color(0xFF1C1340);
+  static const Color onSurfaceMuted = Color(0xB31C1340);
 
   /// Scanner-surface palette built from brand tokens.
   static const SupyScannerPalette palette = SupyScannerPalette(
     primary: accent,
-    primaryDisabled: Color(0x802F6BFF),
+    primaryDisabled: Color(0x806448C3),
     onPrimary: onNavy,
     secondary: navy,
-    secondaryDisabled: Color(0x800F1E3A),
+    secondaryDisabled: Color(0x802A1E5C),
     onSecondary: onNavy,
     surface: surface,
-    surfaceLow: Color(0xCC0F1E3A),
+    surfaceLow: Color(0xCC2A1E5C),
     surfaceHigh: surfaceAlt,
     onSurface: onSurface,
     onSurfaceVariant: onSurfaceMuted,
-    outline: Color(0x330F1E3A),
+    outline: Color(0x331C1340),
     negative: critical,
     positive: success,
     warning: warning,
@@ -72,7 +77,7 @@ class SupyBrand {
         margin: EdgeInsets.zero,
         shape: RoundedRectangleBorder(
           borderRadius: BorderRadius.circular(16),
-          side: const BorderSide(color: Color(0x140F1E3A)),
+          side: const BorderSide(color: Color(0x141C1340)),
         ),
       ),
     );

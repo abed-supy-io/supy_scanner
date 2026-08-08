@@ -43,7 +43,37 @@ enum SupyBarcodeFormat {
   aztec,
 
   /// Codabar barcode (legacy library / blood-bank usage).
-  codabar;
+  codabar,
+
+  /// GS1 DataBar (RSS-14) linear barcode.
+  ///
+  /// Decodes only via the native zxing-cpp core (`useNativeCore: true`); the
+  /// ML Kit and Vision platform decoders do not support it.
+  dataBar,
+
+  /// GS1 DataBar Expanded linear barcode.
+  ///
+  /// Decodes only via the native zxing-cpp core (`useNativeCore: true`); the
+  /// ML Kit and Vision platform decoders do not support it.
+  dataBarExpanded,
+
+  /// Micro QR Code (2D).
+  ///
+  /// Decodes only via the native zxing-cpp core (`useNativeCore: true`); the
+  /// ML Kit and Vision platform decoders do not support it.
+  microQr,
+
+  /// Rectangular Micro QR Code (rMQR, 2D).
+  ///
+  /// Decodes only via the native zxing-cpp core (`useNativeCore: true`); the
+  /// ML Kit and Vision platform decoders do not support it.
+  rMQR,
+
+  /// MaxiCode (2D, UPS shipping).
+  ///
+  /// Decodes only via the native zxing-cpp core (`useNativeCore: true`); the
+  /// ML Kit and Vision platform decoders do not support it.
+  maxiCode;
 
   /// Wire-format name passed across the platform channel.
   ///

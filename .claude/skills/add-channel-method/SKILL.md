@@ -11,13 +11,13 @@ The channel name is **versioned**: `io.supy.scanner/v1`. Adding a method does **
 
 1. **Contract doc** — add a row to the contract table in `docs/ARCHITECTURE.md` under the appropriate channel section (global `v1`, per-view, or EventChannel). Fields: method, args, returns, errors.
 
-2. **Dart wrapper** — add the method to `lib/src/channel/method_channel.dart`. Type the args and return value strictly — no `dynamic` leaking past this file. Translate `PlatformException` to a `SupyScanError` with one of the codes from the error model table.
+2. **Dart wrapper** — add the method to `lib/src/channel/supy_scanner_channel.dart` (the `SupyScannerChannel` class; per-view methods go on the matching controller in `lib/src/widgets/`). Type the args and return value strictly — no `dynamic` leaking past this file. Translate `PlatformException` to a `SupyScanError` with one of the codes from the error model table.
 
 3. **Android handler** — `android/src/main/kotlin/io/supy/scanner/SupyScannerPlugin.kt` (or the per-view plugin if scoped). Handle the new method name in `onMethodCall`. Return on the main thread via `result.success(...)`.
 
 4. **iOS handler** — `ios/Classes/SupyScannerPlugin.swift` (or per-view). Match the method name. Use `DispatchQueue.global(qos: .userInitiated)` for any work that touches the camera or Vision; hop to `.main` only at the `result(...)` callback.
 
-5. **Mocked Dart test** — `test/channel/method_channel_test.dart`. Use `TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler` to assert the exact arg shape and that the return value is parsed correctly.
+5. **Mocked Dart test** — `test/channel/supy_scanner_channel_test.dart`. Use `TestDefaultBinaryMessengerBinding.instance.defaultBinaryMessenger.setMockMethodCallHandler` to assert the exact arg shape and that the return value is parsed correctly.
 
 6. **Example app exposure** — if the method is user-facing, add a button or option in the example app demonstrating it.
 

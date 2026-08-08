@@ -20,6 +20,8 @@ import 'package:flutter/services.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:supy_scanner/supy_scanner.dart';
 
+import '../support/license_test_support.dart';
+
 const int _kSeed = 0xDEC0DE;
 const int _kHappyDocumentIterations = 3000;
 const int _kHappyBarcodeIterations = 3000;
@@ -30,6 +32,9 @@ const int _kErrorCodeIterations = 500;
 
 void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
+
+  setUp(activateTestLicense);
+  tearDown(clearTestLicense);
 
   group('fuzz — well-formed payloads round-trip', () {
     test('SupyDocumentPage.fromMap (${_kHappyDocumentIterations}x)', () {
