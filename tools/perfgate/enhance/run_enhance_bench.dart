@@ -47,7 +47,7 @@ Future<int> _run(List<String> argv) async {
 
   if (!skipBuild) {
     final cmakeRc = await _runCmd('cmake', [
-      '-S', '${repoRoot.path}/native',
+      '-S', '${repoRoot.path}/core',
       '-B', buildDir.path,
       '-DSUPY_BUILD_TOOLS=ON',
       '-DCMAKE_BUILD_TYPE=Release',

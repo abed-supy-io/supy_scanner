@@ -3,7 +3,7 @@
 // writes bench_report.{md,json} with deltas vs pinned baselines.
 //
 // Pixels reach native code via temp files + argv — never dart:ffi, per the
-// supy_scanner_core.h boundary contract.
+// supy_scanner.h boundary contract.
 //
 // Usage:
 //   dart tools/bench/run_bench.dart [--suite all|detect|output]
@@ -87,7 +87,7 @@ Future<void> _buildTools(String root, {required bool ocr}) async {
   }
 
   await run('cmake', [
-    '-S', 'native', '-B', _buildDir,
+    '-S', 'core', '-B', _buildDir,
     '-DSUPY_BUILD_TOOLS=ON', '-DCMAKE_BUILD_TYPE=Release',
   ]);
   await run('cmake', [

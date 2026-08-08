@@ -15,7 +15,7 @@ updates:
       - "github-actions"
 
   - package-ecosystem: "pub"
-    directory: "/"
+    directory: "/flutter/supy_scanner"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5
@@ -27,7 +27,7 @@ updates:
       - "dart"
 
   - package-ecosystem: "pub"
-    directory: "/example"
+    directory: "/flutter/supy_scanner/example"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
@@ -39,7 +39,7 @@ updates:
       - "dart"
 
   - package-ecosystem: "pub"
-    directory: "/compat/supy_scanner_scanbot_compat"
+    directory: "/flutter/supy_scanner_scanbot_compat"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 3
@@ -51,7 +51,7 @@ updates:
       - "dart"
 
   - package-ecosystem: "gradle"
-    directory: "/android"
+    directory: "/flutter/supy_scanner/android"
     schedule:
       interval: "weekly"
     open-pull-requests-limit: 5

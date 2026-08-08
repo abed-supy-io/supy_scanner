@@ -1,0 +1,127 @@
+group = 'io.supy.scanner'
+version = '0.1.0'
+
+buildscript {
+    ext.kotlin_version = '2.4.10'
+    repositories {
+        google()
+        mavenCentral()
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:9.3.0'
+        classpath "org.jetbrains.kotlin:kotlin-gradle-plugin:$kotlin_version"
+        classpath 'org.jetbrains.kotlinx:kover-gradle-plugin:0.8.3'
+    }
+}
+
+rootProject.allprojects {
+    repositories {
+        google()
+        mavenCentral()
+    }
+}
+
+apply plugin: 'com.android.library'
+apply plugin: 'kotlin-android'
+apply plugin: 'org.jetbrains.kotlinx.kover'
+
+// Coverage collection — H2-07. Native-bridge code is hard to unit-test, so
+// no `koverVerify` gate yet; CI uploads the XML report as an artifact so a
+// future PR can ratchet a realistic minimum once a baseline is observed.
+kover {
+    reports {
+        filters {
+            excludes {
+                classes(
+                    'io.supy.scanner.BuildConfig',
+                    'io.supy.scanner.*$Companion',
+                )
+            }
+        }
+    }
+}
+
+android {
+    namespace 'io.supy.scanner'
+    compileSdk 34
+    ndkVersion '26.1.10909125'
+
+    defaultConfig {
+        minSdk 24
+
+        // v1.1: native C++ core (see docs/V1.1_PLAN.md). Ship arm64 + armv7
+        // for production; x86_64 retained for emulator dev.
+        externalNativeBuild {
+            cmake {
+                cppFlags '-std=c++17'
+                arguments '-DANDROID_STL=c++_static'
+            }
+        }
+        ndk {
+            abiFilters 'armeabi-v7a', 'arm64-v8a', 'x86_64'
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+
+    kotlinOptions {
+        jvmTarget = '17'
+    }
+
+    sourceSets {
+        main.java.srcDirs += 'src/main/kotlin'
+        test.java.srcDirs += 'src/test/kotlin'
+    }
+
+    testOptions {
+        unitTests.includeAndroidResources = true
+        unitTests.returnDefaultValues = true
+    }
+
+    externalNativeBuild {
+        cmake {
+            // The C++ core lives outside android/ so iOS can share the same
+            // sources via the pod source_files glob.
+            path '../../../core/CMakeLists.txt'
+            version '3.22.1'
+        }
+    }
+}
+
+// The JNI bridge lives under android/src/main/cpp and is appended to the
+// supy_scanner_core target inside core/CMakeLists.txt when ANDROID is set.
+
+dependencies {
+    // CameraX — preview + lifecycle-bound controller. Detection (ML Kit) is
+    // wired in S1-09 on top of these.
+    def cameraxVersion = '1.6.1'
+    implementation "androidx.camera:camera-core:$cameraxVersion"
+    implementation "androidx.camera:camera-camera2:$cameraxVersion"
+    implementation "androidx.camera:camera-lifecycle:$cameraxVersion"
+    implementation "androidx.camera:camera-view:$cameraxVersion"
+
+    implementation 'androidx.lifecycle:lifecycle-common:2.11.0'
+
+    // ML Kit Barcode — on-device, no network, no license cost.
+    implementation 'com.google.mlkit:barcode-scanning:17.3.0'
+
+    // GMS Document Scanner — on-device, model is downloaded on first use via
+    // Google Play services. OCR runs separately via ML Kit Text Recognition.
+    implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1'
+
+    // ML Kit Text Recognition v2 — Latin script (covers `en`). Arabic OCR is
+    // NOT supported by ML Kit; see docs/MIGRATION.md for the Android coverage
+    // caveat.
+    implementation 'com.google.mlkit:text-recognition:16.0.1'
+
+    // JVM unit tests. ML Kit's `Barcode.FORMAT_*` constants and
+    // `android.util.Size` resolve at runtime via Robolectric so pure-logic
+    // mappers and enums can be exercised without an emulator.
+    testImplementation 'junit:junit:4.13.2'
+    testImplementation 'org.robolectric:robolectric:4.12.2'
+    testImplementation 'androidx.test:core:1.7.0'
+    testImplementation "org.jetbrains.kotlin:kotlin-test:$kotlin_version"
+}

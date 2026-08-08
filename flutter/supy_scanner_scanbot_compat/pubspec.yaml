@@ -1,0 +1,20 @@
+name: supy_scanner_scanbot_compat
+description: Drop-in Scanbot-named API shim over supy_scanner. Lets the retailer app migrate by changing imports only.
+version: 0.1.0
+publish_to: none
+
+environment:
+  sdk: ">=3.7.0 <4.0.0"
+  flutter: ">=3.29.0"
+
+dependencies:
+  flutter:
+    sdk: flutter
+  meta: ^1.15.0
+  supy_scanner:
+    path: ../supy_scanner
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0

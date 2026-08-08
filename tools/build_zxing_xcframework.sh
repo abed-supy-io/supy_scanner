@@ -29,7 +29,7 @@ set -euo pipefail
 # Resolve paths from script location so the script works from any CWD.
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 REPO_ROOT="$(cd "${SCRIPT_DIR}/.." && pwd)"
-NATIVE_DIR="${REPO_ROOT}/native"
+NATIVE_DIR="${REPO_ROOT}/core"
 OUT_DIR="${REPO_ROOT}/ios/Vendor"
 BUILD_ROOT="${REPO_ROOT}/build/ios-zxing"
 XCF_PATH="${OUT_DIR}/ZXing.xcframework"

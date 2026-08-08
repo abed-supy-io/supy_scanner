@@ -34,14 +34,15 @@ jobs:
           cache: true
 
       - name: flutter pub get (library)
+        working-directory: flutter/supy_scanner
         run: flutter pub get
 
       - name: flutter pub get (example)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter pub get
 
       - name: flutter pub get (compat)
-        working-directory: compat/supy_scanner_scanbot_compat
+        working-directory: flutter/supy_scanner_scanbot_compat
         run: flutter pub get
 
       # The nested tool packages have their own pubspecs; the repo-root
@@ -56,18 +57,19 @@ jobs:
         run: dart pub get
 
       - name: dart format --set-exit-if-changed
-        run: dart format --set-exit-if-changed lib test example/lib
+        run: dart format --set-exit-if-changed flutter/supy_scanner/lib flutter/supy_scanner/test flutter/supy_scanner/example/lib
 
       - name: dart analyze
         run: dart analyze --fatal-infos
 
       - name: flutter test (with coverage)
+        working-directory: flutter/supy_scanner
         run: flutter test --reporter expanded --coverage
 
       # Pins the Scanbot-compat shim to retailer call sites + API signature
       # snapshot. Without this step `dx-compat-shim-retailer-pin` has no teeth.
       - name: flutter test (compat shim — retailer pin + API snapshot)
-        working-directory: compat/supy_scanner_scanbot_compat
+        working-directory: flutter/supy_scanner_scanbot_compat
         run: flutter test --reporter expanded
 
       # Gate at 70% — 6pp below the 2026-06-14 baseline of 76.34%. Ratchet up
@@ -81,14 +83,14 @@ jobs:
               print "FAIL: coverage below 70% gate"
               exit 1
             }
-          }' coverage/lcov.info
+          }' flutter/supy_scanner/coverage/lcov.info
 
       - name: upload dart coverage
         if: always()
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: dart-coverage-lcov
-          path: coverage/lcov.info
+          path: flutter/supy_scanner/coverage/lcov.info
           if-no-files-found: warn
 
   build-android:
@@ -111,11 +113,11 @@ jobs:
           cache: true
 
       - name: flutter pub get (example)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter pub get
 
       - name: flutter build apk --debug
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter build apk --debug
 
   build-ios:
@@ -133,11 +135,11 @@ jobs:
           cache: true
 
       - name: flutter pub get (example)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter pub get
 
       - name: flutter build ios --no-codesign
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter build ios --no-codesign
 
   android-native-test:
@@ -160,20 +162,21 @@ jobs:
           cache: true
 
       - name: flutter pub get (library)
+        working-directory: flutter/supy_scanner
         run: flutter pub get
 
       - name: flutter pub get (example)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter pub get
 
-      # example/android/ is not committed; scaffold it so the plugin can be
+      # flutter/supy_scanner/example/android/ is not committed; scaffold it so the plugin can be
       # consumed as a Gradle subproject by the host app.
-      - name: scaffold example/android wrapper
-        working-directory: example
+      - name: scaffold flutter/supy_scanner/example/android wrapper
+        working-directory: flutter/supy_scanner/example
         run: flutter create --platforms=android --project-name supy_scanner_example .
 
       - name: gradle test + kover coverage (plugin :supy_scanner)
-        working-directory: example/android
+        working-directory: flutter/supy_scanner/example/android
         run: ./gradlew :supy_scanner:testDebugUnitTest :supy_scanner:koverXmlReportDebug --stacktrace
 
       - name: upload test reports
@@ -182,8 +185,8 @@ jobs:
         with:
           name: android-test-reports
           path: |
-            example/build/supy_scanner/reports/tests/
-            example/build/supy_scanner/test-results/
+            flutter/supy_scanner/example/build/supy_scanner/reports/tests/
+            flutter/supy_scanner/example/build/supy_scanner/test-results/
           if-no-files-found: ignore
 
       # H2-07: artifact-only for v1.0.x. Once a baseline is observed in CI,
@@ -194,7 +197,7 @@ jobs:
         with:
           name: android-kover-coverage
           path: |
-            example/build/supy_scanner/reports/kover/
+            flutter/supy_scanner/example/build/supy_scanner/reports/kover/
           if-no-files-found: warn
 
   ios-native-test:
@@ -212,25 +215,26 @@ jobs:
           cache: true
 
       - name: flutter pub get (library)
+        working-directory: flutter/supy_scanner
         run: flutter pub get
 
       - name: flutter pub get (example)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter pub get
 
       # Build (config-only) generates ios/Flutter/Generated.xcconfig and runs
       # `pod install`. Tests run under the Runner-hosted RunnerTests target so
       # Flutter.framework is correctly embedded and @testable import succeeds.
       - name: flutter build ios (config + pods)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter build ios --config-only --no-codesign
 
       - name: pod install
-        working-directory: example/ios
+        working-directory: flutter/supy_scanner/example/ios
         run: pod install
 
       - name: xcodebuild test (Runner-hosted RunnerTests)
-        working-directory: example/ios
+        working-directory: flutter/supy_scanner/example/ios
         run: |
           set -o pipefail
           xcodebuild test \
@@ -246,7 +250,7 @@ jobs:
       # PR pick a realistic threshold once observed in CI.
       - name: extract ios coverage summary
         if: always()
-        working-directory: example/ios
+        working-directory: flutter/supy_scanner/example/ios
         run: |
           if [ -d TestResults.xcresult ]; then
             xcrun xccov view --report --json TestResults.xcresult > ios-coverage.json || true
@@ -258,7 +262,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: ios-test-xcresult
-          path: example/ios/TestResults.xcresult
+          path: flutter/supy_scanner/example/ios/TestResults.xcresult
           if-no-files-found: ignore
 
       - name: upload ios coverage json
@@ -266,7 +270,7 @@ jobs:
         uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a  # v7.0.1
         with:
           name: ios-coverage-json
-          path: example/ios/ios-coverage.json
+          path: flutter/supy_scanner/example/ios/ios-coverage.json
           if-no-files-found: ignore
 
   perfgate-unit:
@@ -314,14 +318,15 @@ jobs:
           cache: true
 
       - name: flutter pub get (library)
+        working-directory: flutter/supy_scanner
         run: flutter pub get
 
       - name: flutter pub get (example)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter pub get
 
-      - name: scaffold example/android wrapper
-        working-directory: example
+      - name: scaffold flutter/supy_scanner/example/android wrapper
+        working-directory: flutter/supy_scanner/example
         run: flutter create --platforms=android --project-name supy_scanner_example .
 
       - name: enable KVM
@@ -340,7 +345,7 @@ jobs:
           profile: pixel_4
           ram-size: 4096M
           script: |
-            cd example && flutter test integration_test/perf_bench_test.dart --device-id emulator-5554 2>&1 | tee "$GITHUB_WORKSPACE/bench.log"
+            cd flutter/supy_scanner/example && flutter test integration_test/perf_bench_test.dart --device-id emulator-5554 2>&1 | tee "$GITHUB_WORKSPACE/bench.log"
 
       - name: run perfgate against captured log
         run: dart tools/perfgate/run.dart --log bench.log
@@ -473,16 +478,17 @@ jobs:
         run: flutter --version
 
       - name: flutter pub get (library)
+        working-directory: flutter/supy_scanner
         run: flutter pub get
 
       - name: flutter pub get (example)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter pub get
 
       # Same reason as the pinned job: root analyze walks into every
       # subpackage, so compat, perfgate and bench deps must be resolved first.
       - name: flutter pub get (compat)
-        working-directory: compat/supy_scanner_scanbot_compat
+        working-directory: flutter/supy_scanner_scanbot_compat
         run: flutter pub get
 
       - name: dart pub get (tools/perfgate)
@@ -519,18 +525,19 @@ jobs:
           cache: true
 
       - name: flutter pub get (library)
+        working-directory: flutter/supy_scanner
         run: flutter pub get
 
       - name: flutter pub get (example)
-        working-directory: example
+        working-directory: flutter/supy_scanner/example
         run: flutter pub get
 
-      - name: scaffold example/android wrapper
-        working-directory: example
+      - name: scaffold flutter/supy_scanner/example/android wrapper
+        working-directory: flutter/supy_scanner/example
         run: flutter create --platforms=android --project-name supy_scanner_example .
 
       - name: gradle test (plugin :supy_scanner, jdk 21)
-        working-directory: example/android
+        working-directory: flutter/supy_scanner/example/android
         run: ./gradlew :supy_scanner:testDebugUnitTest --stacktrace
 
       - name: upload test reports (jdk 21 canary)
@@ -539,6 +546,6 @@ jobs:
         with:
           name: android-test-reports-jdk21
           path: |
-            example/build/supy_scanner/reports/tests/
-            example/build/supy_scanner/test-results/
+            flutter/supy_scanner/example/build/supy_scanner/reports/tests/
+            flutter/supy_scanner/example/build/supy_scanner/test-results/
           if-no-files-found: ignore

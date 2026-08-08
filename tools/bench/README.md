@@ -34,11 +34,11 @@ CER lane is skipped automatically.
 | `run_bench.dart` | Driver: build tools, replay corpus, write report |
 | `gen_seed_corpus.dart` | Regenerates the synthetic `seed-*` scenes |
 | `ocr/vision_ocr.swift` | macOS Vision OCR CLI |
-| `native/bench/bench_detect.cpp` | Host harness → classical detector |
-| `native/bench/bench_pipeline.cpp` | Host harness → warp + enhance replay |
+| `core/bench/bench_detect.cpp` | Host harness → classical detector |
+| `core/bench/bench_pipeline.cpp` | Host harness → warp + enhance replay |
 
 Pixel data reaches native code via raw temp files + argv — never dart:ffi
-(`native/include/supy_scanner_core.h` boundary contract).
+(`core/include/supy_scanner.h` boundary contract).
 
 ## CI
 

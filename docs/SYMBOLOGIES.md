@@ -7,9 +7,9 @@ onto the three decode backends. This table is the source of truth referenced by
 Keep it in sync with, in the same PR:
 
 - `lib/src/models/supy_barcode_format.dart` — the `SupyBarcodeFormat` enum.
-- `android/src/main/kotlin/io/supy/scanner/barcode/FormatMapper.kt` — ML Kit + `SUPY_FORMAT_*` mask.
-- `ios/Classes/barcode/SymbologyMapper.swift` — Vision symbologies.
-- `native/include/supy_scanner_core.h` — the `SUPY_FORMAT_*` bit definitions.
+- `flutter/supy_scanner/android/src/main/kotlin/io/supy/scanner/barcode/FormatMapper.kt` — ML Kit + `SUPY_FORMAT_*` mask.
+- `flutter/supy_scanner/ios/Classes/barcode/SymbologyMapper.swift` — Vision symbologies.
+- `core/include/supy_scanner.h` — the `SUPY_FORMAT_*` bit definitions.
 
 ## Decode backends
 
