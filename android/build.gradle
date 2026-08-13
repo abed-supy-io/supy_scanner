@@ -121,7 +121,7 @@ dependencies {
     // `android.util.Size` resolve at runtime via Robolectric so pure-logic
     // mappers and enums can be exercised without an emulator.
     testImplementation 'junit:junit:4.13.2'
-    testImplementation 'org.robolectric:robolectric:4.12.2'
+    testImplementation 'org.robolectric:robolectric:4.16.1'
     testImplementation 'androidx.test:core:1.7.0'
     testImplementation "org.jetbrains.kotlin:kotlin-test:$kotlin_version"
 }
