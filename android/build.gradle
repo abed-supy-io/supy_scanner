@@ -110,7 +110,7 @@ dependencies {
 
     // GMS Document Scanner — on-device, model is downloaded on first use via
     // Google Play services. OCR runs separately via ML Kit Text Recognition.
-    implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0-beta1'
+    implementation 'com.google.android.gms:play-services-mlkit-document-scanner:16.0.0'
 
     // ML Kit Text Recognition v2 — Latin script (covers `en`). Arabic OCR is
     // NOT supported by ML Kit; see docs/MIGRATION.md for the Android coverage
