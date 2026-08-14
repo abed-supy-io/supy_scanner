@@ -183,21 +183,23 @@ final class DocumentDetector: NSObject,
   /// iOS-16 rectangles request and the iOS-17 segmentation post-processing.
   /// Kept tighter than Vision's defaults so we don't promote laptop screens
   /// or table edges to "candidate document".
-  // Tuned for full-page A4/Letter invoices held by hand. Looser than the
-  // original (0.4 / 1.0 / 0.2 / 0.7) so a reasonably-framed page locks reliably
-  // instead of falling through to a full-frame capture:
-  //  - aspect 0.35: A4 is 0.71 flat, but perspective foreshortening at a tilt
-  //    pushes the short/long ratio down — 0.35 tolerates that without admitting
-  //    narrow strips (table edges, monitor bezels stay well under it once area
-  //    is also required).
-  //  - area 0.12: lets the user hold the camera a hand's length back; the page
-  //    no longer has to fill a fifth of the frame.
-  //  - confidence 0.5: the iOS-17 segmentation model routinely reports 0.5–0.7
-  //    on real paper under mixed lighting; 0.7 was rejecting good frames.
-  private static let minAspectRatio: CGFloat = 0.35
+  // Tuned for a hand-held page (often with fingers pinning a corner) — the
+  // real-world case where the live overlay was refusing to lock at all. Looser
+  // than the previous pass (0.35 / 1.0 / 0.12 / 0.5):
+  //  - aspect 0.30: fingers over a corner and steep perspective foreshortening
+  //    both drag the short/long ratio down; 0.30 tolerates that. Table edges /
+  //    monitor bezels still fall out on the area gate below.
+  //  - area 0.08: the page no longer has to fill an eighth of the frame, so a
+  //    document held a full arm's length back still registers.
+  //  - confidence 0.3: the iOS-17 segmentation model reports noticeably lower
+  //    confidence when part of the page is occluded (a hand) or lit unevenly;
+  //    0.5 was silently rejecting those otherwise-good masks — the "edges never
+  //    highlight" symptom. The interior-variance floor + area gate keep genuine
+  //    junk (blank table, monitor) out even at this lower confidence.
+  private static let minAspectRatio: CGFloat = 0.30
   private static let maxAspectRatio: CGFloat = 1.0
-  private static let minBoundingArea: CGFloat = 0.12
-  private static let minConfidence: VNConfidence = 0.5
+  private static let minBoundingArea: CGFloat = 0.08
+  private static let minConfidence: VNConfidence = 0.3
 
   /// Quads whose interior variance falls below this floor are treated as
   /// uniform patches (blank table, monitor, sky) and discarded. Empirically

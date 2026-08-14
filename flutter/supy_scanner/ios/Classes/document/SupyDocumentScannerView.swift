@@ -303,10 +303,7 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     session.commitConfiguration()
     sessionConfigured = true
 
-    DispatchQueue.main.async { [weak self] in
-      self?.attachPreviewLayer()
-    }
-
+    // Register before starting so the `isRunning` flip is observed.
     runningObservation = session.observe(\.isRunning, options: [.new]) {
       [weak self] _, change in
       guard let self = self, let running = change.newValue, running else { return }
@@ -316,7 +313,22 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
       }
     }
 
-    safeStartRunning()
+    // Attach the preview layer, then start — never concurrently. Creating an
+    // `AVCaptureVideoPreviewLayer(session:)` mutates the session to add its
+    // preview connection, which AVFoundation wraps in an *implicit*
+    // begin/commitConfiguration. Running that on main while `startRunning()`
+    // runs on `sessionQueue` lets startRunning land inside that transaction and
+    // throws "startRunning may not be called between calls to beginConfiguration
+    // and commitConfiguration" — reliably so on the heavier `.photo` session.
+    // Hopping back to `sessionQueue` only after the layer is attached serializes
+    // the two and keeps startRunning off the main thread.
+    DispatchQueue.main.async { [weak self] in
+      guard let self = self else { return }
+      self.attachPreviewLayer()
+      self.sessionQueue.async { [weak self] in
+        self?.safeStartRunning()
+      }
+    }
   }
 
   private func attachPreviewLayer() {
@@ -470,36 +482,25 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     options: DocumentProcessingOptions,
     result: @escaping FlutterResult
   ) {
-    guard let detection = detector.snapshotLatestDetection() else {
-      DispatchQueue.main.async {
-        result(
-          FlutterError(
-            code: "captureUnsupported",
-            message: "No quad detected",
-            details: nil
-          )
-        )
-      }
-      return
-    }
+    // Snapshot the live quad if the detector currently has one. When it
+    // doesn't (nothing locked live — a hand-held page, fingers over a corner),
+    // we no longer dead-end with `captureUnsupported`. Instead we capture the
+    // full-resolution still with a `nil` quad, which routes it through the same
+    // detect-on-still path as `captureFullFrame`: one-shot detection on a sharp,
+    // full-res frame routinely succeeds where the jittery live preview never
+    // locked, so the shutter always yields a cropped page.
+    let detection = detector.snapshotLatestDetection()
     sessionQueue.async { [weak self] in
       guard let self = self else { return }
       let settings = self.makePhotoSettings()
+      let delegate = PhotoCaptureDelegate(owner: self)
       self.pendingCaptures[settings.uniqueID] = PendingCapture(
         result: result,
-        quad: detection.quad,
-        analyzerSize: detection.analyzerSize,
+        quad: detection?.quad,
+        analyzerSize: detection?.analyzerSize,
         jpegQuality: jpegQuality,
-        options: options
-      )
-      let delegate = PhotoCaptureDelegate(owner: self)
-      // Retain the delegate until the callback fires — AVFoundation only
-      // holds a weak ref.
-      objc_setAssociatedObject(
-        settings,
-        &PhotoCaptureDelegate.assocKey,
-        delegate,
-        .OBJC_ASSOCIATION_RETAIN
+        options: options,
+        delegate: delegate
       )
       self.photoOutput.capturePhoto(with: settings, delegate: delegate)
     }
@@ -513,19 +514,14 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     sessionQueue.async { [weak self] in
       guard let self = self else { return }
       let settings = self.makePhotoSettings()
+      let delegate = PhotoCaptureDelegate(owner: self)
       self.pendingCaptures[settings.uniqueID] = PendingCapture(
         result: result,
         quad: nil,
         analyzerSize: nil,
         jpegQuality: jpegQuality,
-        options: options
-      )
-      let delegate = PhotoCaptureDelegate(owner: self)
-      objc_setAssociatedObject(
-        settings,
-        &PhotoCaptureDelegate.assocKey,
-        delegate,
-        .OBJC_ASSOCIATION_RETAIN
+        options: options,
+        delegate: delegate
       )
       self.photoOutput.capturePhoto(with: settings, delegate: delegate)
     }
@@ -826,6 +822,14 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
     /// Shared-pipeline options (detect/crop/enhance/resize). Parsed from the
     /// capture call's `processing` map; defaults when absent.
     let options: DocumentProcessingOptions
+    /// Strong reference to the capture delegate for the request's lifetime.
+    /// `AVCapturePhotoOutput` copies the `AVCapturePhotoSettings` we hand it, so
+    /// the local settings object is a throwaway — pinning the delegate to it
+    /// (via `objc_setAssociatedObject`) released it the instant the enqueue
+    /// closure returned, before the callback fired, silently dropping the
+    /// completion. Retaining it here (dropped when `finishPhotoCapture` removes
+    /// the entry) guarantees the delegate outlives the capture.
+    let delegate: PhotoCaptureDelegate
   }
 
   /// Parses the `jpegQuality` arg (0–100 int, like the presenter) from a
@@ -868,13 +872,11 @@ final class SupyDocumentScannerView: NSObject, FlutterPlatformView,
   }
 }
 
-/// AVFoundation only retains photo-capture delegates weakly. We pin one
-/// instance per outstanding capture via `objc_setAssociatedObject` on the
-/// `AVCapturePhotoSettings` object — that retains the delegate for the
-/// lifetime of the request and lets ARC tear it down once the settings go
-/// out of scope after the callback fires.
+/// AVFoundation only retains photo-capture delegates weakly, so each
+/// outstanding capture keeps its delegate alive via the matching
+/// `PendingCapture` entry (see `pendingCaptures`) until `finishPhotoCapture`
+/// drains it. The delegate holds only a weak back-reference to the view.
 private final class PhotoCaptureDelegate: NSObject, AVCapturePhotoCaptureDelegate {
-  static var assocKey: UInt8 = 0
   private weak var owner: SupyDocumentScannerView?
 
   init(owner: SupyDocumentScannerView) {

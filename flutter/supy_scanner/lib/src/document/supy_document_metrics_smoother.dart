@@ -1,3 +1,4 @@
+import 'dart:math' as math;
 import 'dart:ui' show Offset;
 
 import '../models/supy_document_frame_metrics.dart';
@@ -11,8 +12,23 @@ import '../models/supy_document_frame_metrics.dart';
 /// flips between `tooFar` / `ready` / `blurry` faster than the human eye can
 /// read the hint card.
 ///
-/// Algorithm: per-scalar exponential moving average (EMA). For the quad, each
-/// vertex is EMA'd independently.
+/// Algorithm: per-scalar exponential moving average (EMA). The quad gets a
+/// smarter treatment than the scalars — see [_smoothQuad]:
+///  1. **Corner correspondence.** The incoming four corners are reindexed to
+///     the cyclic rotation that best lines up with the previous smoothed quad
+///     before blending. Vision re-labels which physical corner is "top-left"
+///     when the page rotates even slightly, so a blind vertex-by-index EMA
+///     would average two *different* physical corners and the outline would
+///     visibly rotate/tear. Matching first makes the overlay stick.
+///  2. **Velocity-adaptive alpha (One-Euro-lite).** A single fixed alpha forces
+///     a bad tradeoff: low = steady when still but laggy/rubber-banding when the
+///     user repositions; high = responsive but jittery at rest. Instead the
+///     quad's blend weight ramps from [alpha] (barely moving → smooth hard) up
+///     toward [_quadFastAlpha] (deliberate reposition → track without lag).
+///
+/// The scalars keep the plain fixed-alpha EMA: they feed the Android state
+/// machine's gating thresholds, so their temporal response is deliberately left
+/// unchanged. Only the *rendered quad* gets the adaptive treatment.
 ///
 /// Detection-presence boundary: when the raw sample reports no document
 /// (`hasDocument == false`), the smoother **resets** and returns the empty
@@ -163,18 +179,96 @@ class SupyDocumentMetricsSmoother {
     return List<double>.unmodifiable(smoothed);
   }
 
+  /// Upper bound on the quad's adaptive blend weight. Reached when the matched
+  /// corners move by [_quadFastMotion] or more between frames — a deliberate
+  /// reposition, where tracking beats smoothing. Near-1.0 so the outline snaps
+  /// to a fast-moving page without a visible trail.
+  static const double _quadFastAlpha = 0.9;
+
+  /// Mean per-corner motion (normalized preview units) at or below which the
+  /// quad is treated as "at rest" and smoothed at the baseline [alpha]. ~0.4%
+  /// of the frame — sensor/detector wobble on a held-still page lives here.
+  static const double _quadStillMotion = 0.004;
+
+  /// Mean per-corner motion at or above which the quad is treated as a
+  /// deliberate reposition and smoothed at [_quadFastAlpha]. ~3% of the frame.
+  static const double _quadFastMotion = 0.03;
+
+  /// Smooths the rendered quad with corner correspondence + a velocity-adaptive
+  /// blend weight. See the class doc for the why.
   List<Offset> _smoothQuad(List<Offset>? previous, List<Offset> sample) {
     if (previous == null || previous.length != sample.length) {
       return List<Offset>.unmodifiable(sample);
     }
+    // 1. Reindex the sample to the corner ordering that best matches `previous`,
+    //    so the EMA blends the same physical corner frame-to-frame.
+    final matched =
+        sample.length == 4 ? _matchCorners(previous, sample) : sample;
+    // 2. Adapt the blend weight to how far the (matched) corners moved.
+    final a = _adaptiveQuadAlpha(previous, matched);
     final smoothed = List<Offset>.generate(
-      sample.length,
+      matched.length,
       (i) => Offset(
-        previous[i].dx + alpha * (sample[i].dx - previous[i].dx),
-        previous[i].dy + alpha * (sample[i].dy - previous[i].dy),
+        previous[i].dx + a * (matched[i].dx - previous[i].dx),
+        previous[i].dy + a * (matched[i].dy - previous[i].dy),
       ),
       growable: false,
     );
     return List<Offset>.unmodifiable(smoothed);
+  }
+
+  /// Returns [sample] reindexed by the cyclic rotation (0..3) that minimizes the
+  /// summed squared distance to [previous]. Only cyclic rotations are tried:
+  /// Vision preserves quad winding, so a corner relabel manifests as the
+  /// TL→TR→BR→BL sequence rotating, never reflecting. When the corners already
+  /// correspond, rotation 0 wins and the sample is returned unchanged.
+  static List<Offset> _matchCorners(
+    List<Offset> previous,
+    List<Offset> sample,
+  ) {
+    var bestRotation = 0;
+    var bestCost = double.infinity;
+    for (var r = 0; r < 4; r++) {
+      var cost = 0.0;
+      for (var i = 0; i < 4; i++) {
+        final s = sample[(i + r) % 4];
+        final dx = s.dx - previous[i].dx;
+        final dy = s.dy - previous[i].dy;
+        cost += dx * dx + dy * dy;
+      }
+      if (cost < bestCost) {
+        bestCost = cost;
+        bestRotation = r;
+      }
+    }
+    if (bestRotation == 0) return sample;
+    return List<Offset>.generate(
+      4,
+      (i) => sample[(i + bestRotation) % 4],
+      growable: false,
+    );
+  }
+
+  /// Maps the mean per-corner motion between [previous] and [matched] onto a
+  /// blend weight in `[alpha, _quadFastAlpha]` via a smoothstep between the
+  /// still/fast motion thresholds. Barely-moving → [alpha] (smooth); deliberate
+  /// reposition → [_quadFastAlpha] (track).
+  double _adaptiveQuadAlpha(List<Offset> previous, List<Offset> matched) {
+    final n = matched.length;
+    if (n == 0) return alpha;
+    var sumDist = 0.0;
+    for (var i = 0; i < n; i++) {
+      sumDist += (matched[i] - previous[i]).distance;
+    }
+    final motion = sumDist / n;
+    // Never fall below the caller's baseline: a very smooth config (tiny alpha)
+    // still smooths at rest, but adaptivity can only ever speed tracking up.
+    final fast = math.max(alpha, _quadFastAlpha);
+    if (motion <= _quadStillMotion) return alpha;
+    if (motion >= _quadFastMotion) return fast;
+    final t =
+        (motion - _quadStillMotion) / (_quadFastMotion - _quadStillMotion);
+    final eased = t * t * (3 - 2 * t); // smoothstep
+    return alpha + (fast - alpha) * eased;
   }
 }

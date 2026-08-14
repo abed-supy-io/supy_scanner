@@ -5,7 +5,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
 import '../channel/supy_scanner_channel.dart';
-import '../enhance/supy_document_enhance_mode.dart';
 import '../models/supy_document_frame_state.dart';
 import '../models/supy_document_page.dart';
 import '../models/supy_scan_error.dart';
@@ -266,7 +265,10 @@ class _SupyDocumentScannerScreenState extends State<SupyDocumentScannerScreen>
   // Manual shutter fallback (e.g. when auto-capture is disabled).
   Future<void> _manualCapture() async {
     if (_busy || _reachedMax) return;
-    _busy = true;
+    // Reflect the in-flight capture in the shutter immediately — a still can
+    // take ~1s to capture + detect + rectify, and without this the button
+    // looks unresponsive ("capture not working").
+    setState(() => _busy = true);
     try {
       SupyDocumentCapture capture;
       try {
@@ -290,7 +292,11 @@ class _SupyDocumentScannerScreenState extends State<SupyDocumentScannerScreen>
         ),
       );
     } finally {
-      _busy = false;
+      if (mounted) {
+        setState(() => _busy = false);
+      } else {
+        _busy = false;
+      }
     }
   }
 
@@ -303,12 +309,20 @@ class _SupyDocumentScannerScreenState extends State<SupyDocumentScannerScreen>
     try {
       final page = await SupyScannerChannel.instance.importDocumentImage(
         // Gallery photos are already exposure/white-balance corrected by the
-        // camera app, so the native default paper-flattening enhancement
-        // (illumination + tone + unsharp) stacks on top and reads as harshly
-        // over-contrasted next to a camera capture. Turning enhancement off
-        // imports the picked image as a plain colour page (the default filter)
-        // so it matches the in-app captures.
-        const SupyDocumentScanOptions(enhanceMode: SupyDocumentEnhanceMode.off),
+        // camera app. The native import path enhances every page through the
+        // shared `processing` pipeline (it does NOT honour `enhanceMode`), and
+        // its defaults enable background whitening + shadow flatten — which push
+        // the paper endpoint to pure white and read as harshly bleached next to
+        // an in-app capture. Pass a balanced `processing` block that keeps
+        // detect/crop/deskew and the natural colour chain (tone curve anchored
+        // below white, mild sharpen) but disables the two whitening levers so
+        // the imported page preserves paper tone.
+        const SupyDocumentScanOptions(
+          processing: SupyDocumentProcessingOptions(
+            shadowRemoval: false,
+            backgroundWhitening: false,
+          ),
+        ),
       );
       if (page == null || !mounted) return;
       setState(() => _pages.add(page));
@@ -451,7 +465,7 @@ class _SupyDocumentScannerScreenState extends State<SupyDocumentScannerScreen>
   Widget _buildBrandBar(SupyScannerStrings strings) {
     final topInset = MediaQuery.paddingOf(context).top;
     return Container(
-      decoration: BoxDecoration(gradient: _barGradient),
+      decoration: BoxDecoration(color: widget.palette.primary),
       padding: EdgeInsets.only(top: topInset),
       child: SizedBox(
         height: 56,
@@ -532,7 +546,7 @@ class _SupyDocumentScannerScreenState extends State<SupyDocumentScannerScreen>
   Widget _buildCaptureBar(SupyScannerStrings strings) {
     final bottomInset = MediaQuery.paddingOf(context).bottom;
     return Container(
-      decoration: BoxDecoration(gradient: _barGradient),
+      decoration: BoxDecoration(color: widget.palette.primary),
       padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + bottomInset),
       child: Row(
         children: [
@@ -561,7 +575,8 @@ class _SupyDocumentScannerScreenState extends State<SupyDocumentScannerScreen>
           ),
           _ShutterButton(
             color: widget.palette.onPrimary,
-            enabled: !_reachedMax,
+            enabled: !_reachedMax && !_busy,
+            busy: _busy,
             onTap: _manualCapture,
             label: strings.capturePage,
           ),
@@ -965,12 +980,17 @@ class _ShutterButton extends StatelessWidget {
     required this.enabled,
     required this.onTap,
     required this.label,
+    this.busy = false,
   });
 
   final Color color;
   final bool enabled;
   final VoidCallback onTap;
   final String label;
+
+  /// A capture is in flight. Swaps the inner disc for a spinner and swallows
+  /// taps so the shutter reads as responsive during the ~1s still capture.
+  final bool busy;
 
   @override
   Widget build(BuildContext context) {
@@ -981,7 +1001,7 @@ class _ShutterButton extends StatelessWidget {
       child: GestureDetector(
         onTap: enabled ? onTap : null,
         child: Opacity(
-          opacity: enabled ? 1 : 0.4,
+          opacity: enabled || busy ? 1 : 0.4,
           child: Container(
             width: 72,
             height: 72,
@@ -990,11 +1010,24 @@ class _ShutterButton extends StatelessWidget {
               border: Border.all(color: color, width: 4),
             ),
             child: Center(
-              child: Container(
-                width: 54,
-                height: 54,
-                decoration: BoxDecoration(shape: BoxShape.circle, color: color),
-              ),
+              child:
+                  busy
+                      ? SizedBox(
+                        width: 30,
+                        height: 30,
+                        child: CircularProgressIndicator(
+                          strokeWidth: 3,
+                          valueColor: AlwaysStoppedAnimation<Color>(color),
+                        ),
+                      )
+                      : Container(
+                        width: 54,
+                        height: 54,
+                        decoration: BoxDecoration(
+                          shape: BoxShape.circle,
+                          color: color,
+                        ),
+                      ),
             ),
           ),
         ),

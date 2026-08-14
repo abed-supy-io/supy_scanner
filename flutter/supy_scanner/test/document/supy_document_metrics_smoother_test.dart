@@ -95,34 +95,100 @@ void main() {
       expect(out.coverageRatio, closeTo(0.2 + alpha * (1.0 - 0.2), 1e-9));
     });
 
-    test('quad vertices are EMA-blended independently', () {
+    test(
+      'quad vertices are EMA-blended independently at the still baseline',
+      () {
+        // A tiny per-corner move keeps the quad in the "at rest" regime, where
+        // the adaptive weight collapses to the baseline alpha and each vertex is
+        // blended independently by that alpha.
+        const alpha = 0.5;
+        const d =
+            0.002; // mean corner motion ~0.0028 < _quadStillMotion (0.004)
+        final s = SupyDocumentMetricsSmoother(alpha: alpha);
+        s.add(
+          _doc(
+            quad: const [
+              Offset(0.10, 0.10),
+              Offset(0.90, 0.10),
+              Offset(0.90, 0.90),
+              Offset(0.10, 0.90),
+            ],
+          ),
+        );
+        final out = s.add(
+          _doc(
+            quad: const [
+              Offset(0.10 + d, 0.10 + d),
+              Offset(0.90 + d, 0.10 + d),
+              Offset(0.90 + d, 0.90 + d),
+              Offset(0.10 + d, 0.90 + d),
+            ],
+          ),
+        );
+        expect(out.quad[0].dx, closeTo(0.10 + alpha * d, 1e-9));
+        expect(out.quad[0].dy, closeTo(0.10 + alpha * d, 1e-9));
+        expect(out.quad[2].dx, closeTo(0.90 + alpha * d, 1e-9));
+        expect(out.quad[2].dy, closeTo(0.90 + alpha * d, 1e-9));
+      },
+    );
+
+    test('a large reposition tracks at the fast alpha, not the baseline', () {
+      // A big per-corner jump is a deliberate reposition: the adaptive weight
+      // ramps to ~0.9 so the outline follows without rubber-banding, well past
+      // what the 0.5 baseline would produce.
       const alpha = 0.5;
       final s = SupyDocumentMetricsSmoother(alpha: alpha);
       s.add(
         _doc(
           quad: const [
-            Offset(0.0, 0.0),
-            Offset(1.0, 0.0),
-            Offset(1.0, 1.0),
-            Offset(0.0, 1.0),
+            Offset(0.10, 0.10),
+            Offset(0.90, 0.10),
+            Offset(0.90, 0.90),
+            Offset(0.10, 0.90),
           ],
         ),
       );
       final out = s.add(
         _doc(
           quad: const [
-            Offset(0.2, 0.2),
-            Offset(0.8, 0.2),
-            Offset(0.8, 0.8),
-            Offset(0.2, 0.8),
+            Offset(0.30, 0.30),
+            Offset(1.10, 0.30),
+            Offset(1.10, 1.10),
+            Offset(0.30, 1.10),
           ],
         ),
       );
-      expect(out.quad[0], const Offset(0.1, 0.1));
-      expect(out.quad[1], const Offset(0.9, 0.1));
-      expect(out.quad[2], const Offset(0.9, 0.9));
-      expect(out.quad[3], const Offset(0.1, 0.9));
+      // Fast alpha is max(alpha, 0.9) = 0.9 → 0.10 + 0.9 * 0.20 = 0.28.
+      expect(out.quad[0].dx, closeTo(0.28, 1e-9));
+      // Strictly past the baseline result (0.20), proving adaptivity kicked in.
+      expect(out.quad[0].dx, greaterThan(0.10 + alpha * 0.20));
     });
+
+    test(
+      'a corner relabel is matched back instead of blended across corners',
+      () {
+        // Vision can rotate which physical corner it calls "top-left" between
+        // frames. A blind index-wise EMA would then average two different
+        // corners and the outline would spin. Correspondence must reindex the
+        // relabeled sample back onto the stable quad, leaving it essentially
+        // unchanged (zero motion → baseline alpha → no drift).
+        final s = SupyDocumentMetricsSmoother(alpha: 0.5);
+        const stable = [
+          Offset(0.10, 0.10),
+          Offset(0.90, 0.10),
+          Offset(0.90, 0.90),
+          Offset(0.10, 0.90),
+        ];
+        s.add(_doc(quad: stable));
+        // Same physical quad, cyclically relabeled by one corner.
+        final relabeled = [stable[1], stable[2], stable[3], stable[0]];
+        final out = s.add(_doc(quad: relabeled));
+        for (var i = 0; i < 4; i++) {
+          expect(out.quad[i].dx, closeTo(stable[i].dx, 1e-9));
+          expect(out.quad[i].dy, closeTo(stable[i].dy, 1e-9));
+        }
+      },
+    );
 
     test('smoothed quad is immutable', () {
       final s = SupyDocumentMetricsSmoother();
